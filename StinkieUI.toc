@@ -4,8 +4,8 @@
 ## Author: Stinkie (twitch.tv/smellystinkie)
 ## X-License: MIT
 ## Version: 0.19.2
-## X-Curse-Project-ID: 1234567
-## X-Wago-ID: aBcDeFgH
+## X-Curse-Project-ID: 1780262
+## X-Wago-ID: rNkgx3Na
 ## IconTexture: Interface\AddOns\StinkieUI\Media\logo_icon
 ## SavedVariables: StinkieUIDB
 ## AddonCompartmentFunc: StinkieUI_OnAddonCompartmentClick
