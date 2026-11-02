@@ -6,6 +6,7 @@ local _, ns = ...
 
 local PRESET = {
 	actionBars = {
+		cooldownScale = 1.2,
 		countStyle = {
 			size = 21,
 		},
@@ -73,7 +74,7 @@ local PRESET = {
 		kickPoint = { "CENTER", 0, -120 },
 		kickSize = 40,
 		precogGlow = "static",
-		precogGlowColor = { 1, 0.976, 0.973 },
+		precogGlowColor = { 1, 0.9765, 0.9725 },
 		precogGlowThickness = 1,
 		precogPoint = { "CENTER", 0, 0 },
 		precogSize = 50,
@@ -82,7 +83,7 @@ local PRESET = {
 	bgAllies = {
 		carrierSide = "RIGHT",
 		headerStyle = {
-			size = 17,
+			size = 18,
 		},
 		healthStyle = {
 			size = 14,
@@ -100,7 +101,7 @@ local PRESET = {
 	},
 	bgEnemies = {
 		headerStyle = {
-			size = 17,
+			size = 18,
 		},
 		healthStyle = {
 			outline = "NONE",
@@ -127,6 +128,22 @@ local PRESET = {
 		ghostScale = 1.2,
 		scoreScale = 1.75,
 	},
+	chat = {
+		bgAlpha = 0.6,
+		clock24 = false,
+		fontSize = 17,
+		removeBrackets = true,
+		shortWhispers = true,
+		spacing = 0,
+		tabAlpha = 0.85,
+		tabInactiveAlpha = 0.75,
+		tabStyle = {
+			outline = "NONE",
+			size = 13,
+		},
+		timestampColor = { 0.6941, 0.6941, 0.6941 },
+		whisperTabs = true,
+	},
 	classPower = {
 		height = 25,
 		point = { "BOTTOM", 0, 343 },
@@ -138,7 +155,7 @@ local PRESET = {
 		width = 280,
 	},
 	colors = {
-		health = { 0.212, 0.212, 0.224 },
+		health = { 0.2118, 0.2118, 0.2235 },
 	},
 	combat = {
 		attachPoint = "TOPLEFT",
@@ -191,13 +208,13 @@ local PRESET = {
 	cursor = {
 		ring = true,
 		ringAlpha = 0.85,
-		ringColor = { 0.859, 0.69, 1 },
+		ringColor = { 0.8588, 0.6902, 1 },
 		ringCombatOnly = true,
 		ringSize = 69,
 	},
 	damageMeter = {
 		barBackgroundAlpha = 0.65,
-		headerColor = { 0.039, 0.027, 0.071, 0.65 },
+		headerColor = { 0.0392, 0.0275, 0.0706, 0.65 },
 		nameStyle = {
 			size = 14,
 		},
@@ -212,7 +229,6 @@ local PRESET = {
 	minimap = {
 		buttons = "hide",
 		clockStyle = {
-			outline = "NONE",
 			size = 14,
 		},
 		coordStyle = {
@@ -226,8 +242,18 @@ local PRESET = {
 		mailCorner = "TOPLEFT",
 		shape = "SQUARE",
 		zoneStyle = {
-			outline = "NONE",
 			size = 14,
+		},
+	},
+	misc = {
+		decor = {
+			enabled = true,
+		},
+		gcd = {
+			direction = "LEFT",
+			enabled = true,
+			point = { "BOTTOM", -380, 0 },
+			spacing = 0,
 		},
 	},
 	nameplates = {
@@ -249,7 +275,7 @@ local PRESET = {
 		highlight = {
 			arrowSize = 32,
 			arrows = true,
-			scale = 1.05,
+			scale = 1.05, -- target nameplate size (seeded from the game when missing)
 			thickness = 3,
 		},
 		important = {
