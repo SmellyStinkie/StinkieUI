@@ -1,0 +1,28 @@
+# Publishes Stinkie UI when a version tag (like v0.20.0) is pushed:
+# builds the zip, then uploads it to CurseForge, Wago and GitHub Releases.
+# A site whose secret isn't set is simply skipped.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # lets the workflow create the GitHub release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, so the changelog can be built from commits
+
+      - name: Package and upload
+        uses: BigWigsMods/packager@v2

@@ -1,0 +1,62 @@
+# Stinkie UI 0.19.2
+
+Flat unit frames, party frames, nameplates, castbars, class resource bar and cooldown bars for WoW: Midnight (12.1.5, Interface 120105). No library dependencies.
+
+## Install
+Works on retail (Midnight) and WoW Forever. Forever has no arena, so the arena frames stay off there.
+Unzip so the folder is `World of Warcraft/_retail_/Interface/AddOns/StinkieUI/` (the `.toc` must be directly inside it).
+**Fully exit and restart WoW after installing or updating** whenever the Media folder gains files (0.17.0 replaces the logo files). WoW only picks up new files on a full restart, not on `/reload`.
+
+## Commands
+- `/stinkie` or `/sui`: options window (also in the addon compartment and Options > AddOns)
+- `/stinkie unlock` / `/stinkie lock`: move frames. Drag a box, or click it and use the arrow keys (Shift = 10px). A panel shows its exact X/Y. Every options page also has anchor, X and Y fields with nudge buttons.
+- `/stinkie fontcheck`: prints how the client loads each font (for troubleshooting)
+- `/stinkie reset`: restore all defaults and reload
+
+## What's in it
+- **Font**: one font for everything, including Blizzard's own UI (tooltips, buff timers, spec names, character sheet, damage meter, zone text, settings), names above characters (relog) and optionally floating combat text (relog); PT Sans Narrow Bold by default. Every text (names, health, castbars, nameplates, class resource, cooldown counts) has its own size, outline and color, and names can be class colored.
+- **Unit frames**: player, target, target of target, focus, pet. Flat class-colored health, optional power bar, name inside or above, health text (default %), absorb overlay (shields can be turned off per frame). Target and focus show your debuffs, CC and major defensives. Target and focus also get one big crowd-control icon beside the frame. The small aura icons can be turned off while keeping the big CC icon.
+- **Health bars**: dark gray empty area, yellow shield after current health, and an overshield (shield bigger than missing health) drawn backwards over the top half so it never needs extra room. New target/focus snaps to the right value instead of filling up.
+- **Party**: arena-frame style (test mode shows a tank, a healer and two damage dealers, in range and casting) with a resizable green healer cross. PvP trinket and defensives on one side, crowd control (bigger, optional glow) on the other, dispellable debuffs in a row below or after the CC. Target border, range fade, power for all / healers / none. Test mode. Hidden in battlegrounds and Blitz by default.
+- **Arena Assist**: a movable, resizable "Healer in CC!" warning with the CC icon (optional sound), your Precognition (or any buffs you list) big and glowing, and an enemy interrupt tracker that shows who kicked you or a teammate with a cooldown timer. Glow options for party CC and trinkets. Test mode.
+- **Minimap**: round or square, border on/off, fonts for the zone name, clock and coordinates, coordinates moved where you like, buttons shown / on mouseover / hidden, auto-hide in arena, battlegrounds, Mythic+ and raids. On a square map the zone bar and calendar sit centered right on top of it, the mail icon goes in a corner, and the Omnium Folio button sits in another corner.
+- **Castbars**: player, target, focus. Float by default; each can attach to its frame. Colors for interruptible, not interruptible and interrupted are configurable.
+- **Class resource**: soul shards (Destruction shows partial shards), combo points, holy power, chi, arcane charges, essence. Flat segmented bar with 1px lines between segments, optional number in the middle, class default or your own color. Floats, or attaches above the player frame.
+- **Nameplates**: enemies get health, level, name (above, or inside the bar), castbar, your debuffs, all CC and big/external defensives. Debuffs can be all, Blizzard's important ones, or a whitelist, plus a blacklist. Target highlight with thickness, size, color and optional `> <` arrows. Toggles for enemy pets, guardians, totems and trivial units (these switch Blizzard's own settings directly). Important totems and Psyfiend turn pink, draw on top and get a bigger click area. Elite/boss star. Friendlies get a small class-colored name (above or on the bar) and a thin health line. Healers get a green (friendly) or red (enemy) cross, sized as you like; outside groups healers are found by inspecting nearby players, out of combat. In arena, the enemy healer cross comes from Blizzard's own secure spec helper. Flag / orb carriers get a big icon above the plate (size up to 120). In Blitz the enemy healer cross also tries Blizzard's role helper and the scoreboard role. Optional spec icons above enemy and/or friendly players: left or right of the healer cross, or centered with the cross beside or above it, with X/Y offsets. Long names can be capped at a number of characters. Healer cross up to 100 px. Blizzard's quest / interact icon is enlarged and moved above the plate; friendly plates can be lowered. Enemy pets / guardians / totems / trivial units are set from Stinkie UI's boxes (pets and totems on by default).
+- **Action bars**: restyles Blizzard's bars to match the cooldown skin (zoomed icons, 1px edge), hides the bar art, macro names on or off, keybinds on or off, and per-bar show-on-mouseover. Layout stays in Edit Mode. Off automatically if Bartender, Dominos or ElvUI is loaded. The bag bar and menu icons can be set to show on mouseover too.
+- **Cursor**: Blizzard's cursor size, plus an optional ring around the cursor (size, thin/thick, color, opacity, combat only).
+- **Cooldowns**: optional square flat skin for Blizzard's Cooldown Manager (icons and buff bars), plus row centering. Two custom bars for spells, items, trinkets, racial and Healthstone. In options the bar shows as icons: drag to reorder, right-click to remove. Drop spells or items on the box to add them. Hover any icon and press your ping key to ping it. Spells you haven't learned (or that aren't in your current spec) and items you have none of are left off the bar.
+
+- **Arena frames**: health, healer power bar, castbar, spec icon, green healer cross (size and corner), resizable teammate-target squares (bright green by default, or class colors), trinket, DRs (pick categories, or Blizzard's 'only DRs I can apply'), one square per teammate who is targeting that enemy, and a white border on your own target. Test mode in options, and automatically while unlocked. Right click focuses by default (or target / menu / nothing). They turn themselves off if sArena or Gladius is running. Names are cleared between games and Solo Shuffle rounds.
+- **Combat indicator**: icon on the player frame or anywhere, plus an "Entering / Leaving Combat" message that can be moved and styled.
+- **Battleground frames** (Blitz and 10-15 player battlegrounds; off in 40-player ones): one block for the enemy team and one for yours, each titled Horde / Alliance, sorted healers, tanks, then damage. Allies always have live health and range. Flag / orb debuff with its stack count next to the carrier icon. Enemies: every enemy's name and class color from the scoreboard, click a row to target (right click focuses by default), flag/orb carrier icon (left or right), spec icon (learned before the gates open, class icon otherwise), live health / dead / out-of-range fading for enemies you can see. Test mode in options and while unlocked. Thick target highlight (thickness and color). Tank shield next to the healer cross. In live matches (Blitz) where Blizzard hides spec and role, the spec shows as text and the role still shows as a cross or shield (drawn with two tiny bundled symbol fonts, display-only). Enemies out of sight keep their last known health, faded. The icon beside each row shows the role: green cross for healers on both teams, shield for tanks, sword for damage (or the spec / class icon if you prefer, or when the role isn't known). Name and spec text are left-aligned and centered together, each with its own size. Horde / Alliance titles are centered over the icons and bars together. Carriers get crisp flag (red / blue) and orb (bright color) icons. Optional mana strip along the bottom of healer rows (or everyone), live while that player is visible.
+- **Healer crosses** everywhere (nameplates, party, arena, battlegrounds) have a thin black outline. Green on party, arena and battleground frames; red only above enemy nameplates.
+- **Look**: the options window carries the Stinkie logo and its colors (fel green, hood plum, warm black, orange trim); the logo is also the addon-list and compartment icon.
+- **Profiles**: every character uses Default until you give it its own profile (General page). Copy settings between profiles, delete old ones, and export / import a profile as a string.
+- **Battleground score**: move and resize the score display at the top and the cart / capture progress widgets, and restyle the score bars (Blizzard, flat, or any shared-media texture; Alliance and Horde colors). Only inside battlegrounds. Test mode shows stand-ins so you can place and style them anywhere. The Return to Graveyard button can be moved and resized too.
+- **Damage meter**: restyles Blizzard's built-in damage meter to match: flat bars (or any shared-media texture) with a 1px edge, flat header (your color and opacity) and background, your font with separate name / number / header styles, zoomed icons, optional hidden scroll bar. Size, bar height, class colors and opacity stay in Edit Mode.
+- **Combat logging**: automatic `/combatlog` in arena, Solo Shuffle, Blitz, regular battlegrounds, Mythic+, other dungeons and raids (separate toggles), with Advanced Combat Logging turned on for you. It stops when you leave, turns back on after a `/reload` inside a match, and never stops logging you started yourself. Optional "one log for the whole session": once on, logging stays on until logout so every match lands in one file.
+
+Settings marked `*` need a reload.
+
+## Community
+Questions or ideas: #stinkie-ui on Discord (https://discord.gg/abb8n4T3rc), or drop by the stream at twitch.tv/smellystinkie. Videos: https://www.youtube.com/@SmellyStinkie
+
+## Midnight limits (Blizzard rules, not bugs)
+- Battlegrounds: no DR data reaches addons. Health and range only exist for enemies you can see; when Blizzard hides a name, a row links up only if that class+race is unique on the enemy team. Trinkets aren't available there either.
+- Arena: trinkets and DRs come from Blizzard's own arena widgets, which Stinkie UI moves into its frames. DR category picking only works when Blizzard reveals the category; if it's hidden in rated games, every category shows.
+- Arena: enemy roles are hidden in rated games, so the healer-only power bar falls back to mana users there.
+- Target of target can't show anything inside arenas or battlegrounds. Addons are blocked from compound units like `targettarget` in PvP matches.
+- Health, power, casts and auras are "secret values" in combat and PvP. They can be displayed but not computed on.
+- Friendly nameplates inside dungeons and raids are locked by Blizzard and stay default.
+- Important totem coloring matches by unit name or NPC ID. Where Blizzard hides those from addons, the totem stays normal colored. Which of two overlapping plates gets the click is Blizzard's call; a bigger click area only helps where plates don't overlap.
+- Enemy healer crosses on nameplates only appear where the game tells addons who is a healer: battleground scoreboard specs (learned before the gates open) and inspectable players. In arena and for most open-world enemies it can't know.
+- Teammates' cooldown timers (other than the PvP trinket) aren't available to addons in Midnight; their big and external defensives show while active.
+- The cursor image itself can't be recolored by addons; the ring is the colored option.
+- Death Knight runes and aura-based resources (Devourer, Icicles, Maelstrom Weapon) aren't on the class resource bar yet.
+
+## License
+MIT, © 2026 Stinkie (twitch.tv/smellystinkie). See `LICENSE`. The bundled font keeps its own license.
+
+## Credits
+PT Sans Narrow © ParaType, SIL Open Font License 1.1 (see `Media/PTSansNarrow-OFL.txt`).

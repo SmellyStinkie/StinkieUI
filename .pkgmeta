@@ -1,0 +1,8 @@
+# Tells the packager what goes into the downloadable zip.
+package-as: StinkieUI
+
+ignore:
+  - .github
+  - .gitignore
+  - "*.py"
+  - Media/__pycache__

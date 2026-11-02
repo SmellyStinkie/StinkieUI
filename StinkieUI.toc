@@ -1,0 +1,33 @@
+## Interface: 120105, 16001
+## Title: |cffbfcc29Stinkie|r UI
+## Notes: Flat unit frames, party frames, nameplates, castbars and cooldown bars. /stinkie
+## Author: Stinkie (twitch.tv/smellystinkie)
+## X-License: MIT
+## Version: 0.19.2
+## IconTexture: Interface\AddOns\StinkieUI\Media\logo_icon
+## SavedVariables: StinkieUIDB
+## AddonCompartmentFunc: StinkieUI_OnAddonCompartmentClick
+
+Core.lua
+Preset.lua
+Fonts.lua
+Widgets.lua
+Castbar.lua
+Auras.lua
+Roles.lua
+UnitFrames.lua
+ClassPower.lua
+Party.lua
+Arena.lua
+ArenaAssist.lua
+BGEnemies.lua
+BGWidgets.lua
+Minimap.lua
+Nameplates.lua
+Cooldowns.lua
+ActionBars.lua
+Cursor.lua
+Combat.lua
+DamageMeter.lua
+CombatLog.lua
+Options.lua
