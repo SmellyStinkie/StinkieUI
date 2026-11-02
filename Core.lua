@@ -539,6 +539,52 @@ ns.defaults = {
 		macroStyle = text(10),
 		mouseover = {}, -- bar name -> true: hidden until the mouse is over it
 		fadeAlpha = 0,
+		cooldownNumbers = true, -- countdown numbers on the buttons (overrides the game's own setting)
+		cooldownScale = 1,      -- size of those numbers relative to the button
+	},
+	chat = {
+		enabled = true,
+		-- window
+		bgColor = { 0.04, 0.04, 0.05 }, bgAlpha = 0.45, border = true,
+		tabColor = { 0.10, 0.09, 0.08 }, tabAlpha = 0.7, tabInactiveAlpha = 0.55,
+		tabStyle = text(12),
+		mouseover = false, fadeAlpha = 0, showOnMessage = false, showOnMessageTime = 5,
+		buttons = "show", -- side buttons: show | hide
+		copyButton = true, dragCopy = false,
+		-- text
+		fontSize = 0, -- 0: each window keeps its size from Blizzard's chat settings
+		outline = "NONE", spacing = 1, indent = true,
+		timestamps = "hm", -- none | hm | hms
+		clock24 = true,
+		timestampMode = "inline", -- inline | column
+		timestampColor = { 0.55, 0.55, 0.55 },
+		columnGap = 8,
+		-- history
+		history = "session", -- session (this and the previous login) | reload (reloads only) | off
+		historyLines = 300, maxLines = 500, restoreDivider = true,
+		-- formatting
+		classColors = true, showLevel = false, levelHideMax = true,
+		channelStyle = "short", -- full | short | name
+		removeBrackets = false, hideRealms = false, shortWhispers = false,
+		whisperTabs = false, flashTabs = true, flashPlayerOnly = true,
+		colors = {}, -- chat type -> { r, g, b }, only the ones changed here
+	},
+	misc = {
+		gcd = {
+			enabled = false,
+			size = 34, count = 6, spacing = 4,
+			direction = "RIGHT", -- the way older icons move: RIGHT | LEFT | UP | DOWN
+			duration = 10, -- seconds an icon stays
+			where = "always", -- always | combat | pvp
+			showInterrupted = true,
+			ignore = { 6603, 75 }, -- Auto Attack, Auto Shot
+			point = { "BOTTOM", 0, 330 },
+		},
+		decor = {
+			enabled = false,
+			maxGold = 0, -- 0: no limit
+			announce = true,
+		},
 	},
 	cursor = {
 		-- size: cursorSizePreferred (-1 default, 0..4 = 32/48/64/96/128); read from the game on first load

@@ -131,11 +131,23 @@ function AB.SkinButton(b)
 		end
 	end
 	if icon then ns.ZoomIcon(icon) end
-	if b.cooldown and b.cooldown.SetCountdownFont then
-		b.cooldown:SetCountdownFont(ns.GetCountdownFont(math.max(10, (b:GetWidth() or 36) * 0.4)))
-	end
+	AB.StyleCooldownNumbers(b)
 	StripArt(b)
 	StyleText(b)
+end
+
+-- Countdown numbers: shown or hidden by our setting (Blizzard's "countdownForCooldowns" is
+-- re-applied by its own code, so the post-hook below has the last word), sized to the button.
+function AB.StyleCooldownNumbers(b)
+	local cd = b and b.cooldown
+	if not cd then return end
+	local cfg = ns.db.actionBars
+	if cd.SetCountdownFont then
+		local w = b:GetWidth()
+		if type(w) ~= "number" or w <= 0 then w = 36 end
+		cd:SetCountdownFont(ns.GetCountdownFont(math.max(8, w * 0.4 * (cfg.cooldownScale or 1))))
+	end
+	if cd.SetHideCountdownNumbers then cd:SetHideCountdownNumbers(not cfg.cooldownNumbers) end
 end
 
 local function StripBarArt(bar)
@@ -209,6 +221,11 @@ function AB:Init()
 		if bar and bar.UpdateEndCaps then
 			hooksecurefunc(bar, "UpdateEndCaps", StripBarArt)
 		end
+	end
+	if type(ActionButton_UpdateCooldownNumberHidden) == "function" then
+		hooksecurefunc("ActionButton_UpdateCooldownNumberHidden", function(b)
+			if skinned[b] then AB.StyleCooldownNumbers(b) end
+		end)
 	end
 	ns:On("PLAYER_ENTERING_WORLD", function() C_Timer.After(0, function() ns:RunOOC(SkinAll) end) end)
 	ns:On("UPDATE_BINDINGS", function() C_Timer.After(0, function() ns:RunOOC(SkinAll) end) end)

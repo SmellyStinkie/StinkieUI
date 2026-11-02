@@ -915,6 +915,8 @@ local function BuildActionBarPage(page)
 	page:Check("Show keybinds", Getter(cfg, "hotkeys"), Setter(cfg, "hotkeys"))
 	page:Slider("Icon zoom (shared with cooldowns)", 0, 0.2, 0.01, function() return ns.db.cooldowns.iconZoom end,
 		function(v) ns.db.cooldowns.iconZoom = v end)
+	page:Check("Show cooldown numbers", Getter(cfg, "cooldownNumbers"), Setter(cfg, "cooldownNumbers"))
+	page:Slider("Cooldown number size", 0.5, 2, 0.05, Getter(cfg, "cooldownScale"), Setter(cfg, "cooldownScale"))
 	page:Header("Show only on mouseover")
 	for _, def in ipairs(ns.ActionBars.BARS) do
 		page:Check(def[2], function() return cfg().mouseover[def[1]] and true or false end,
@@ -925,6 +927,107 @@ local function BuildActionBarPage(page)
 	page:TextStyle("Keybind text", function() return cfg().hotkeyStyle end)
 	page:TextStyle("Charges / count text", function() return cfg().countStyle end)
 	page:TextStyle("Macro name text", function() return cfg().macroStyle end)
+end
+
+local function BuildChatPage(page)
+	local function cfg() return ns.db.chat end
+	local CH = ns.Chat
+	page:Column(1)
+	page:Header("Chat")
+	page:Check("Restyle chat", Getter(cfg, "enabled"), Setter(cfg, "enabled"), true)
+	page:Note("Restyles Blizzard's chat windows. Tabs, channels and window size and position stay in Blizzard's chat settings. Turns itself off if Chattynator, Prat or ElvUI is loaded.", 62)
+	page:Header("Window")
+	page:Color("Background color", Getter(cfg, "bgColor"), Setter(cfg, "bgColor"))
+	page:Slider("Background opacity", 0, 1, 0.05, Getter(cfg, "bgAlpha"), Setter(cfg, "bgAlpha"))
+	page:Check("Border", Getter(cfg, "border"), Setter(cfg, "border"))
+	page:Color("Tab color", Getter(cfg, "tabColor"), Setter(cfg, "tabColor"))
+	page:Slider("Tab opacity", 0, 1, 0.05, Getter(cfg, "tabAlpha"), Setter(cfg, "tabAlpha"))
+	page:Slider("Unselected tab text opacity", 0, 1, 0.05, Getter(cfg, "tabInactiveAlpha"), Setter(cfg, "tabInactiveAlpha"))
+	page:TextStyle("Tab text", function() return cfg().tabStyle end)
+	page:Header("Visibility")
+	page:Check("Hide until mouseover", Getter(cfg, "mouseover"), Setter(cfg, "mouseover"))
+	page:Slider("Faded opacity", 0, 0.5, 0.05, Getter(cfg, "fadeAlpha"), Setter(cfg, "fadeAlpha"))
+	page:Check("Show briefly on new messages", Getter(cfg, "showOnMessage"), Setter(cfg, "showOnMessage"))
+	page:Slider("Seconds shown", 1, 30, 1, Getter(cfg, "showOnMessageTime"), Setter(cfg, "showOnMessageTime"))
+	page:Choice("Side buttons (menu, channels, social)", { { "show", "Show" }, { "hide", "Hide" } }, Getter(cfg, "buttons"), Setter(cfg, "buttons"))
+	page:Header("Tabs")
+	page:Check("Flash tabs on new messages", Getter(cfg, "flashTabs"), Setter(cfg, "flashTabs"), true)
+	page:Check("Only flash for messages from players", Getter(cfg, "flashPlayerOnly"), Setter(cfg, "flashPlayerOnly"))
+	page:Check("New whispers open in their own tab", Getter(cfg, "whisperTabs"), Setter(cfg, "whisperTabs"))
+	page:Header("Copy")
+	page:Check("Copy button (top right, on mouseover)", Getter(cfg, "copyButton"), Setter(cfg, "copyButton"))
+	page:Check("Drag over chat text to copy it", Getter(cfg, "dragCopy"), Setter(cfg, "dragCopy"))
+	page:Button("Copy chat now", function() if CH and CH.ShowCopy then CH.ShowCopy() end end)
+	page:Header("Saved messages")
+	page:Choice("Keep messages", { { "session", "Next login" }, { "reload", "Reloads only" }, { "off", "Off" } },
+		Getter(cfg, "history"), Setter(cfg, "history"))
+	page:Note("Next login: messages come back after a reload and after your next login, then drop off. Lines sent while you're in an arena, battleground, dungeon or raid can't be saved; the game hides their text from addons there.", 76)
+	page:Slider("Messages kept per window", 50, 1000, 50, Getter(cfg, "historyLines"), Setter(cfg, "historyLines"))
+	page:Check("Line above restored messages", Getter(cfg, "restoreDivider"), Setter(cfg, "restoreDivider"))
+	page:Button("Clear saved messages", function() if CH and CH.ClearHistory then CH.ClearHistory() ns:Print("Saved chat cleared.") end end)
+
+	page:Column(2)
+	page:Header("Text")
+	page:Slider("Font size (0 = each window's own)", 0, 24, 1, Getter(cfg, "fontSize"), Setter(cfg, "fontSize"))
+	page:Choice("Outline", { { "NONE", "None" }, { "OUTLINE", "Thin" }, { "THICKOUTLINE", "Thick" } }, Getter(cfg, "outline"), Setter(cfg, "outline"))
+	page:Slider("Message spacing", 0, 10, 1, Getter(cfg, "spacing"), Setter(cfg, "spacing"))
+	page:Check("Indent wrapped lines", Getter(cfg, "indent"), Setter(cfg, "indent"))
+	page:Header("Timestamps")
+	page:Choice("Timestamps", { { "none", "None" }, { "hm", "HH:MM" }, { "hms", "HH:MM:SS" } }, Getter(cfg, "timestamps"), Setter(cfg, "timestamps"))
+	page:Check("24-hour clock", Getter(cfg, "clock24"), Setter(cfg, "clock24"))
+	page:Choice("Layout", { { "inline", "In the line" }, { "column", "Own column" } }, Getter(cfg, "timestampMode"), Setter(cfg, "timestampMode"))
+	page:Slider("Column gap", 2, 30, 1, Getter(cfg, "columnGap"), Setter(cfg, "columnGap"))
+	page:Color("Timestamp color", Getter(cfg, "timestampColor"), Setter(cfg, "timestampColor"))
+	page:Note("Own column pads every time to the same width so messages start at the same spot. Wrapped lines use the game's indent, which addons can't size.", 50)
+	page:Header("Names and channels")
+	page:Choice("Channel names", { { "full", "Full" }, { "short", "Short" }, { "name", "Name" } }, Getter(cfg, "channelStyle"), Setter(cfg, "channelStyle"))
+	page:Note("[2. Trade - City] becomes [2] (Short) or [Trade] (Name). Party, Raid, Guild and Instance become P, R, G and I.", 36)
+	page:Check("Remove brackets", Getter(cfg, "removeBrackets"), Setter(cfg, "removeBrackets"))
+	page:Check("Hide realm names", Getter(cfg, "hideRealms"), Setter(cfg, "hideRealms"))
+	page:Check("\"From Name:\" for incoming whispers", Getter(cfg, "shortWhispers"), Setter(cfg, "shortWhispers"))
+	page:Check("Class colors for names", Getter(cfg, "classColors"), Setter(cfg, "classColors"))
+	page:Check("Show player level", Getter(cfg, "showLevel"), Setter(cfg, "showLevel"))
+	page:Check("Not at max level", Getter(cfg, "levelHideMax"), Setter(cfg, "levelHideMax"))
+	page:Note("Levels are known for your group, guild and friends, and for players you target or mouse over. New settings apply to new lines.", 50)
+	page:Header("Colors")
+	if CH and CH.COLOR_TYPES then
+		for _, def in ipairs(CH.COLOR_TYPES) do
+			page:Color(def[2], function() return CH.GetColor(def[1]) end, function(c) CH.SetColor(def[1], c) end)
+		end
+		for i = 1, CH.CHANNEL_SLOTS do
+			local key = "CHANNEL" .. i
+			local name = CH.ChannelName and CH.ChannelName(i)
+			page:Color("Channel " .. i .. (name and (" (" .. name .. ")") or ""), function() return CH.GetColor(key) end, function(c) CH.SetColor(key, c) end)
+		end
+	end
+end
+
+local function BuildMiscPage(page)
+	local function gcd() return ns.db.misc.gcd end
+	local function decor() return ns.db.misc.decor end
+	page:Column(1)
+	page:Header("GCD History")
+	page:Check("Enabled", Getter(gcd, "enabled"), Setter(gcd, "enabled"))
+	page:Note("Icons of the spells you cast, newest first, sliding along as you cast more.", 36)
+	page:Button("Test", function() if ns.Misc and ns.Misc.TestGCD then ns.Misc.TestGCD() end end)
+	page:Slider("Icon size", 16, 80, 1, Getter(gcd, "size"), Setter(gcd, "size"))
+	page:Slider("Icons shown", 2, 12, 1, Getter(gcd, "count"), Setter(gcd, "count"))
+	page:Slider("Spacing", 0, 20, 1, Getter(gcd, "spacing"), Setter(gcd, "spacing"))
+	page:Dropdown("Older icons move", { { "RIGHT", "Right" }, { "LEFT", "Left" }, { "UP", "Up" }, { "DOWN", "Down" } },
+		Getter(gcd, "direction"), Setter(gcd, "direction"))
+	page:Slider("Seconds on screen", 2, 30, 1, Getter(gcd, "duration"), Setter(gcd, "duration"))
+	page:Choice("Show", { { "always", "Always" }, { "combat", "In combat" }, { "pvp", "Arena + BGs" } }, Getter(gcd, "where"), Setter(gcd, "where"))
+	page:Check("Interrupted casts (red)", Getter(gcd, "showInterrupted"), Setter(gcd, "showInterrupted"))
+	page:Position(nil, function() return "gcdHistory" end)
+	page:TextList("Ignored spells", 90, function() return SpellListText(gcd().ignore) end,
+		function(text) gcd().ignore = ParseSpellList(text) end, "One spell ID or name per line. Auto Attack and Auto Shot are ignored by default.")
+
+	page:Column(2)
+	page:Header("Auto-Confirm Decor Purchases")
+	page:Check("Enabled", Getter(decor, "enabled"), Setter(decor, "enabled"))
+	page:Note("Buying housing decor from a vendor skips the \"are you sure\" popup. Other items still ask. Never used for the in-game shop.", 50)
+	page:Slider("Only up to this many gold (0 = any price)", 0, 10000, 100, Getter(decor, "maxGold"), Setter(decor, "maxGold"))
+	page:Check("Say in chat what was bought", Getter(decor, "announce"), Setter(decor, "announce"))
 end
 
 local function BuildCombatPage(page)
@@ -1663,12 +1766,15 @@ local pages = {
 	{ "Cooldowns", BuildCooldownPage },
 	{ "Damage Meter", BuildDamageMeterPage },
 	{ "Minimap", BuildMinimapPage },
+	{ "Chat", BuildChatPage },
 	{ "Combat Logging", BuildCombatLogPage },
 	{ "Combat", BuildCombatPage },
 	{ "Cursor", BuildCursorPage },
+	{ "Miscellaneous", BuildMiscPage },
 }
 
 local HEADER_H, WIN_H = 92, 680
+local NAV_STEP = 23 -- 24 pages must fit the 568px nav column
 
 local function CreateWindow()
 	local w = CreateFrame("Frame", "StinkieUIOptions", UIParent)
@@ -1766,7 +1872,7 @@ local function CreateWindow()
 	end
 	for i, def in ipairs(pages) do
 		local b = FlatButton(nav, def[1], 142, function() SelectPage(i) end)
-		b:SetPoint("TOPLEFT", 4, -4 - (i - 1) * 24)
+		b:SetPoint("TOPLEFT", 4, -4 - (i - 1) * NAV_STEP)
 		b.text:ClearAllPoints()
 		b.text:SetPoint("LEFT", 10, 0)
 		navButtons[i] = b

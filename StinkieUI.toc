@@ -1,13 +1,14 @@
 ## Interface: 120105, 16001
 ## Title: |cffbfcc29Stinkie|r UI
-## Notes: Flat unit frames, party frames, nameplates, castbars and cooldown bars. /stinkie
+## Notes: Flat PvP UI: unit, party, arena and battleground frames, nameplates, castbars, chat and cooldown bars. /stinkie
 ## Author: Stinkie (twitch.tv/smellystinkie)
 ## X-License: MIT
-## Version: 0.19.3
+## Version: 0.20.0
 ## X-Curse-Project-ID: 1780262
 ## X-Wago-ID: rNkgx3Na
 ## IconTexture: Interface\AddOns\StinkieUI\Media\logo_icon
 ## SavedVariables: StinkieUIDB
+## SavedVariablesPerCharacter: StinkieUIChatHistory
 ## AddonCompartmentFunc: StinkieUI_OnAddonCompartmentClick
 
 Core.lua
@@ -25,6 +26,8 @@ ArenaAssist.lua
 BGEnemies.lua
 BGWidgets.lua
 Minimap.lua
+Chat.lua
+Misc.lua
 Nameplates.lua
 Cooldowns.lua
 ActionBars.lua
