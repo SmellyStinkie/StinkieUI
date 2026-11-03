@@ -116,6 +116,7 @@ local function HealerContainer(i)
 		glow = function() return GlowCfg("healer") end,
 		onShow = OnHealerIconShown,
 		decorate = DecorateHealerButton,
+		magicGlow = function() return cfg().magicGlow end,
 	})
 	w = { container = container }
 	healerWatch[i] = w

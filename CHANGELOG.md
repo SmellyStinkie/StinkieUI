@@ -1,5 +1,8 @@
 # Stinkie UI changelog
 
+## 0.25.0
+- Party crowd control icons and the Healer in CC warning glow bright blue (pulsing) when the crowd control is a Magic debuff, i.e. one Singe Magic or another magic dispel can remove. Works in arena: the game itself picks the glow per dispel type. Toggle on the PvP Assist page (/reload to apply).
+
 ## 0.24.0
 - Nameplates: stacking controls. Turn stacking on or off for enemies and friendlies, set the stacking box height (how far stacked plates climb), and, where the game still has them, vertical spacing, slide speed and distance from the screen top. /stinkie plates lists what this game version supports.
 

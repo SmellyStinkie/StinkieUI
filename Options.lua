@@ -727,6 +727,8 @@ local function BuildArenaAssistPage(page)
 	GlowOptions(page, cfg, "healer")
 	page:Position(nil, function() return "healerCC" end)
 	page:Header("Party frame icons")
+	page:Check("Blue glow when the CC is Magic (Singe Magic can remove it)", Getter(cfg, "magicGlow"), Setter(cfg, "magicGlow"))
+	page:Note("Party CC icons and the healer warning. Takes effect after /reload.", 22)
 	GlowOptions(page, cfg, "cc", "Crowd control glow")
 	GlowOptions(page, cfg, "trinket", "Trinket glow")
 

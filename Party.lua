@@ -129,6 +129,7 @@ local function CreatePartyFrame(unit, index)
 			glow = function()
 				return { glow = AA.ccGlow, glowColor = AA.ccGlowColor, glowThickness = AA.ccGlowThickness }
 			end,
+			magicGlow = function() return AA.magicGlow end,
 		})
 	end
 	do

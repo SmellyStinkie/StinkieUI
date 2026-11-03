@@ -21,7 +21,8 @@ ns.MEDIA = {
 	roleTank = [[Interface\AddOns\StinkieUI\Media\role_tank]],
 	roleDamage = [[Interface\AddOns\StinkieUI\Media\role_damage]],
 	damageFont = [[Interface\AddOns\StinkieUI\Media\StinkieRoleDamage.ttf]],
-	orb = [[Interface\AddOns\StinkieUI\Media\orb]],   -- white circle, tinted per orb
+	orb = [[Interface\AddOns\StinkieUI\Media\orb]],   -- grey Kotmogu-style ball, tinted per orb
+	magicGlow = [[Interface\AddOns\StinkieUI\Media\magic_glow]], -- blue glow ring for Magic (dispellable) debuffs
 	-- role fonts: show a role icon from a (possibly secret) scoreboard role number, display-only.
 	-- "4" (healer) draws a cross in the first, "1" (tank) draws a shield in the second; every
 	-- other character is empty. See Media/README-fonts.txt.
@@ -370,6 +371,7 @@ ns.defaults = {
 		countdownScale = 1.3, -- timer numbers on PvP Assist and party CC / trinket icons
 		-- party frame extras
 		ccGlow = "pulse", ccGlowColor = { 1.00, 0.25, 0.25 }, ccGlowThickness = 2,
+		magicGlow = true, -- party CC and healer-in-CC icons glow blue when the CC is Magic (Singe Magic can remove it)
 		trinketGlow = "none", trinketGlowColor = { 0.75, 0.80, 0.16 }, trinketGlowThickness = 2,
 		-- "Healer in CC" warning
 		healerCC = true,

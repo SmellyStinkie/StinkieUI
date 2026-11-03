@@ -102,6 +102,35 @@ local function StyleButtonBody(size, opts, button)
 		})
 	end
 
+	-- Blue glow when the aura is Magic (dispellable). Blizzard's own code picks the texture per
+	-- dispel type, so this works while the aura's details are hidden from addons: only "Magic"
+	-- maps to the glow; every other type gets no texture.
+	if opts.magicGlow and opts.magicGlow() then
+		local holder = CreateFrame("Frame", nil, button)
+		holder:SetAllPoints()
+		holder:SetFrameLevel(button:GetFrameLevel() + 12)
+		local tex = holder:CreateTexture(nil, "OVERLAY")
+		local o = math.floor(size * 0.35 + 0.5)
+		tex:SetPoint("TOPLEFT", button, "TOPLEFT", -o, o)
+		tex:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", o, -o)
+		tex:SetBlendMode("ADD")
+		button:AddDispelTypeTexture(tex, {
+			style = Enum.CustomAuraButtonDispelTypeTextureStyle.CustomAsset,
+			showWhenHarmful = true,
+			showWhenHelpful = false,
+			customDispelAssetMap = { Magic = { asset = ns.MEDIA.magicGlow } },
+		})
+		-- gentle pulse on our own holder frame (the texture's look stays Blizzard's)
+		local ag = holder:CreateAnimationGroup()
+		ag:SetLooping("BOUNCE")
+		local a = ag:CreateAnimation("Alpha")
+		a:SetFromAlpha(1)
+		a:SetToAlpha(0.45)
+		a:SetDuration(0.45)
+		ag:Play()
+		button.SUIMagicGlow = holder
+	end
+
 	-- last, and allowed to fail: aura buttons forbid addon scripts, so this hook is refused
 	-- whenever the button is created under secret auras
 	if opts.onShow then pcall(button.HookScript, button, "OnShow", opts.onShow) end
@@ -117,6 +146,7 @@ end
 -- Creates one AuraContainer with one or more groups.
 -- groups: list of { filter = string, max = n }
 -- opts: { size, spacing, growthX ("RIGHT"|"LEFT"), growthY ("UP"|"DOWN"), anchor, maxWidth, dispelBorder, disableMouse,
+--         magicGlow (function -> true to add the blue Magic glow; read once, at creation),
 --         glow (function -> glow settings), onShow (icon appeared), decorate(button, textParent) }
 function ns.CreateAuraContainer(parent, groups, opts)
 	local container = CreateFrame("AuraContainer", nil, parent, "CustomAuraContainerTemplate")
