@@ -1,0 +1,14 @@
+## Interface: 120105, 16001
+## Title: |cffbfcc29Stinkie|r UI - Match History
+## Notes: Browsable match history and match stats for Stinkie UI. Loads only when you open it (/mh).
+## Author: Stinkie (twitch.tv/smellystinkie)
+## X-License: MIT
+## Version: 0.31.0
+## Dependencies: StinkieUI
+## LoadOnDemand: 1
+## IconTexture: Interface\AddOns\StinkieUI\Media\logo_icon
+## SavedVariables: StinkieUIMatchHistory
+
+Data.lua
+Import.lua
+UI.lua

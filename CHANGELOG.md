@@ -1,5 +1,45 @@
 # Stinkie UI changelog
 
+## 0.31.0
+- New Window Mover (Miscellaneous), replacing BlizzMove: drag Blizzard's windows by any empty part of them, Ctrl + mouse wheel over a window to make it bigger or smaller. Positions and sizes are remembered across sessions (or just until logout) and put back whenever the window opens or Blizzard re-arranges its side panels. Alt + right-click resets one window; a button resets them all. Optional key to hold while dragging; add any other window by name. Windows Blizzard protects (spellbook, map) only move out of combat. It switches itself off while BlizzMove is enabled, since both would fight over the same windows: disable BlizzMove to use it.
+- The character and inspect window sizes are the same setting in Window Mover and on the Character Sheet page.
+
+## 0.30.0
+- Match History window: drag the bottom-right corner to resize it; its size and position are remembered.
+- Queue Time & MMR: shows how much your last game changed your MMR (+73 in green, -40 in red). Solo Shuffle and Blitz use your current spec's last game.
+- Character Sheet: roomier layout. The window and character area are wider and taller, with more space between item slots and between the weapons (adjustable, or off). Item text is wider to match.
+- Character Sheet: gems and empty sockets sit beside each icon on the outside (above the weapons) instead of in the text.
+- Character Sheet: window size is re-applied every time the window opens, so a resize sticks. Default window opacity is 55% (profiles still on 95% move to 55%).
+
+## 0.29.0
+- Match Stats: click any column heading to sort by it; click again to reverse. (Replaces the Sort dropdown.)
+- Match Stats: new groupings, Opponent (every enemy you've faced, like Teammate) and Faction (the side you fought on in Blitz and battlegrounds; arenas have no sides).
+- Match History: a "my spec" filter in the top bar, so e.g. grouping by map shows how one spec does on each map.
+- Match History: skirmishes, brawls and unrated games (battlegrounds, Solo Shuffle, Blitz) are no longer saved. Each can be turned back on. Matches already saved stay.
+- Character Sheet: item level and PvP item level are on the same line as the upgrade track.
+
+## 0.28.1
+- Fixed: the character window's item details stopped after the first slot ("CharacterSheet.lua:291: attempt to call a nil value").
+- Character Sheet: every secondary and tertiary stat (crit, haste, mastery, versatility, leech, avoidance, speed) now shows even at 0, plus a movement speed row. Option to hide the ones you have none of (Blizzard's default).
+- Character Sheet: PvP item level only appears on items (and in the overall line) when it differs from the normal item level. Item levels refresh on their own when they change, including entering and leaving PvP.
+
+## 0.28.0
+- Character Sheet: flat look for the character and inspect windows. Blizzard's frame art, portrait, marble background, slot frames and stat-pane gradients are gone; flat window and tabs with 1px borders, zoomed item icons with a border in the item's quality color, thin accent lines under the stat headings. Both windows are bigger by default (120%) and can be resized with a slider or by dragging the bottom-right corner.
+- Objectives: flat headers (thin accent line instead of the gradient), flat progress bars with a 1px border, quest item buttons with zoomed icons. The background now defaults to 0% opacity (profiles still on 0.27's 50% are moved to 0%).
+- Fixed: the Rated Tracker import stopped partway with "integer overflow attempting to store 4294967295". Values Rated Tracker saved as "unknown" (4294967295) are now treated as missing, very large numbers are saved safely, and a match that can't be converted is skipped instead of stopping the import. Run the import again: matches already brought in are skipped.
+
+## 0.27.0
+- New Flag Cap Indicator (BG Score page): Warsong Gulch and Twin Peaks show each flag that's out under the score: the carrier, yards to their cap spot, and ON CAP (flashing) / NOT ON CAP / DROPPED, plus seconds until they reach the cap. Size, width, layout, colors, fonts and position are all adjustable; it can also be moved anywhere. Cap spots are learned from where each flag is picked up and remembered per map.
+- New BG Timers page: bars for assaulted bases, the predicted winner and final score, and your next resurrection while dead. Each kind can be turned off. Base capture times are set per map (Arathi Basin, Battle for Gilneas and Deepwind Gorge at 60 s to start).
+- New Match History (/mh): every arena, Solo Shuffle, Blitz, rated BG, skirmish, battleground and brawl is saved when it ends, with rating and MMR before and after, comps, talents and every player's full scoreboard line. Browse and filter matches, open any match's scoreboard, and see Match Stats: win rates with a 95% range by map, comp, spec, teammate, hero talents, MMR, length, time of day and weekday, plus rating trend, streaks and CSV export. The window is its own addon (StinkieUI_History) that only loads when opened.
+- Match History: import your Rated Tracker history (Match History page, the /mh window, or /mh import). Rated Tracker has to be enabled for that session; its files aren't changed and matches already saved are skipped. Imported matches show what Rated Tracker didn't record (hero talents, PvP talents, item level) as "not recorded", and keep its queue times and Solo Shuffle round details (teammates and first death per round). Single Shuffle rounds it had filed as 2v2 / 3v3 games get their own "Shuffle rounds (imported)" bracket.
+- New Queue Time & MMR (Match History group): while you're queued, each queue's bracket, time waited, Blizzard's estimated wait and your MMR (and optionally rating) in that bracket. Movable, resizable, optional background and border. MMR is from your last match in that bracket on that character, since the game only reveals MMR at the end of a match.
+- New Character Sheet page: beside each item on your character window (and when inspecting others) its name or upgrade track ("Mythic 6/6" in the track's color), item level, PvP item level for gear that scales in PvP, gem icons (empty sockets too), and the enchant, or "Enchant Missing" in red on helm, shoulders, chest, legs, boots, rings and weapons. Backgrounds: any warband camp, flat dark, Blizzard's, or any texture / atlas, with adjustable darkening. Hovering a secondary or tertiary stat highlights the items that have it. Item level to two decimals, with overall and PvP.
+- New Objectives page (Miscellaneous): font sizes and outline for the quest / objective tracker, scale, a flat background with opacity (Blizzard's off), and hiding it in arenas, battlegrounds, raids, Mythic+ or other dungeons.
+- New Party Targets frames (Unit Frames > Party Targets, off by default). Blank in arenas and battlegrounds, where Blizzard blocks party targets, so hidden there by default.
+- Default settings updated to Stinkie's setup: Flag Cap Indicator side by side, 229 x 40, larger text, green ON CAP / red NOT ON CAP, yards instead of NOT ON CAP; BG Timers 270 x 26 with bigger text. Existing profiles are unchanged.
+- Options reorganized: Unit Frames is one group (Player, Target, Target of Target, Focus, Pet, Party, Party Targets), Miscellaneous holds GCD History & Decor, Minimap, Damage Meter and Objectives, Match History holds History & Import and Queue Time & MMR, and pages are renamed Arena Frames, Battleground Frames and Combat Indicator. The "hide Blizzard raid frames" option moved to Battleground Frames.
+
 ## 0.26.1
 - Default settings updated to Stinkie's current setup: bigger Big Debuffs (60 px, 3 crowd control icons), Howl of Terror added to DR timers, XP / honor bars on mouseover, wider nameplates (210) with larger target arrows and healer crosses, nameplate stacking tuned (spacing 0.6, slide speed 0.05), battleground frames lower with softer out-of-range fading, larger chat text (19), Command Demon on cooldown bar 1. Existing profiles are unchanged.
 

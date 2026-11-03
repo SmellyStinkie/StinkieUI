@@ -280,7 +280,7 @@ local function unit(t)
 	return t
 end
 
-ns.DB_VERSION = 5
+ns.DB_VERSION = 8
 ns.defaults = {
 	version = ns.DB_VERSION,
 	scale = 1,
@@ -657,6 +657,109 @@ ns.defaults = {
 		quiet = false,
 		startedByUs = false,
 	},
+	-- party members' targets: a small frame beside each party frame. Blank in arenas and
+	-- battlegrounds (Blizzard refuses compound unit tokens there), so hidden there by default.
+	partyTargets = {
+		enabled = false,
+		width = 90, height = 18, showPower = false, powerHeight = 3,
+		showName = true, nameAbove = false, healthText = "percent", shields = false,
+		nameStyle = text(10, true), healthStyle = text(10),
+		hideInPvP = true,
+		point = { "LEFT", 560, 120 },
+	},
+	-- Flag Cap Indicator (Warsong Gulch, Twin Peaks): who carries each flag, yards to their cap
+	-- spot, ON CAP / NOT ON CAP / DROPPED. Sits under the battleground score by default.
+	flagCap = {
+		enabled = true,
+		attach = true, attachX = 0, attachY = -4, -- under the score display
+		point = { "TOP", 0, -80 },               -- when not attached
+		scale = 1,
+		width = 240, height = 22, spacing = 2,
+		layout = "STACK", -- STACK (one under the other) | SIDE (side by side)
+		names = true, classColors = true, realms = false,
+		distance = true, onlyYardsWhenNotOnCap = false, eta = true,
+		radius = 8, -- yards from the cap spot that count as on cap
+		textStyle = text(13),
+		statusStyle = { size = 13, outline = "THICKOUTLINE", color = { 1, 1, 1 }, classColor = false },
+		bgAlpha = 0.75,
+		onCapColor = { 0.95, 0.20, 0.15 },
+		notOnCapColor = { 0.25, 0.25, 0.28 },
+		droppedColor = { 0.95, 0.75, 0.15 },
+		flashOnCap = true,
+	},
+	-- BG Timers: base captures, predicted winner, resurrection wave
+	bgTimers = {
+		enabled = true,
+		nodes = true, win = true, respawn = true,
+		width = 200, height = 18, spacing = 3,
+		growth = "DOWN",
+		textStyle = text(12),
+		allianceColor = { 0.25, 0.55, 1.00 }, hordeColor = { 0.95, 0.25, 0.25 }, neutralColor = { 0.75, 0.70, 0.55 },
+		bgAlpha = 0.7,
+		-- seconds an assaulted base takes to turn, per map name. Maps not listed get no base timers.
+		durations = { "Arathi Basin = 60", "Battle for Gilneas = 60", "Deepwind Gorge = 60" },
+		point = { "TOP", 330, -20 },
+	},
+	-- Match History: every rated and unrated PvP match is saved at the end. The browser and
+	-- stats (/mh) live in the StinkieUI_History addon, which only loads when you open it.
+	matchHistory = {
+		enabled = true,
+		arena = true, shuffle = true, blitz = true, rbg = true,
+		skirmish = false, battleground = false, brawl = false, unrated = false, -- unrated games aren't saved by default
+		talents = true, -- save your talent loadout string with each match
+		announce = true, -- one chat line after each match ("Saved: 3v3 Nagrand Arena, win, +14")
+	},
+	-- Character Sheet: additions to Blizzard's character and inspect frames
+	character = {
+		enabled = true,
+		inspect = true, -- same look when inspecting others
+		background = "dark", -- blizzard | dark | custom | warband:<id>
+		customTexture = "", ownedOnly = false,
+		dim = 0.25, -- darkening over the background so text stays readable
+		line1 = "name", -- name | track ("Mythic 6/6") | none
+		track = true, ilvl = true, pvp = true, gems = true, gemSize = 14,
+		enchants = true, enchantNames = true, missing = true,
+		statHighlight = true, highlightColor = { 0.75, 0.80, 0.16 },
+		hideZeroStats = false, -- false: every secondary / tertiary stat shows, even at 0
+		moveSpeed = true,      -- movement speed row in the stat list
+		ilvlDecimals = true,
+		textWidth = 140, -- with the roomier layout the model area is ~320 px wide
+		flat = true, frameColor = { 0.05, 0.05, 0.06 }, frameAlpha = 0.55, tabAlpha = 0.9,
+		roomy = true, extraWidth = 90, extraHeight = 70, weaponGap = 40, -- more room around the character
+		scale = 1.2, inspectScale = 1.2, resizer = true,
+		nameStyle = text(12),
+		infoStyle = text(11),
+	},
+	-- Objectives (quest / objective tracker)
+	objectives = {
+		enabled = true,
+		lineSize = 12, headerSize = 14, outline = "OUTLINE",
+		scale = 1,
+		background = true, bgColor = { 0.04, 0.04, 0.05 }, bgAlpha = 0, border = false, padding = 4,
+		hideBlizzardBg = true,
+		flat = true, -- flat headers, progress bars and quest item buttons (no gradients)
+		hideArena = true, hideBG = true, hideRaid = true, hideMPlus = false, hideDungeon = false,
+	},
+	-- Window Mover (replaces BlizzMove): drag Blizzard windows, Ctrl + wheel to resize
+	windowMover = {
+		enabled = true,
+		wheel = true,       -- Ctrl + mouse wheel over a window changes its size
+		modifier = "none",  -- none | alt | shift | ctrl: key to hold while dragging
+		remember = true,    -- keep positions and sizes across sessions
+		frames = {},        -- window name -> { point, scale }
+		extra = {},         -- more window names to make movable
+	},
+	-- Queue Time & MMR: while you're queued, each queue's bracket, time waited, Blizzard's estimate
+	-- and your MMR there (from your last match in that bracket on this character)
+	queueInfo = {
+		enabled = true,
+		estimate = true, mmr = true, mmrChange = true, rating = false,
+		width = 300, height = 22, spacing = 2, scale = 1,
+		background = true, bgColor = { 0.04, 0.04, 0.05 }, bgAlpha = 0.65, border = true,
+		textStyle = text(14),
+		labelStyle = { size = 14, outline = "OUTLINE", color = { 0.75, 0.80, 0.16 }, classColor = false },
+		point = { "TOP", 0, -200 },
+	},
 	cooldowns = {
 		centerEssential = true, centerUtility = true, centerBuffs = true,
 		skinBlizzard = true,
@@ -726,6 +829,23 @@ local function Migrate(db)
 		-- battleground blocks: 15 rows by default (was 10)
 		for _, key in ipairs({ "bgEnemies", "bgAllies" }) do
 			if db[key] and db[key].maxRows == 10 then db[key].maxRows = 15 end
+		end
+	end
+	if v < 6 then
+		-- objectives background: new default is 0% opacity (0.27 started at 50%)
+		if db.objectives and db.objectives.bgAlpha == 0.5 then db.objectives.bgAlpha = 0 end
+	end
+	if v < 7 then
+		-- Match History: unrated games (skirmish, brawls, unrated battlegrounds) are no longer saved
+		local mh = db.matchHistory
+		if mh then mh.skirmish, mh.battleground, mh.brawl, mh.unrated = false, false, false, false end
+	end
+	if v < 8 then
+		-- Character Sheet: 55% window opacity and wider item text (roomier layout), if still at 0.28's values
+		local ch = db.character
+		if ch then
+			if ch.frameAlpha == 0.95 then ch.frameAlpha = 0.55 end
+			if ch.textWidth == 110 then ch.textWidth = 140 end
 		end
 	end
 	db.version = ns.DB_VERSION
@@ -1300,6 +1420,14 @@ SlashCmdList.STINKIEUI = function(msg)
 		if ns.Nameplates and ns.Nameplates.PrintStacking then ns.Nameplates.PrintStacking() end
 	elseif msg == "auras" then
 		if ns.Nameplates and ns.Nameplates.DebugTarget then ns.Nameplates.DebugTarget() end
+	elseif msg == "flags" then
+		if ns.FlagCap then ns.FlagCap.Debug() end
+	elseif msg == "flags reset" then
+		if ns.FlagCap then ns.FlagCap.ResetLearned() end
+	elseif msg == "timers" then
+		if ns.BGTimers then ns.BGTimers.Debug() end
+	elseif msg == "history" or msg == "mh" then
+		if ns.MatchRecorder then ns.MatchRecorder.Open() end
 	elseif msg == "reset" then
 		ns:ResetProfile()
 		ReloadUI()

@@ -1220,6 +1220,8 @@ local function BuildBGPage(page)
 		function(v) page.side = v; page:SyncAll() end)
 	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"), true)
 	page:Button("Test mode on / off", function() ns.BGEnemies:SetTestMode(not ns.BGEnemies.testMode) end)
+	page:Check("Hide Blizzard raid frames in Blitz and battlegrounds", function() return ns.db.bgWidgets.hideRaidFrames end, function(v) ns.db.bgWidgets.hideRaidFrames = v end)
+	page:Note("Both sides. Not in 40-player battlegrounds.", 22)
 	page:Check("Show Horde / Alliance title", Getter(cfg, "header"), Setter(cfg, "header"))
 	page:Slider("Width", 60, 300, 1, Getter(cfg, "width"), Setter(cfg, "width"))
 	page:Slider("Row height", 10, 50, 1, Getter(cfg, "height"), Setter(cfg, "height"))
@@ -1230,7 +1232,7 @@ local function BuildBGPage(page)
 	page:Check("Health percent", Getter(cfg, "showHealthText"), Setter(cfg, "showHealthText"))
 	page:Check("Hide realm names", Getter(cfg, "shortNames"), Setter(cfg, "shortNames"))
 	page:Slider("Out of range opacity", 0.1, 1, 0.05, Getter(cfg, "oorAlpha"), Setter(cfg, "oorAlpha"))
-	page:Choice("Icon beside each row", { { "role", "Role" }, { "spec", "Spec / class" } }, Getter(cfg, "iconMode"), Setter(cfg, "iconMode"))
+	page:Choice("Icon type", { { "role", "Role" }, { "spec", "Spec / class" } }, Getter(cfg, "iconMode"), Setter(cfg, "iconMode"))
 	page:Note("Role: green cross for healers (both teams), shield for tanks, sword for damage. Falls back to the spec or class icon when the role isn't known.", 48)
 	page:Check("Spec name as text when there's no spec icon", Getter(cfg, "specText"), Setter(cfg, "specText"))
 	page:Choice("Power bar", { { "none", "Off" }, { "healers", "Healers" }, { "all", "Everyone" } }, Getter(cfg, "power"), Setter(cfg, "power"))
@@ -1260,13 +1262,16 @@ end
 
 local function BuildBGScorePage(page)
 	local function cfg() return ns.db.bgWidgets end
+	local function fc() return ns.db.flagCap end
 	page:Column(1)
 	page:Header("Battleground score")
 	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"))
 	page:Note("Only inside battlegrounds. Elsewhere these stay where Blizzard puts them.", 36)
-	page:Check("Hide Blizzard raid frames in Blitz and battlegrounds", Getter(cfg, "hideRaidFrames"), Setter(cfg, "hideRaidFrames"))
-	page:Note("Not in 40-player battlegrounds. Works even when the score options are off.", 24)
-	page:Button("Test mode on / off", function() ns.BGWidgets:SetTestMode(not ns.BGWidgets.testMode) end)
+	page:Button("Test mode on / off", function()
+		local on = not ns.BGWidgets.testMode
+		ns.BGWidgets:SetTestMode(on)
+		if ns.FlagCap then ns.FlagCap:SetTestMode(on) end
+	end)
 	page:Check("Move the score display (top of screen)", Getter(cfg, "moveScore"), Setter(cfg, "moveScore"))
 	page:Slider("Score size", 0.5, 2, 0.05, Getter(cfg, "scoreScale"), Setter(cfg, "scoreScale"))
 	page:Position("Score position", function() return "bgScore" end)
@@ -1279,7 +1284,6 @@ local function BuildBGScorePage(page)
 	end, Getter(cfg, "texture"), Setter(cfg, "texture"), true)
 	page:Color("Alliance side", Getter(cfg, "leftColor"), Setter(cfg, "leftColor"))
 	page:Color("Horde side", Getter(cfg, "rightColor"), Setter(cfg, "rightColor"))
-	page:Column(2)
 	page:Header("Capture / cart progress")
 	page:Note("The progress widgets Blizzard normally puts under the minimap (cart, capture bars).", 36)
 	page:Check("Move it", Getter(cfg, "moveCapture"), Setter(cfg, "moveCapture"))
@@ -1289,7 +1293,267 @@ local function BuildBGScorePage(page)
 	page:Check("Move it", Getter(cfg, "moveGhost"), Setter(cfg, "moveGhost"))
 	page:Slider("Size", 0.5, 2, 0.05, Getter(cfg, "ghostScale"), Setter(cfg, "ghostScale"))
 	page:Position("Position", function() return "bgGhost" end)
-	page:Note("Unlock frames (/stinkie unlock) to drag both boxes. They're easiest to place inside a battleground, where the real widgets show.", 48)
+	page:Note("Unlock frames (/stinkie unlock) to drag the boxes. They're easiest to place inside a battleground, where the real widgets show.", 48)
+
+	page:Column(2)
+	page:Header("Flag Cap Indicator")
+	page:Note("Warsong Gulch and Twin Peaks: who carries each flag, how many yards they are from their cap spot, and ON CAP when they're standing on it (a good moment to return your flag).", 62)
+	page:Check("Enabled", Getter(fc, "enabled"), Setter(fc, "enabled"))
+	page:Button("Test mode on / off", function() if ns.FlagCap then ns.FlagCap:SetTestMode(not ns.FlagCap.testMode) end end)
+	page:Check("Sit under the score", Getter(fc, "attach"), Setter(fc, "attach"))
+	page:Slider("Offset X (under the score)", -400, 400, 1, Getter(fc, "attachX"), Setter(fc, "attachX"))
+	page:Slider("Offset Y (under the score)", -300, 100, 1, Getter(fc, "attachY"), Setter(fc, "attachY"))
+	page:Position("Position (not under the score)", function() return "flagCap" end)
+	page:Slider("Size", 0.5, 2.5, 0.05, Getter(fc, "scale"), Setter(fc, "scale"))
+	page:Slider("Width", 120, 500, 1, Getter(fc, "width"), Setter(fc, "width"))
+	page:Slider("Height", 14, 48, 1, Getter(fc, "height"), Setter(fc, "height"))
+	page:Choice("Two flags", { { "STACK", "One under the other" }, { "SIDE", "Side by side" } }, Getter(fc, "layout"), Setter(fc, "layout"))
+	page:Slider("Spacing", 0, 20, 1, Getter(fc, "spacing"), Setter(fc, "spacing"))
+	page:Check("Carrier names", Getter(fc, "names"), Setter(fc, "names"))
+	page:Check("Class-colored names", Getter(fc, "classColors"), Setter(fc, "classColors"))
+	page:Check("Realm names", Getter(fc, "realms"), Setter(fc, "realms"))
+	page:Check("Distance to cap (yards)", Getter(fc, "distance"), Setter(fc, "distance"))
+	page:Check("Yards instead of NOT ON CAP", Getter(fc, "onlyYardsWhenNotOnCap"), Setter(fc, "onlyYardsWhenNotOnCap"))
+	page:Check("Seconds until they reach the cap", Getter(fc, "eta"), Setter(fc, "eta"))
+	page:Slider("On cap within (yards)", 3, 20, 1, Getter(fc, "radius"), Setter(fc, "radius"))
+	page:Check("Flash ON CAP", Getter(fc, "flashOnCap"), Setter(fc, "flashOnCap"))
+	page:Color("ON CAP color", Getter(fc, "onCapColor"), Setter(fc, "onCapColor"))
+	page:Color("NOT ON CAP color", Getter(fc, "notOnCapColor"), Setter(fc, "notOnCapColor"))
+	page:Color("DROPPED color", Getter(fc, "droppedColor"), Setter(fc, "droppedColor"))
+	page:Slider("Background opacity", 0, 1, 0.05, Getter(fc, "bgAlpha"), Setter(fc, "bgAlpha"))
+	page:Note("The game doesn't say where cap spots are, so they're learned: each flag shows up where it's picked up (its base). The first time you play a map, distance appears once both flags have been picked up; after that it's remembered. /stinkie flags shows what the game reports, /stinkie flags reset relearns a map.", 90)
+	page:TextStyle("Name and distance text", function() return fc().textStyle end, {})
+	page:TextStyle("Status text", function() return fc().statusStyle end, {})
+end
+
+local function BuildBGTimersPage(page)
+	local function cfg() return ns.db.bgTimers end
+	page:Column(1)
+	page:Header("BG Timers")
+	page:Note("Bars for assaulted bases, the predicted winner and your next resurrection. Battlegrounds and Blitz only.", 36)
+	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"))
+	page:Button("Test mode on / off", function() ns.BGTimers:SetTestMode(not ns.BGTimers.testMode) end)
+	page:Header("Timers")
+	page:Check("Base captures", Getter(cfg, "nodes"), Setter(cfg, "nodes"))
+	page:Note("Starts when a base is assaulted; gone when it turns or is defended. Uses the seconds set for the map (right).", 36)
+	page:Check("Predicted winner and final score", Getter(cfg, "win"), Setter(cfg, "win"))
+	page:Note("From each team's points per second over the last 30 seconds, on maps with a resource score bar.", 36)
+	page:Check("Resurrection (while you're dead)", Getter(cfg, "respawn"), Setter(cfg, "respawn"))
+	page:Header("Look")
+	page:Slider("Width", 100, 400, 1, Getter(cfg, "width"), Setter(cfg, "width"))
+	page:Slider("Height", 10, 40, 1, Getter(cfg, "height"), Setter(cfg, "height"))
+	page:Slider("Spacing", 0, 12, 1, Getter(cfg, "spacing"), Setter(cfg, "spacing"))
+	page:Choice("Grow", { { "DOWN", "Down" }, { "UP", "Up" } }, Getter(cfg, "growth"), Setter(cfg, "growth"))
+	page:Slider("Background opacity", 0, 1, 0.05, Getter(cfg, "bgAlpha"), Setter(cfg, "bgAlpha"))
+	page:Color("Alliance", Getter(cfg, "allianceColor"), Setter(cfg, "allianceColor"))
+	page:Color("Horde", Getter(cfg, "hordeColor"), Setter(cfg, "hordeColor"))
+	page:Color("Unknown team / resurrection", Getter(cfg, "neutralColor"), Setter(cfg, "neutralColor"))
+	page:Position(nil, function() return "bgTimers" end)
+	page:Column(2)
+	page:TextList("Base capture time per map", 150, function() return table.concat(cfg().durations, "\n") end, function(text)
+		local list = {}
+		for line in text:gmatch("[^\r\n]+") do
+			line = strtrim(line)
+			if line ~= "" then table.insert(list, line) end
+		end
+		cfg().durations = list
+	end, "One map per line: Map name = seconds. Maps not listed get no base timers (maps without bases, like Warsong Gulch, need nothing).")
+	page:Note("Map names as the game shows them on entry. /stinkie timers inside a battleground prints the map name and what each base icon reports, to add or correct a map.", 62)
+	page:TextStyle("Bar text", function() return cfg().textStyle end, {})
+end
+
+local function BuildMatchHistoryPage(page)
+	local function cfg() return ns.db.matchHistory end
+	page:Column(1)
+	page:Header("Match History")
+	page:Note("Every match is saved when it ends: result, rating and MMR before and after, map, length, comps, your spec, hero talents, PvP talents and talent loadout, and every player's full scoreboard line.", 62)
+	page:Button("Open Match History (/mh)", function() ns.MatchRecorder.Open() end, 220)
+	page:Button("Open Match Stats (/mh stats)", function() ns.MatchRecorder.Open("stats") end, 220)
+	page:Check("Save matches", Getter(cfg, "enabled"), Setter(cfg, "enabled"))
+	page:Check("One chat line after each match", Getter(cfg, "announce"), Setter(cfg, "announce"))
+	page:Check("Save my talent loadout with each match", Getter(cfg, "talents"), Setter(cfg, "talents"))
+	page:Header("Save these")
+	page:Check("Rated arena (2v2, 3v3)", Getter(cfg, "arena"), Setter(cfg, "arena"))
+	page:Check("Solo Shuffle", Getter(cfg, "shuffle"), Setter(cfg, "shuffle"))
+	page:Check("Blitz", Getter(cfg, "blitz"), Setter(cfg, "blitz"))
+	page:Check("Rated battlegrounds", Getter(cfg, "rbg"), Setter(cfg, "rbg"))
+	page:Header("Unrated (off by default)")
+	page:Check("Skirmishes", Getter(cfg, "skirmish"), Setter(cfg, "skirmish"))
+	page:Check("Unrated battlegrounds", Getter(cfg, "battleground"), Setter(cfg, "battleground"))
+	page:Check("Unrated Solo Shuffle and Blitz", Getter(cfg, "unrated"), Setter(cfg, "unrated"))
+	page:Check("Brawls", Getter(cfg, "brawl"), Setter(cfg, "brawl"))
+	page:Header("Import")
+	page:Note("Bring in your Rated Tracker history. Rated Tracker has to be enabled for the session you import in (an addon can only read another addon's data while it's loaded); disable it afterwards. Its own files aren't changed, and matches already here are skipped.", 76)
+	page:Button("Import Rated Tracker history", function() ns.MatchRecorder.Import() end, 240)
+	page:Column(2)
+	page:Header("Memory")
+	page:Note("The history window is its own addon (StinkieUI_History) and only loads when you open it. Until then a new match costs a few hundred bytes. After you close the window its decoded data is released; the archive itself stays loaded until your next /reload.", 90)
+	page:Note("Matches are stored as compact text with names, maps and loadouts kept once each: about 0.5 KB per arena match and 1-1.5 KB per Blitz match.", 50)
+	page:Header("Match Stats")
+	page:Note("Win rates by map, enemy comp, enemy spec, your team comp, teammate, your spec and hero talents, enemy MMR, match length, time of day and day of week, with a 95% range on each so you can tell real differences from luck. Rating trend, streaks and CSV export.", 90)
+end
+
+local function BuildQueueInfoPage(page)
+	local function cfg() return ns.db.queueInfo end
+	page:Column(1)
+	page:Header("Queue Time & MMR")
+	page:Note("While you're queued: each queue's bracket, how long you've waited, Blizzard's estimate, and your MMR there.", 36)
+	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"))
+	page:Button("Test mode on / off", function() ns.QueueInfo:SetTestMode(not ns.QueueInfo.testMode) end)
+	page:Check("Estimated wait", Getter(cfg, "estimate"), Setter(cfg, "estimate"))
+	page:Check("MMR", Getter(cfg, "mmr"), Setter(cfg, "mmr"))
+	page:Check("MMR change from your last game (+73 green / -40 red)", Getter(cfg, "mmrChange"), Setter(cfg, "mmrChange"))
+	page:Check("Rating (CR)", Getter(cfg, "rating"), Setter(cfg, "rating"))
+	page:Note("The game only shows MMR at the end of a match, so this is your MMR after your last match in that bracket on this character (recorded or imported), and how much that match changed it. Solo Shuffle and Blitz use your current spec. It shows - until there is one.", 76)
+	page:Header("Size")
+	page:Slider("Size", 0.5, 2.5, 0.05, Getter(cfg, "scale"), Setter(cfg, "scale"))
+	page:Slider("Width", 150, 600, 1, Getter(cfg, "width"), Setter(cfg, "width"))
+	page:Slider("Row height", 12, 48, 1, Getter(cfg, "height"), Setter(cfg, "height"))
+	page:Slider("Spacing", 0, 12, 1, Getter(cfg, "spacing"), Setter(cfg, "spacing"))
+	page:Position(nil, function() return "queueInfo" end)
+	page:Column(2)
+	page:Header("Background")
+	page:Check("Background", Getter(cfg, "background"), Setter(cfg, "background"))
+	page:Check("1px border", Getter(cfg, "border"), Setter(cfg, "border"))
+	page:Color("Color", Getter(cfg, "bgColor"), Setter(cfg, "bgColor"))
+	page:Slider("Opacity", 0, 1, 0.05, Getter(cfg, "bgAlpha"), Setter(cfg, "bgAlpha"))
+	page:TextStyle("Bracket text", function() return cfg().labelStyle end, {})
+	page:TextStyle("Time and MMR text", function() return cfg().textStyle end, {})
+end
+
+local function BuildCharacterPage(page)
+	local function cfg() return ns.db.character end
+	local function bgChanged() if ns.CharacterSheet then ns.CharacterSheet:Refresh() end end
+	page:Column(1)
+	page:Header("Character Sheet")
+	page:Note("Adds to Blizzard's character window: item details beside each slot, a background behind your character, stat highlighting and exact item levels. Open your character (C) to see changes.", 62)
+	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"))
+	page:Check("Same look when inspecting others", Getter(cfg, "inspect"), Setter(cfg, "inspect"))
+	page:Header("Look and size")
+	page:Check("Flat look (no frame art, portrait or gradients; 1px borders)", Getter(cfg, "flat"), Setter(cfg, "flat"), true)
+	page:Color("Window color", Getter(cfg, "frameColor"), Setter(cfg, "frameColor"))
+	page:Slider("Window opacity", 0, 1, 0.05, Getter(cfg, "frameAlpha"), Setter(cfg, "frameAlpha"))
+	page:Slider("Character window size", 0.7, 2, 0.05, Getter(cfg, "scale"), Setter(cfg, "scale"))
+	page:Slider("Inspect window size", 0.7, 2, 0.05, Getter(cfg, "inspectScale"), Setter(cfg, "inspectScale"))
+	page:Check("Drag corner to resize (bottom right)", Getter(cfg, "resizer"), Setter(cfg, "resizer"))
+	page:Check("Roomier layout (bigger character area)", Getter(cfg, "roomy"), Setter(cfg, "roomy"))
+	page:Slider("Extra width", 0, 200, 1, Getter(cfg, "extraWidth"), Setter(cfg, "extraWidth"))
+	page:Slider("Extra height", 0, 160, 1, Getter(cfg, "extraHeight"), Setter(cfg, "extraHeight"))
+	page:Slider("Space between weapons", 5, 120, 1, Getter(cfg, "weaponGap"), Setter(cfg, "weaponGap"))
+	page:Note("Item borders take the item's quality color. Turning the flat look off needs a reload.", 36)
+	page:Header("Background")
+	page:Dropdown("Background", function() return ns.CharacterSheet.BackgroundChoices() end, Getter(cfg, "background"), function(v) cfg().background = v; bgChanged() end)
+	page:Check("Only warband camps I own", Getter(cfg, "ownedOnly"), Setter(cfg, "ownedOnly"))
+	page:EditText("Custom texture or atlas", Getter(cfg, "customTexture"), function(v) cfg().customTexture = v; bgChanged() end)
+	page:Note("For Custom: an atlas name or a file path / ID, e.g. Interface\\Glues\\... Warband camps are cropped to fit, not stretched.", 48)
+	page:Slider("Darken background", 0, 0.9, 0.05, Getter(cfg, "dim"), Setter(cfg, "dim"))
+	page:Header("Item details")
+	page:Choice("First line", { { "name", "Item name" }, { "track", "Upgrade track" }, { "none", "Nothing" } }, Getter(cfg, "line1"), Setter(cfg, "line1"))
+	page:Note("Item level, PvP item level and the upgrade track (e.g. Mythic 6/6, in the track's color) share one line. With Upgrade track it's the first line, in place of the name; items without a track show their name.", 62)
+	page:Check("Item level", Getter(cfg, "ilvl"), Setter(cfg, "ilvl"))
+	page:Check("Upgrade track on the item level line (with names)", Getter(cfg, "track"), Setter(cfg, "track"))
+	page:Check("PvP item level (only on gear that scales up in PvP)", Getter(cfg, "pvp"), Setter(cfg, "pvp"))
+	page:Check("Gems beside each icon, on the outside (empty sockets too)", Getter(cfg, "gems"), Setter(cfg, "gems"))
+	page:Slider("Gem icon size", 8, 28, 1, Getter(cfg, "gemSize"), Setter(cfg, "gemSize"))
+	page:Check("Enchants", Getter(cfg, "enchants"), Setter(cfg, "enchants"))
+	page:Check("Enchant names (otherwise just Enchanted)", Getter(cfg, "enchantNames"), Setter(cfg, "enchantNames"))
+	page:Check("Enchant Missing in red", Getter(cfg, "missing"), Setter(cfg, "missing"))
+	page:Note("Checked slots: helm, shoulders, chest, legs, boots, rings and weapons (an off-hand only if it's a weapon).", 36)
+	page:Slider("Text width", 80, 300, 1, Getter(cfg, "textWidth"), Setter(cfg, "textWidth"))
+	page:Column(2)
+	page:Header("Stats and item level")
+	page:Check("Hovering a secondary or tertiary stat highlights items with it", Getter(cfg, "statHighlight"), Setter(cfg, "statHighlight"))
+	page:Color("Highlight color", Getter(cfg, "highlightColor"), Setter(cfg, "highlightColor"))
+	page:Note("Critical strike, haste, mastery, versatility, speed (also movement speed), leech and avoidance.", 36)
+	page:Check("Hide stats you have none of (Blizzard's default)", Getter(cfg, "hideZeroStats"), Setter(cfg, "hideZeroStats"))
+	page:Check("Movement speed in the stat list", Getter(cfg, "moveSpeed"), Setter(cfg, "moveSpeed"))
+	page:Check("Item level to two decimals, with overall and PvP", Getter(cfg, "ilvlDecimals"), Setter(cfg, "ilvlDecimals"))
+	page:Note("Inspected players show their item level and PvP item level at the top of the window.", 36)
+	page:TextStyle("First line text", function() return cfg().nameStyle end, {})
+	page:TextStyle("Item level / enchant text", function() return cfg().infoStyle end, {})
+end
+
+local function BuildObjectivesPage(page)
+	local function cfg() return ns.db.objectives end
+	page:Column(1)
+	page:Header("Objectives")
+	page:Note("Blizzard's quest and objective tracker. Move it and set its height in Edit Mode.", 36)
+	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"), true)
+	page:Header("Text")
+	page:Note("Uses the Stinkie UI font (General page).", 22)
+	page:Slider("Objective text size", 8, 24, 1, Getter(cfg, "lineSize"), Setter(cfg, "lineSize"))
+	page:Slider("Header text size", 8, 28, 1, Getter(cfg, "headerSize"), Setter(cfg, "headerSize"))
+	page:Choice("Outline", { { "NONE", "None" }, { "OUTLINE", "Thin" }, { "THICKOUTLINE", "Thick" } }, Getter(cfg, "outline"), Setter(cfg, "outline"))
+	page:Header("Size")
+	page:Slider("Scale", 0.5, 2, 0.05, Getter(cfg, "scale"), Setter(cfg, "scale"))
+	page:Header("Look")
+	page:Check("Flat headers, bars and quest item buttons", Getter(cfg, "flat"), Setter(cfg, "flat"), true)
+	page:Note("Headers get a thin accent line instead of Blizzard's gradient; progress bars a flat fill with a 1px border.", 36)
+	page:Column(2)
+	page:Header("Background")
+	page:Check("Background", Getter(cfg, "background"), Setter(cfg, "background"))
+	page:Check("Hide Blizzard's background", Getter(cfg, "hideBlizzardBg"), Setter(cfg, "hideBlizzardBg"))
+	page:Check("1px border", Getter(cfg, "border"), Setter(cfg, "border"))
+	page:Color("Color", Getter(cfg, "bgColor"), Setter(cfg, "bgColor"))
+	page:Slider("Opacity", 0, 1, 0.05, Getter(cfg, "bgAlpha"), Setter(cfg, "bgAlpha"))
+	page:Slider("Padding", 0, 20, 1, Getter(cfg, "padding"), Setter(cfg, "padding"))
+	page:Header("Hide in")
+	page:Check("Arenas", Getter(cfg, "hideArena"), Setter(cfg, "hideArena"))
+	page:Check("Battlegrounds and Blitz", Getter(cfg, "hideBG"), Setter(cfg, "hideBG"))
+	page:Check("Raids", Getter(cfg, "hideRaid"), Setter(cfg, "hideRaid"))
+	page:Check("Mythic+", Getter(cfg, "hideMPlus"), Setter(cfg, "hideMPlus"))
+	page:Check("Other dungeons", Getter(cfg, "hideDungeon"), Setter(cfg, "hideDungeon"))
+	page:Note("Changes wait until you're out of combat (Blizzard protects the tracker in combat).", 36)
+end
+
+local function BuildWindowMoverPage(page)
+	local function cfg() return ns.db.windowMover end
+	page:Column(1)
+	page:Header("Window Mover")
+	page:Note("Move Blizzard's windows by dragging any empty part of them, and hold Ctrl and scroll over a window to make it bigger or smaller. Positions and sizes are remembered. Replaces BlizzMove (it switches itself off while BlizzMove is enabled).", 76)
+	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"), true)
+	page:Check("Ctrl + mouse wheel changes size", Getter(cfg, "wheel"), Setter(cfg, "wheel"))
+	page:Choice("Hold to drag", { { "none", "Nothing" }, { "alt", "Alt" }, { "shift", "Shift" }, { "ctrl", "Ctrl" } }, Getter(cfg, "modifier"), Setter(cfg, "modifier"))
+	page:Check("Remember across sessions", Getter(cfg, "remember"), Setter(cfg, "remember"))
+	page:Note("Off: windows go back to Blizzard's spots after a logout or reload.", 36)
+	page:Button("Reset all windows", function() ns.WindowMover.ResetAll() end)
+	page:Note("Alt + right-click a window to reset just that one. Windows Blizzard protects (spellbook, map) only move out of combat. Character and inspect window sizes are the same setting as on the Character Sheet page.", 62)
+	page:Column(2)
+	page:Header("Windows")
+	local names = {}
+	for _, f in ipairs(ns.WindowMover.FRAMES) do names[#names + 1] = f[2] end
+	page:Note(table.concat(names, ", ") .. ".", 210)
+	page:TextList("More windows", 90, function() return table.concat(cfg().extra or {}, "\n") end, function(text)
+		local list = {}
+		for line in text:gmatch("[^\r\n,]+") do
+			line = strtrim(line)
+			if line ~= "" then table.insert(list, line) end
+		end
+		cfg().extra = list
+	end, "Frame names of any other window to make movable, one per line (/fstack shows names).")
+end
+
+local function BuildPartyTargetsPage(page)
+	local function cfg() return ns.db.partyTargets end
+	page:Column(1)
+	page:Header("Party targets")
+	page:Note("A small frame for each party member's target, in line with the party frames.", 36)
+	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"), true)
+	page:Note("Blizzard blocks addons from party members' targets inside arenas and battlegrounds, so these frames stay blank there.", 48)
+	page:Check("Hide in arenas and battlegrounds", Getter(cfg, "hideInPvP"), Setter(cfg, "hideInPvP"))
+	page:Slider("Width", 30, 300, 1, Getter(cfg, "width"), Setter(cfg, "width"))
+	page:Slider("Height", 6, 60, 1, Getter(cfg, "height"), Setter(cfg, "height"))
+	page:Check("Show power bar", Getter(cfg, "showPower"), Setter(cfg, "showPower"))
+	page:Slider("Power height", 1, 20, 1, Getter(cfg, "powerHeight"), Setter(cfg, "powerHeight"))
+	page:Check("Shields", Getter(cfg, "shields"), Setter(cfg, "shields"))
+	page:Note("Rows follow the party frames' height, spacing and growth. Party test mode (or unlocking) shows stand-ins.", 36)
+	page:Position(nil, function() return "partyTargets" end)
+	page:Column(2)
+	page:Header("Text")
+	page:Check("Show name", Getter(cfg, "showName"), Setter(cfg, "showName"))
+	page:Choice("Health text", healthTextChoices, Getter(cfg, "healthText"), Setter(cfg, "healthText"))
+	page:TextStyle("Name text", function() return cfg().nameStyle end, { classColor = true })
+	page:TextStyle("Health text", function() return cfg().healthStyle end)
 end
 
 local function BuildDamageMeterPage(page)
@@ -1627,7 +1891,7 @@ local function BuildGeneralPage(page)
 	end)
 	page:Button("Reset this profile", function() StaticPopup_Show("STINKIEUI_RESET") end)
 	page:Note("Settings marked * apply after a reload.", 22)
-	page:Note("Slash commands: /stinkie, /stinkie unlock, /stinkie lock, /stinkie fontcheck, /stinkie auras, /stinkie plates, /stinkie reset", 36)
+	page:Note("Slash commands: /stinkie, /stinkie unlock, /stinkie lock, /mh (match history), /mh stats, /stinkie flags, /stinkie timers, /stinkie fontcheck, /stinkie auras, /stinkie plates, /stinkie reset", 50)
 	page:Note("PT Sans Narrow is bundled under the SIL Open Font License (Media folder).", 36)
 end
 
@@ -1817,35 +2081,49 @@ StaticPopupDialogs["STINKIEUI_RESET"] = {
 ---------------------------------------------------------------------------
 -- Window
 ---------------------------------------------------------------------------
+-- Top-level pages; an entry with children opens a group in the list.
 local pages = {
 	{ "General", BuildGeneralPage },
-	{ "Player", function(p) BuildUnitPage(p, "player") end },
-	{ "Target", function(p) BuildUnitPage(p, "target") end },
-	{ "Target of Target", function(p) BuildUnitPage(p, "targettarget") end },
-	{ "Focus", function(p) BuildUnitPage(p, "focus") end },
-	{ "Pet", function(p) BuildUnitPage(p, "pet") end },
-	{ "Party", BuildPartyPage },
-	{ "Arena", BuildArenaPage },
-	{ "PvP Assist", BuildArenaAssistPage },
-	{ "Battlegrounds", BuildBGPage },
-	{ "BG Score", BuildBGScorePage },
-	{ "Castbars", BuildCastbarPage },
-	{ "Class Resource", BuildClassPowerPage },
+	{ "Unit Frames", children = {
+		{ "Player", function(p) BuildUnitPage(p, "player") end },
+		{ "Target", function(p) BuildUnitPage(p, "target") end },
+		{ "Target of Target", function(p) BuildUnitPage(p, "targettarget") end },
+		{ "Focus", function(p) BuildUnitPage(p, "focus") end },
+		{ "Pet", function(p) BuildUnitPage(p, "pet") end },
+		{ "Party", BuildPartyPage },
+		{ "Party Targets", BuildPartyTargetsPage },
+	} },
 	{ "Nameplates", BuildNameplatePage },
 	{ "Plate Auras & Units", BuildPlateAurasPage },
 	{ "Action Bars", BuildActionBarPage },
 	{ "Cooldowns", BuildCooldownPage },
-	{ "Damage Meter", BuildDamageMeterPage },
-	{ "Minimap", BuildMinimapPage },
+	{ "PvP Assist", BuildArenaAssistPage },
+	{ "Arena Frames", BuildArenaPage },
+	{ "Battleground Frames", BuildBGPage },
+	{ "BG Score", BuildBGScorePage },
+	{ "BG Timers", BuildBGTimersPage },
+	{ "Character Sheet", BuildCharacterPage },
+	{ "Combat Indicator", BuildCombatPage },
+	{ "Match History", children = {
+		{ "History & Import", BuildMatchHistoryPage },
+		{ "Queue Time & MMR", BuildQueueInfoPage },
+	} },
+	{ "Castbars", BuildCastbarPage },
+	{ "Class Resource", BuildClassPowerPage },
 	{ "Chat", BuildChatPage },
 	{ "Combat Logging", BuildCombatLogPage },
-	{ "Combat", BuildCombatPage },
 	{ "Cursor", BuildCursorPage },
-	{ "Miscellaneous", BuildMiscPage },
+	{ "Miscellaneous", children = {
+		{ "GCD History & Decor", BuildMiscPage },
+		{ "Minimap", BuildMinimapPage },
+		{ "Damage Meter", BuildDamageMeterPage },
+		{ "Objectives", BuildObjectivesPage },
+		{ "Window Mover", BuildWindowMoverPage },
+	} },
 }
 
-local HEADER_H, WIN_H = 92, 680
-local NAV_STEP = 23 -- 24 pages must fit the 568px nav column
+local HEADER_H, WIN_H = 92, 700
+local NAV_STEP, NAV_CHILD_STEP = 22, 20 -- 20 entries + the largest open group (7) fit the 588px column
 
 local function CreateWindow()
 	local w = CreateFrame("Frame", "StinkieUIOptions", UIParent)
@@ -1927,26 +2205,90 @@ local function CreateWindow()
 		thumb:SetPoint("TOP", track, "TOP", 0, -y)
 	end)
 
-	local navButtons, built = {}, {}
+	-- every leaf page gets an index; groups open in place when clicked
+	local leaves = {}
+	local top = {} -- { button, def, leafIndex | children = { { button, leafIndex } } }
+	local built, current, openGroup = {}, nil, nil
+	local Layout
 	local function SelectPage(i)
-		for j, b in ipairs(navButtons) do b:SetSelected(i == j) end
+		current = i
 		for _, p in pairs(built) do p:Hide() end
 		if not built[i] then
 			local page = NewPage(scroll)
-			pages[i][2](page)
+			leaves[i].build(page)
 			built[i] = page
 		end
 		scroll:SetScrollChild(built[i])
 		scroll:SetVerticalScroll(0)
 		built[i]:Show()
 		if popup then popup:Hide() end
+		openGroup = leaves[i].group or openGroup
+		if leaves[i].group == nil then openGroup = nil end
+		Layout()
 	end
-	for i, def in ipairs(pages) do
-		local b = FlatButton(nav, def[1], 142, function() SelectPage(i) end)
-		b:SetPoint("TOPLEFT", 4, -4 - (i - 1) * NAV_STEP)
-		b.text:ClearAllPoints()
-		b.text:SetPoint("LEFT", 10, 0)
-		navButtons[i] = b
+	function Layout()
+		local y = -4
+		for _, t in ipairs(top) do
+			t.button:ClearAllPoints()
+			t.button:SetPoint("TOPLEFT", 4, y)
+			y = y - NAV_STEP
+			if t.children then
+				local open = (openGroup == t)
+				local selected = false
+				for _, c in ipairs(t.children) do
+					c.button:SetShown(open)
+					if open then
+						c.button:ClearAllPoints()
+						c.button:SetPoint("TOPLEFT", 16, y + 1)
+						y = y - NAV_CHILD_STEP
+					end
+					c.button:SetSelected(current == c.leaf)
+					if current == c.leaf then selected = true end
+				end
+				t.button.arrow:SetText(open and "-" or "+")
+				t.button:SetSelected(selected and not open)
+			else
+				t.button:SetSelected(current == t.leaf)
+			end
+		end
+	end
+	for _, def in ipairs(pages) do
+		local t = { def = def }
+		if def.children then
+			t.children = {}
+			t.button = FlatButton(nav, def[1], 142, function()
+				if openGroup == t then
+					openGroup = nil
+					Layout()
+				else
+					openGroup = t
+					local pick = t.lastLeaf or t.children[1].leaf
+					SelectPage(pick)
+				end
+			end)
+			t.button.arrow = Label(t.button, "+", 13, { 0.6, 0.6, 0.65 })
+			t.button.arrow:SetPoint("RIGHT", -8, 0)
+			for _, cdef in ipairs(def.children) do
+				leaves[#leaves + 1] = { build = cdef[2], group = t }
+				local leaf = #leaves
+				local c = { leaf = leaf }
+				c.button = FlatButton(nav, cdef[1], 130, function() t.lastLeaf = leaf; SelectPage(leaf) end)
+				c.button:SetHeight(19)
+				c.button.text:ClearAllPoints()
+				c.button.text:SetPoint("LEFT", 10, 0)
+				ns.SetFont(c.button.text, 12)
+				c.button:Hide()
+				table.insert(t.children, c)
+			end
+		else
+			leaves[#leaves + 1] = { build = def[2] }
+			t.leaf = #leaves
+			t.button = FlatButton(nav, def[1], 142, function() SelectPage(t.leaf) end)
+		end
+		t.button:SetHeight(21)
+		t.button.text:ClearAllPoints()
+		t.button.text:SetPoint("LEFT", 10, 0)
+		table.insert(top, t)
 	end
 	scroll:SetSize(820 - 150 - 44, WIN_H - HEADER_H - 20)
 	SelectPage(1)
@@ -1975,5 +2317,12 @@ function O:Init()
 	local category = Settings.RegisterCanvasLayoutCategory(panel, "Stinkie UI")
 	Settings.RegisterAddOnCategory(category)
 end
+
+-- shared with the Match History window (StinkieUI_History)
+O.W = {
+	Flat = Flat, Label = Label, FlatButton = FlatButton, EditBox = EditBox,
+	ShowPopup = function(...) return ShowPopup(...) end,
+	ShowTextPopup = function(...) return ShowTextPopup(...) end,
+}
 
 ns:RegisterModule("Options", O)

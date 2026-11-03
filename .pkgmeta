@@ -1,6 +1,10 @@
 # Tells the packager what goes into the downloadable zip.
 package-as: StinkieUI
 
+# The match history window is its own load-on-demand addon; it ships as a second folder.
+move-folders:
+  StinkieUI/StinkieUI_History: StinkieUI_History
+
 ignore:
   - .github
   - .gitignore

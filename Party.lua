@@ -637,6 +637,7 @@ function Party:SetTestMode(on, preset)
 	castTicker:SetShown(on and true or false)
 	if not on then RequestTrinkets() end
 	Party:UpdateVisibility()
+	if ns.PartyTargets and ns.PartyTargets.holder and not ns.unlocked then ns.PartyTargets:SetTestMode(on) end
 end
 
 ns:RegisterModule("Party", Party)

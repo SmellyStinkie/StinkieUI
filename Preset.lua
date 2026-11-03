@@ -129,6 +129,14 @@ local PRESET = {
 		stackSize = 30,
 		width = 170,
 	},
+	bgTimers = {
+		height = 26,
+		point = { "TOP", 910, -740 },
+		textStyle = {
+			size = 15,
+		},
+		width = 270,
+	},
 	bgWidgets = {
 		capturePoint = { "TOP", 0, -120 },
 		captureScale = 1.5,
@@ -233,6 +241,23 @@ local PRESET = {
 			size = 14,
 		},
 		windowBorder = false,
+	},
+	flagCap = {
+		eta = false,
+		height = 40,
+		layout = "SIDE",
+		notOnCapColor = { 1, 0, 0.2 },
+		onCapColor = { 0, 1, 0.082353 },
+		onlyYardsWhenNotOnCap = true,
+		point = { "TOP", 0, -59 },
+		spacing = 6,
+		statusStyle = {
+			size = 18,
+		},
+		textStyle = {
+			size = 17,
+		},
+		width = 229,
 	},
 	minimap = {
 		buttons = "hide",
