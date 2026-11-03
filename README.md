@@ -11,6 +11,7 @@ Unzip so the folder is `World of Warcraft/_retail_/Interface/AddOns/StinkieUI/` 
 - `/stinkie` or `/sui`: options window (also in the addon compartment and Options > AddOns)
 - `/stinkie unlock` / `/stinkie lock`: move frames. Drag a box, or click it and use the arrow keys (Shift = 10px). A panel shows its exact X/Y. Every options page also has anchor, X and Y fields with nudge buttons.
 - `/stinkie fontcheck`: prints how the client loads each font (for troubleshooting)
+- `/stinkie plates`: prints the nameplate stacking settings this game version has
 - `/stinkie auras`: prints how your target's nameplate aura icons are set up (for bug reports)
 - `/stinkie reset`: restore all defaults and reload
 

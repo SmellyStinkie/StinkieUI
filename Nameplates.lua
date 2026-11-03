@@ -867,10 +867,74 @@ function NP.SetUnitType(key, on)
 	NP.WriteUnitTypes()
 end
 
+-- Stacking: the game moves overlapping plates apart until their boxes (SetNamePlateSize) stop
+-- overlapping, so a shorter box means plates climb less. 12.1.5's own settings only use
+-- nameplateStackingTypes; the older spacing CVars are applied only if the game still has them.
+local STACK_CVARS = {
+	spacing = { "nameplateOverlapV" },
+	speed = { "nameplateMotionSpeed" },
+	topInset = { "nameplateOtherTopInset", "nameplateLargeTopInset" },
+}
+NP.STACK_CVARS = STACK_CVARS
+
+local function HasCVar(name)
+	local ok, v = pcall(C_CVar.GetCVar, name)
+	return ok and v ~= nil
+end
+
+local function ApplyStacking(cfg)
+	local st = cfg.stacking
+	local E = Enum.NamePlateStackType
+	if E and SetCVarBitfield and HasCVar("nameplateStackingTypes") then
+		if st.enemies ~= nil then pcall(SetCVarBitfield, "nameplateStackingTypes", E.Enemy, st.enemies and true or false) end
+		if st.friendly ~= nil then pcall(SetCVarBitfield, "nameplateStackingTypes", E.Friendly, st.friendly and true or false) end
+	end
+	st.touched = st.touched or {}
+	for key, names in pairs(STACK_CVARS) do
+		local v = st[key]
+		for _, name in ipairs(names) do
+			if HasCVar(name) then
+				if v and v > 0 then
+					pcall(C_CVar.SetCVar, name, tostring(v))
+					st.touched[name] = true
+				elseif st.touched[name] then
+					-- back to 0: hand the setting back to the game's default
+					local okd, def = pcall(C_CVar.GetCVarDefault, name)
+					if okd and def then pcall(C_CVar.SetCVar, name, def) end
+					st.touched[name] = nil
+				end
+			end
+		end
+	end
+end
+
+-- /stinkie plates: which stacking settings this game version has, and their values
+function NP.PrintStacking()
+	local function line(name)
+		local ok, v = pcall(C_CVar.GetCVar, name)
+		ns:Print(name .. ": " .. ((ok and v ~= nil) and tostring(v) or "not in this game version"))
+	end
+	local E = Enum.NamePlateStackType
+	if E and GetCVarBitfield and HasCVar("nameplateStackingTypes") then
+		ns:Print("stacking enemies: " .. tostring(GetCVarBitfield("nameplateStackingTypes", E.Enemy)) ..
+			", friendlies: " .. tostring(GetCVarBitfield("nameplateStackingTypes", E.Friendly)))
+	else
+		line("nameplateStackingTypes")
+	end
+	for _, names in pairs(STACK_CVARS) do
+		for _, name in ipairs(names) do line(name) end
+	end
+	local cfg = ns.db.nameplates
+	local bh = cfg.stacking.boxHeight
+	ns:Print("stacking box height: " .. ((bh and bh > 0) and bh or (cfg.height + cfg.castHeight + 24) .. " (auto)"))
+end
+
 function NP:ApplyCVars()
 	ns:RunOOC(function()
 		local cfg = ns.db.nameplates
-		C_NamePlate.SetNamePlateSize(cfg.width + 10, cfg.height + cfg.castHeight + 24)
+		local bh = cfg.stacking.boxHeight
+		C_NamePlate.SetNamePlateSize(cfg.width + 10, (bh and bh > 0) and bh or (cfg.height + cfg.castHeight + 24))
+		pcall(ApplyStacking, cfg)
 		if cfg.highlight.scale then
 			pcall(C_CVar.SetCVar, "nameplateSelectedScale", tostring(cfg.highlight.scale))
 		end
@@ -887,6 +951,13 @@ function NP:Init()
 	local hc = ns.db.nameplates.highlight
 	if hc.scale == nil then
 		hc.scale = tonumber(C_CVar.GetCVar("nameplateSelectedScale")) or 1
+	end
+	-- start from whatever stacking the game is set to, so nothing changes until it's edited here
+	local st = ns.db.nameplates.stacking
+	local E = Enum.NamePlateStackType
+	if E and GetCVarBitfield and HasCVar("nameplateStackingTypes") then
+		if st.enemies == nil then st.enemies = GetCVarBitfield("nameplateStackingTypes", E.Enemy) and true or false end
+		if st.friendly == nil then st.friendly = GetCVarBitfield("nameplateStackingTypes", E.Friendly) and true or false end
 	end
 	local driver = CreateFrame("Frame")
 	driver:RegisterEvent("NAME_PLATE_UNIT_ADDED")

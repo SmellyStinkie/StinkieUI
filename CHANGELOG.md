@@ -1,5 +1,8 @@
 # Stinkie UI changelog
 
+## 0.24.0
+- Nameplates: stacking controls. Turn stacking on or off for enemies and friendlies, set the stacking box height (how far stacked plates climb), and, where the game still has them, vertical spacing, slide speed and distance from the screen top. /stinkie plates lists what this game version supports.
+
 ## 0.23.0
 - Big Debuffs: crowd control and defensives / offensive cooldowns are now two rows, each placed left or right of the nameplate (default: defensives / offensives left, crowd control right). On the same side, crowd control sits next to the bar.
 

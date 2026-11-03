@@ -434,6 +434,9 @@ ns.defaults = {
 		clickPadX = 10, clickPadY = 6,
 		friendlyWidth = 60, friendlyHeight = 3,
 		friendlyClickThrough = true,
+		-- how plates push each other apart. enemies / friendly are seeded from the game's setting.
+		-- boxHeight 0 = auto (bar + castbar + 24). spacing / speed / topInset 0 = game default.
+		stacking = { boxHeight = 0, spacing = 0, speed = 0, topInset = 0 },
 		healerIcon = true,
 		enemyHealerIcon = true,
 		healerSize = 20,
@@ -1282,6 +1285,8 @@ SlashCmdList.STINKIEUI = function(msg)
 		ns:SetLocked(true)
 	elseif msg == "fontcheck" then
 		ns:FontCheck()
+	elseif msg == "plates" then
+		if ns.Nameplates and ns.Nameplates.PrintStacking then ns.Nameplates.PrintStacking() end
 	elseif msg == "auras" then
 		if ns.Nameplates and ns.Nameplates.DebugTarget then ns.Nameplates.DebugTarget() end
 	elseif msg == "reset" then
