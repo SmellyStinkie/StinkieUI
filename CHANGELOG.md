@@ -1,5 +1,8 @@
 # Stinkie UI changelog
 
+## 0.25.1
+- Custom cooldown bars: spells that change into another spell (Command Demon and other overrides) now show the current spell's icon and cooldown, including pet abilities, which report their cooldowns through the pet bar. Updates when you summon a different demon.
+
 ## 0.25.0
 - Party crowd control icons and the Healer in CC warning glow bright blue (pulsing) when the crowd control is a Magic debuff, i.e. one Singe Magic or another magic dispel can remove. Works in arena: the game itself picks the glow per dispel type. Toggle on the PvP Assist page (/reload to apply).
 

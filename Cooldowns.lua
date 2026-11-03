@@ -362,9 +362,42 @@ local function CreateButton(bar)
 	return b
 end
 
+-- Spells like Command Demon (119898) are stand-ins whose real spell changes (here: with your
+-- demon). Cooldowns live on the current override, and a pet ability's cooldown is reported by
+-- its pet bar slot (PET_BAR_UPDATE_COOLDOWN), not by the player spell cooldown API.
+local function CurrentSpell(id)
+	local ok, over = pcall(C_Spell.GetOverrideSpell, id)
+	if ok and not ns.issecret(over) and type(over) == "number" and over ~= 0 then return over end
+	return id
+end
+
+local function PetSlotFor(spellID)
+	if not (PetHasActionBar and PetHasActionBar()) then return nil end
+	for i = 1, NUM_PET_ACTION_SLOTS or 10 do
+		local sid = select(7, GetPetActionInfo(i))
+		if not ns.issecret(sid) and sid == spellID then return i end
+	end
+	return nil
+end
+
 local function UpdateButton(b)
 	local kind, id = b.kind, b.id
 	if kind == "spell" then
+		id = CurrentSpell(id)
+		local tex = C_Spell.GetSpellTexture(id)
+		if tex then b.Icon:SetTexture(tex) end
+		local petSlot = PetSlotFor(id)
+		if petSlot then
+			local start, dur = GetPetActionCooldown(petSlot)
+			-- values may be hidden in combat: hand them straight to the cooldown frame
+			local ok = pcall(b.Cooldown.SetCooldown, b.Cooldown, start or 0, dur or 0)
+			if not ok then b.Cooldown:Clear() end
+			b.Count:SetText("")
+			local desat = false
+			if not ns.issecret(dur) and type(dur) == "number" then desat = dur > 1.5 end
+			b.Icon:SetDesaturated(desat)
+			return
+		end
 		local charges = C_Spell.GetSpellCharges(id)
 		local hasCharges = charges and ns.IsUsable(charges.maxCharges) and charges.maxCharges > 1
 		local duration
@@ -411,7 +444,7 @@ local function SetupButton(b, entry)
 	b.kind, b.id, b.itemID = nil, nil, nil
 	b:SetAlpha(1)
 	if kind == "spell" and id then
-		local tex = C_Spell.GetSpellTexture(id)
+		local tex = C_Spell.GetSpellTexture(CurrentSpell(id)) or C_Spell.GetSpellTexture(id)
 		if not tex or not SpellKnown(id) then return false end -- not learned / not this spec
 		b.kind, b.id = "spell", id
 		b.Icon:SetTexture(tex)
@@ -513,16 +546,20 @@ function CD:Init()
 	end
 
 	local f = CreateFrame("Frame")
-	for _, e in ipairs({ "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "ACTIONBAR_UPDATE_COOLDOWN" }) do
+	for _, e in ipairs({ "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "ACTIONBAR_UPDATE_COOLDOWN",
+		"PET_BAR_UPDATE_COOLDOWN", "SPELL_UPDATE_ICON" }) do
 		f:RegisterEvent(e)
 	end
 	f:SetScript("OnEvent", UpdateAllButtons)
 
 	local r = CreateFrame("Frame")
 	for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_EQUIPMENT_CHANGED", "SPELLS_CHANGED", "BAG_UPDATE_DELAYED",
-		"PLAYER_SPECIALIZATION_CHANGED", "PLAYER_TALENT_UPDATE", "TRAIT_CONFIG_UPDATED", "LEARNED_SPELL_IN_SKILL_LINE" }) do
+		"PLAYER_SPECIALIZATION_CHANGED", "PLAYER_TALENT_UPDATE", "TRAIT_CONFIG_UPDATED", "LEARNED_SPELL_IN_SKILL_LINE",
+		"PET_BAR_UPDATE" }) do
 		r:RegisterEvent(e)
 	end
+	-- a new demon changes what Command Demon (and similar stand-ins) points at
+	r:RegisterUnitEvent("UNIT_PET", "player")
 	r:SetScript("OnEvent", function() RebuildAll() end)
 
 	-- Blizzard Cooldown Manager may load on demand
