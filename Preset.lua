@@ -20,12 +20,14 @@ local PRESET = {
 		mouseover = {
 			BagsBar = true,
 			MainActionBar = true,
+			MainStatusTrackingBarContainer = true,
 			MicroMenuContainer = true,
 			MultiBarBottomLeft = true,
 			MultiBarBottomRight = true,
 			MultiBarLeft = true,
 			MultiBarRight = true,
 			PetActionBar = true,
+			SecondaryStatusTrackingBarContainer = true,
 		},
 	},
 	arena = {
@@ -62,7 +64,10 @@ local PRESET = {
 		width = 200,
 	},
 	arenaAssist = {
+		bigCCMax = 3,
+		bigSize = 60,
 		ccGlow = "static",
+		drSpells = { "5782 disorient Fear", "5484 disorient Howl of Terror" },
 		healerGlowThickness = 4,
 		healerIconSize = 95,
 		healerPoint = { "CENTER", 0, 360 },
@@ -74,10 +79,9 @@ local PRESET = {
 		kickPoint = { "CENTER", 0, -120 },
 		kickSize = 40,
 		precogGlow = "static",
-		precogGlowColor = { 1, 0.9765, 0.9725 },
-		precogGlowThickness = 1,
+		precogGlowColor = { 1, 0.976471, 0.972549 },
 		precogPoint = { "CENTER", 0, 0 },
-		precogSize = 50,
+		precogSize = 55,
 		precogWhere = "always",
 	},
 	bgAllies = {
@@ -92,10 +96,13 @@ local PRESET = {
 		nameStyle = {
 			size = 14,
 		},
-		oorAlpha = 0.3,
-		point = { "LEFT", 580, 30 },
+		oorAlpha = 0.5,
+		point = { "LEFT", 580, -80 },
 		showHealthText = false,
 		spacing = 2,
+		specStyle = {
+			size = 12,
+		},
 		stackSize = 30,
 		width = 170,
 	},
@@ -111,8 +118,9 @@ local PRESET = {
 		nameStyle = {
 			size = 14,
 		},
-		oorAlpha = 0.3,
-		point = { "RIGHT", -580, 30 },
+		oorAlpha = 0.5,
+		point = { "RIGHT", -580, -80 },
+		powerManaFallback = true,
 		showHealthText = false,
 		spacing = 2,
 		specStyle = {
@@ -131,7 +139,7 @@ local PRESET = {
 	chat = {
 		bgAlpha = 0.6,
 		clock24 = false,
-		fontSize = 17,
+		fontSize = 19,
 		removeBrackets = true,
 		shortWhispers = true,
 		spacing = 0,
@@ -141,7 +149,7 @@ local PRESET = {
 			outline = "NONE",
 			size = 13,
 		},
-		timestampColor = { 0.6941, 0.6941, 0.6941 },
+		timestampColor = { 0.694118, 0.694118, 0.694118 },
 		whisperTabs = true,
 	},
 	classPower = {
@@ -155,7 +163,7 @@ local PRESET = {
 		width = 280,
 	},
 	colors = {
-		health = { 0.2118, 0.2118, 0.2235 },
+		health = { 0.211765, 0.211765, 0.223529 },
 	},
 	combat = {
 		attachPoint = "TOPLEFT",
@@ -180,7 +188,7 @@ local PRESET = {
 					size = 20,
 				},
 				enabled = true,
-				entries = { "spell:1276452", "spell:119910", "spell:6789", "item:224464", "spell:5484", "slot:14" },
+				entries = { "spell:1276452", "spell:119898", "spell:6789", "item:224464", "spell:5484", "slot:14" },
 				perRow = 12,
 				point = { "BOTTOM", 0, 275 },
 				showCount = true,
@@ -208,13 +216,13 @@ local PRESET = {
 	cursor = {
 		ring = true,
 		ringAlpha = 0.85,
-		ringColor = { 0.8588, 0.6902, 1 },
+		ringColor = { 0.858824, 0.690196, 1 },
 		ringCombatOnly = true,
 		ringSize = 69,
 	},
 	damageMeter = {
 		barBackgroundAlpha = 0.65,
-		headerColor = { 0.0392, 0.0275, 0.0706, 0.65 },
+		headerColor = { 0.039216, 0.027451, 0.070588, 0.65 },
 		nameStyle = {
 			size = 14,
 		},
@@ -259,7 +267,7 @@ local PRESET = {
 	nameplates = {
 		auraMode = "important",
 		auraSize = 30,
-		carrierSize = 80,
+		carrierSize = 70,
 		castHeight = 15,
 		eliteSize = 16,
 		friendlyHeight = 5,
@@ -270,12 +278,12 @@ local PRESET = {
 			size = 17,
 		},
 		friendlyWidth = 90,
-		healerSize = 40,
+		healerSize = 60,
 		height = 25,
 		highlight = {
-			arrowSize = 32,
+			arrowSize = 50,
 			arrows = true,
-			scale = 1.05, -- target nameplate size (seeded from the game when missing)
+			scale = 1.15,
 			thickness = 3,
 		},
 		important = {
@@ -292,7 +300,14 @@ local PRESET = {
 		specIconSize = 30,
 		specIcons = true,
 		specIconsFriendly = true,
-		width = 180,
+		stacking = {
+			enemies = true,
+			friendly = true,
+			spacing = 0.6,
+			speed = 0.05,
+			topInset = 0.17,
+		},
+		width = 210,
 	},
 	party = {
 		castbar = {

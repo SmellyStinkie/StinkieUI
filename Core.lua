@@ -396,6 +396,15 @@ ns.defaults = {
 		kickGrowth = "RIGHT",
 		kickGlow = "none", kickGlowColor = { 1.00, 0.55, 0.12 }, kickGlowThickness = 2,
 		kickPoint = { "CENTER", 0, -170 },
+		-- DR timers for your own CC (Midnight hides real DR): started when your listed spell lands.
+		-- 12.1: DR resets 20 s after the CC ends; drCC = assumed CC length (full PvP duration).
+		dr = true, drWhere = "pvp",
+		drSpells = { "5782 disorient Fear" },
+		drReset = 20, drCC = 6,
+		drPlate = true, drPlateSize = 22, drPlateX = 0, drPlateY = -3,
+		drList = true, drListSize = 24, drMax = 3, drNumbers = true,
+		drNameStyle = text(12),
+		drPoint = { "CENTER", -320, -60 },
 		-- Big Debuffs: crowd control, defensives and offensive cooldowns, big, right of enemy nameplates
 		bigAuras = true,
 		bigWhere = "always", -- arena | pvp | always

@@ -714,6 +714,7 @@ local function BuildArenaAssistPage(page)
 		local AA = ns.ArenaAssist
 		AA:SetTestMode(not AA.testMode)
 		if ns.Party.SetTestMode then ns.Party:SetTestMode(AA.testMode, "arena") end
+		if ns.PvPDR then ns.PvPDR:SetTestMode(AA.testMode) end
 	end)
 	page:Slider("Countdown text size", 0.5, 2.5, 0.05, Getter(cfg, "countdownScale"), Setter(cfg, "countdownScale"))
 	page:Note("Timer numbers on party CC, trinkets, the healer warning, Precognition, kicks and Big Debuffs.", 36)
@@ -778,6 +779,31 @@ local function BuildArenaAssistPage(page)
 	page:TextStyle("Name text", function() return cfg().kickNameStyle end)
 	GlowOptions(page, cfg, "kick")
 	page:Position(nil, function() return "enemyKicks" end)
+
+	page:Header("DR timers (your crowd control)")
+	page:Check("Start a DR timer when my CC lands", Getter(cfg, "dr"), Setter(cfg, "dr"))
+	page:Choice("Where", whereChoices, Getter(cfg, "drWhere"), Setter(cfg, "drWhere"))
+	page:Note("The game hides real DR, so this is an estimate from your own casts: 50% = their next one is half length, IMM = immune. It assumes the CC ran its full length, so if it broke early the real reset comes sooner than shown.", 76)
+	page:Slider("DR reset (seconds after CC ends)", 10, 30, 1, Getter(cfg, "drReset"), Setter(cfg, "drReset"))
+	page:Slider("Assumed CC length", 1, 10, 0.5, Getter(cfg, "drCC"), Setter(cfg, "drCC"))
+	page:TextList("Spells", 50, function() return table.concat(cfg().drSpells, "\n") end, function(t)
+		local list = {}
+		for line in t:gmatch("[^\n]+") do
+			line = strtrim(line)
+			if line ~= "" then table.insert(list, line) end
+		end
+		cfg().drSpells = list
+	end, "One per line: spell ID, DR category, name. Same category = shared DR (e.g. 6789 incapacitate Mortal Coil).")
+	page:Check("On the enemy's nameplate", Getter(cfg, "drPlate"), Setter(cfg, "drPlate"))
+	page:Slider("Nameplate icon size", 12, 50, 1, Getter(cfg, "drPlateSize"), Setter(cfg, "drPlateSize"))
+	page:Slider("Nameplate icon X", -60, 60, 1, Getter(cfg, "drPlateX"), Setter(cfg, "drPlateX"))
+	page:Slider("Nameplate icon Y", -60, 30, 1, Getter(cfg, "drPlateY"), Setter(cfg, "drPlateY"))
+	page:Check("List with names (movable)", Getter(cfg, "drList"), Setter(cfg, "drList"))
+	page:Slider("List icon size", 14, 50, 1, Getter(cfg, "drListSize"), Setter(cfg, "drListSize"))
+	page:Slider("List rows", 1, 6, 1, Getter(cfg, "drMax"), Setter(cfg, "drMax"))
+	page:Check("Countdown numbers", Getter(cfg, "drNumbers"), Setter(cfg, "drNumbers"))
+	page:TextStyle("List name text", function() return cfg().drNameStyle end)
+	page:Position(nil, function() return "drTimers" end)
 end
 
 local function BuildMinimapPage(page)

@@ -1,5 +1,11 @@
 # Stinkie UI changelog
 
+## 0.26.1
+- Default settings updated to Stinkie's current setup: bigger Big Debuffs (60 px, 3 crowd control icons), Howl of Terror added to DR timers, XP / honor bars on mouseover, wider nameplates (210) with larger target arrows and healer crosses, nameplate stacking tuned (spacing 0.6, slide speed 0.05), battleground frames lower with softer out-of-range fading, larger chat text (19), Command Demon on cooldown bar 1. Existing profiles are unchanged.
+
+## 0.26.0
+- PvP Assist: DR timers for your own crowd control (Fear by default; add Mortal Coil or others by spell ID and DR category). When your CC lands, the enemy's nameplate and a movable list show the DR window counting down, marked 50% (next one is half length) or IMM (immune). The game hides real DR in Midnight, so this is an estimate from your casts: 20 s reset after the CC (patch 12.1), assuming it ran its full length.
+
 ## 0.25.1
 - Custom cooldown bars: spells that change into another spell (Command Demon and other overrides) now show the current spell's icon and cooldown, including pet abilities, which report their cooldowns through the pet bar. Updates when you summon a different demon.
 
