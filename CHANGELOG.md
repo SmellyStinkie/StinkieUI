@@ -1,5 +1,8 @@
 # Stinkie UI changelog
 
+## 0.23.0
+- Big Debuffs: crowd control and defensives / offensive cooldowns are now two rows, each placed left or right of the nameplate (default: defensives / offensives left, crowd control right). On the same side, crowd control sits next to the bar.
+
 ## 0.22.1
 - Fixed: Blizzard Cooldown Manager rows didn't center when the bar is positioned by its left or right edge in Edit Mode (Blizzard shrinks the bar to the icons showing). Rows now center on the full bar as placed in Edit Mode.
 

@@ -440,19 +440,25 @@ local function CreatePlateFrame(nameplate)
 		maxWidth = cfg.width, disableMouse = true,
 	})
 
-	-- PvP Assist Big Debuffs: one row right of the plate, crowd control nearest the bar.
+	-- PvP Assist Big Debuffs: two rows beside the plate, each on its own side (bigCCSide /
+	-- bigBuffSide): crowd control, and defensives + offensive cooldowns.
 	-- Sizes and glow are set here because aura icons are locked during matches (Auras.lua).
 	local A = ns.db.arenaAssist
-	f.BigAuras = ns.CreateAuraContainer(f, {
+	local bigOpts = function()
+		return {
+			size = A.bigSize or 36, spacing = 3, anchor = "TOPLEFT", growthX = "RIGHT", growthY = "DOWN",
+			maxWidth = ((A.bigSize or 36) + 3) * 8, disableMouse = true, assistCountdown = true,
+			glow = BigGlow,
+		}
+	end
+	f.BigCC = ns.CreateAuraContainer(f, {
 		{ filter = BIG.cc, max = A.bigCCMax or 2 },
+	}, bigOpts())
+	f.BigBuffs = ns.CreateAuraContainer(f, {
 		{ filter = BIG.def, max = A.bigDefMax or 1 },
 		{ filter = BIG.ext, max = A.bigDefMax or 1 },
 		{ filter = BIG.off, max = A.bigOffMax or 1 },
-	}, {
-		size = A.bigSize or 36, spacing = 3, anchor = "TOPLEFT", growthX = "RIGHT", growthY = "DOWN",
-		maxWidth = ((A.bigSize or 36) + 3) * 8, disableMouse = true, assistCountdown = true,
-		glow = BigGlow,
-	})
+	}, bigOpts())
 
 	f:SetScript("OnEvent", OnEvent)
 	nameplate.SUIFrame = f
@@ -635,12 +641,29 @@ local function LayoutPlate(f)
 	local auraY = nameInBar and 4 or (fontSize + 6)
 	f.Auras:SetPoint("BOTTOMLEFT", f.Health, "TOPLEFT", 0, auraY)
 
-	-- Big Debuffs, right of the bar and clear of the target ">" arrow
+	-- Big Debuffs beside the bar, clear of the target > < arrows. Each row grows away from the bar.
+	-- Our code can't anchor to an aura container, so when both rows share a side the outer one
+	-- leaves room for the inner (crowd control) row at its full icon count.
 	local A = ns.db.arenaAssist
 	local hc = cfg.highlight
 	local arrowW = (hc and hc.arrows) and math.floor((hc.arrowSize or 16) * 0.55 + 3) or 0
-	f.BigAuras:ClearAllPoints()
-	f.BigAuras:SetPoint("LEFT", f.HealthFrame, "RIGHT", (A.bigX or 4) + arrowW, A.bigY or 0)
+	local bs = A.bigSize or 36
+	local gap = (A.bigX or 4) + arrowW
+	local function PlaceBig(container, side, reserve)
+		container:ClearAllPoints()
+		if side == "LEFT" then
+			container:SetPoint("RIGHT", f.HealthFrame, "LEFT", -(gap + reserve), A.bigY or 0)
+			ns.SetAuraGrowth(container, "TOPRIGHT", "LEFT", "DOWN")
+		else
+			container:SetPoint("LEFT", f.HealthFrame, "RIGHT", gap + reserve, A.bigY or 0)
+			ns.SetAuraGrowth(container, "TOPLEFT", "RIGHT", "DOWN")
+		end
+	end
+	local ccSide = A.bigCCSide == "LEFT" and "LEFT" or "RIGHT"
+	local buffSide = A.bigBuffSide == "RIGHT" and "RIGHT" or "LEFT"
+	PlaceBig(f.BigCC, ccSide, 0)
+	local reserve = (ccSide == buffSide and A.bigCC) and (A.bigCCMax or 2) * (bs + 3) or 0
+	PlaceBig(f.BigBuffs, buffSide, reserve)
 
 	-- important units draw above other plates
 	f:SetFrameLevel(f:GetParent():GetFrameLevel() + (f.important and 20 or 1))
@@ -669,18 +692,20 @@ local function ApplyAuraConfig(f)
 	ns.SetAuraGroupEnabled(c, 2, cfg.showDefensives and not (dup and A.bigDef))
 	ns.SetAuraGroupEnabled(c, 3, cfg.showDefensives and not (dup and A.bigDef))
 
-	local b = f.BigAuras
-	ns.SetAuraGroupEnabled(b, 1, A.bigCC)
-	ns.SetAuraGroupEnabled(b, 2, A.bigDef)
-	ns.SetAuraGroupEnabled(b, 3, A.bigDef)
-	ns.SetAuraGroupEnabled(b, 4, A.bigOff)
-	ns.SetAuraGroupMax(b, 1, A.bigCCMax or 2)
-	ns.SetAuraGroupMax(b, 2, A.bigDefMax or 1)
-	ns.SetAuraGroupMax(b, 3, A.bigDefMax or 1)
-	ns.SetAuraGroupMax(b, 4, A.bigOffMax or 1)
-	b:SetFlowLayoutMaximumLineSize(((A.bigSize or 36) + 3) * 8)
-	-- size / glow changes reach existing icons now, or after the match if auras are secret
-	ns.RestyleAuraButtons(b, BigGlow(), A.bigSize or 36, true)
+	local bcc, bb = f.BigCC, f.BigBuffs
+	ns.SetAuraGroupEnabled(bcc, 1, A.bigCC)
+	ns.SetAuraGroupMax(bcc, 1, A.bigCCMax or 2)
+	ns.SetAuraGroupEnabled(bb, 1, A.bigDef)
+	ns.SetAuraGroupEnabled(bb, 2, A.bigDef)
+	ns.SetAuraGroupEnabled(bb, 3, A.bigOff)
+	ns.SetAuraGroupMax(bb, 1, A.bigDefMax or 1)
+	ns.SetAuraGroupMax(bb, 2, A.bigDefMax or 1)
+	ns.SetAuraGroupMax(bb, 3, A.bigOffMax or 1)
+	for _, b in ipairs({ bcc, bb }) do
+		b:SetFlowLayoutMaximumLineSize(((A.bigSize or 36) + 3) * 8)
+		-- size / glow changes reach existing icons now, or after the match if auras are secret
+		ns.RestyleAuraButtons(b, BigGlow(), A.bigSize or 36, true)
+	end
 	ns.SetAuraGroupMax(c, 4, cfg.maxAuras)
 	ns.SetAuraGroupFilter(c, 4, cfg.auraOnlyMine and ns.AuraFilters.mine or ns.AuraFilters.anyDebuff)
 	local filters
@@ -723,7 +748,8 @@ local function OnPlateAdded(unit)
 		f:Hide()
 		f.Castbar:SetUnit(nil)
 		ns.SetAuraUnit(f.Auras, nil)
-		ns.SetAuraUnit(f.BigAuras, nil)
+		ns.SetAuraUnit(f.BigCC, nil)
+		ns.SetAuraUnit(f.BigBuffs, nil)
 		return
 	end
 
@@ -740,8 +766,10 @@ local function OnPlateAdded(unit)
 	ns.SetAuraUnit(f.Auras, not f.friendly and unit or nil)
 	f.Auras:SetShown(not f.friendly)
 	local big = BigWanted(f)
-	ns.SetAuraUnit(f.BigAuras, big and unit or nil)
-	f.BigAuras:SetShown(big)
+	for _, b in ipairs({ f.BigCC, f.BigBuffs }) do
+		ns.SetAuraUnit(b, big and unit or nil)
+		b:SetShown(big)
+	end
 
 	-- each piece on its own, so an error in one can't skip the others
 	for _, fn in ipairs(plateUpdates) do
@@ -779,9 +807,11 @@ function NP.DebugTarget()
 	local ok, u = pcall(c.GetUnit, c)
 	show("aura icons watching", ok and u or ("error: " .. tostring(u)))
 	show("aura icons shown", c:IsShown())
-	local okb, ub = pcall(f.BigAuras.GetUnit, f.BigAuras)
-	show("big debuffs watching", okb and ub or ("error: " .. tostring(ub)))
-	show("big debuffs shown", f.BigAuras:IsShown())
+	for label, b in pairs({ ["big CC"] = f.BigCC, ["big defensives/offensives"] = f.BigBuffs }) do
+		local okb, ub = pcall(b.GetUnit, b)
+		show(label .. " watching", okb and ub or ("error: " .. tostring(ub)))
+		show(label .. " shown", b:IsShown())
+	end
 	local cfg = ns.db.nameplates
 	show("show CC", cfg.showCC)
 	show("aura mode", cfg.auraMode)
@@ -795,7 +825,8 @@ local function OnPlateRemoved(unit)
 	f:UnregisterAllEvents()
 	f.Castbar:SetUnit(nil)
 	ns.SetAuraUnit(f.Auras, nil)
-	ns.SetAuraUnit(f.BigAuras, nil)
+	ns.SetAuraUnit(f.BigCC, nil)
+	ns.SetAuraUnit(f.BigBuffs, nil)
 	f.unit = nil
 	f:Hide()
 end

@@ -401,6 +401,7 @@ ns.defaults = {
 		bigDef = true, bigDefMax = 1,
 		bigOff = true, bigOffMax = 1,
 		bigSize = 36, bigX = 4, bigY = 0,
+		bigCCSide = "RIGHT", bigBuffSide = "LEFT", -- which side of the nameplate each row sits on
 		bigHideSmall = true, -- don't repeat CC / defensives in the small row above the plate
 		bigGlow = "pulse", bigGlowColor = { 1.00, 0.25, 0.25 }, bigGlowThickness = 2,
 	},
