@@ -227,6 +227,41 @@ function W:Apply()
 	W:UpdatePreview()
 end
 
+---------------------------------------------------------------------------
+-- Blizzard raid frames: hidden in Blitz and normal battlegrounds (up to 15 players), where the
+-- battleground frames already cover your team. 40-player battlegrounds and everywhere else are
+-- left to Blizzard. The container is protected, so it only changes out of combat.
+---------------------------------------------------------------------------
+local raidHidden = false
+local function WantRaidHidden()
+	if not cfg().hideRaidFrames or not InBattleground() then return false end
+	local BG = ns.BGEnemies
+	return not (BG and BG.IsLargeBattleground and BG.IsLargeBattleground())
+end
+
+local function HideRaidNow()
+	local container = _G.CompactRaidFrameContainer
+	if container and container:IsShown() and WantRaidHidden() then
+		ns:RunOOC(function()
+			if WantRaidHidden() then container:Hide() end
+		end)
+	end
+end
+
+function W:UpdateRaidFrames()
+	local container = _G.CompactRaidFrameContainer
+	if not container then return end
+	if WantRaidHidden() then
+		raidHidden = true
+		HideRaidNow()
+	elseif raidHidden then
+		raidHidden = false
+		ns:RunOOC(function()
+			if CompactRaidFrameManager_UpdateContainerVisibility then CompactRaidFrameManager_UpdateContainerVisibility() end
+		end)
+	end
+end
+
 function W:Init()
 	MakePin("bgScore", "Battleground Score", "UIWidgetTopCenterContainerFrame", "scorePoint")
 	MakePin("bgCapture", "Capture / Cart Progress", "UIWidgetBelowMinimapContainerFrame", "capturePoint")
@@ -236,14 +271,22 @@ function W:Init()
 		if container.UpdateWidgetLayout then hooksecurefunc(container, "UpdateWidgetLayout", function() W:SkinScore() end) end
 		if container.ProcessWidget then hooksecurefunc(container, "ProcessWidget", function() W:SkinScore() end) end
 	end
-	ns:On("PLAYER_ENTERING_WORLD", function() C_Timer.After(0.5, function() W:Apply() end) end)
-	ns:On("ZONE_CHANGED_NEW_AREA", function() W:Apply() end)
+	ns:On("PLAYER_ENTERING_WORLD", function() C_Timer.After(0.5, function() W:Apply(); W:UpdateRaidFrames() end) end)
+	ns:On("ZONE_CHANGED_NEW_AREA", function() W:Apply(); W:UpdateRaidFrames() end)
+	ns:On("PVP_MATCH_STATE_CHANGED", function() W:UpdateRaidFrames() end)
+	ns:On("UPDATE_BATTLEFIELD_SCORE", function() if raidHidden ~= WantRaidHidden() then W:UpdateRaidFrames() end end)
+	-- Blizzard shows the container again on roster changes; hide it again right after
+	if CompactRaidFrameManager_UpdateContainerVisibility then
+		hooksecurefunc("CompactRaidFrameManager_UpdateContainerVisibility", HideRaidNow)
+	end
+	if _G.CompactRaidFrameContainer then _G.CompactRaidFrameContainer:HookScript("OnShow", HideRaidNow) end
 	table.insert(ns.lockCallbacks, function() W:UpdatePreview() end)
 	W:Apply()
 end
 
 function W:Refresh()
 	W:Apply()
+	W:UpdateRaidFrames()
 end
 
 ns:RegisterModule("BGWidgets", W)

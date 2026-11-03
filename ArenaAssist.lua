@@ -1,7 +1,9 @@
--- StinkieUI: Arena Assist. Extras for arena (and optionally battlegrounds):
+-- StinkieUI: PvP Assist (saved settings keep the old key, arenaAssist). Extras for arena and battlegrounds:
 --   * "Healer in CC!" warning with the crowd-control icon, movable and sized
 --   * Precognition (or any buff you list) on you, big and glowing
 --   * enemy interrupt tracker: who kicked you or a teammate, and roughly when it's back
+--   * Big Debuffs: crowd control, defensives and offensive cooldowns, big, right of enemy nameplates
+--     (built on each nameplate in Nameplates.lua; settings live here)
 -- Party trinkets and the party crowd-control glow live on the party frames (Party.lua).
 --
 -- Midnight rules this follows: aura matching is done by Blizzard's AuraContainer, and the
@@ -27,6 +29,7 @@ local function Allowed(where)
 	if where == "arena" then return t == "arena" end
 	return t == "arena" or t == "pvp"
 end
+AA.Allowed = Allowed
 
 local function GlowCfg(prefix)
 	local c = cfg()

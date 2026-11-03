@@ -314,6 +314,25 @@ local function OnEvent(f, event, unit)
 	end
 end
 
+-- Big Debuffs groups. IMPORTANT = buffs Blizzard flags to show on enemy nameplates (mostly
+-- offensive cooldowns); defensives are excluded from it so nothing shows twice.
+local BIG = {
+	cc = "HARMFUL|CROWD_CONTROL",
+	def = "HELPFUL|BIG_DEFENSIVE",
+	ext = "HELPFUL|EXTERNAL_DEFENSIVE|!BIG_DEFENSIVE",
+	off = "HELPFUL|IMPORTANT|!BIG_DEFENSIVE|!EXTERNAL_DEFENSIVE",
+}
+local function BigGlow()
+	local A = ns.db.arenaAssist
+	return { glow = A.bigGlow, glowColor = A.bigGlowColor, glowThickness = A.bigGlowThickness }
+end
+
+local function BigWanted(f)
+	local A = ns.db.arenaAssist
+	local AA = ns.ArenaAssist
+	return not f.friendly and A.bigAuras and (not AA or not AA.Allowed or AA.Allowed(A.bigWhere)) and true or false
+end
+
 local function CreatePlateFrame(nameplate)
 	local f = CreateFrame("Frame", nil, nameplate)
 	f:SetAllPoints()
@@ -419,6 +438,20 @@ local function CreatePlateFrame(nameplate)
 	}, {
 		size = cfg.auraSize, spacing = 2, anchor = "BOTTOMLEFT", growthX = "RIGHT", growthY = "UP",
 		maxWidth = cfg.width, disableMouse = true,
+	})
+
+	-- PvP Assist Big Debuffs: one row right of the plate, crowd control nearest the bar.
+	-- Sizes and glow are set here because aura icons are locked during matches (Auras.lua).
+	local A = ns.db.arenaAssist
+	f.BigAuras = ns.CreateAuraContainer(f, {
+		{ filter = BIG.cc, max = A.bigCCMax or 2 },
+		{ filter = BIG.def, max = A.bigDefMax or 1 },
+		{ filter = BIG.ext, max = A.bigDefMax or 1 },
+		{ filter = BIG.off, max = A.bigOffMax or 1 },
+	}, {
+		size = A.bigSize or 36, spacing = 3, anchor = "TOPLEFT", growthX = "RIGHT", growthY = "DOWN",
+		maxWidth = ((A.bigSize or 36) + 3) * 8, disableMouse = true, assistCountdown = true,
+		glow = BigGlow,
 	})
 
 	f:SetScript("OnEvent", OnEvent)
@@ -594,6 +627,13 @@ local function LayoutPlate(f)
 	local auraY = nameInBar and 4 or (fontSize + 6)
 	f.Auras:SetPoint("BOTTOMLEFT", f.Health, "TOPLEFT", 0, auraY)
 
+	-- Big Debuffs, right of the bar and clear of the target ">" arrow
+	local A = ns.db.arenaAssist
+	local hc = cfg.highlight
+	local arrowW = (hc and hc.arrows) and math.floor((hc.arrowSize or 16) * 0.55 + 3) or 0
+	f.BigAuras:ClearAllPoints()
+	f.BigAuras:SetPoint("LEFT", f.HealthFrame, "RIGHT", (A.bigX or 4) + arrowW, A.bigY or 0)
+
 	-- important units draw above other plates
 	f:SetFrameLevel(f:GetParent():GetFrameLevel() + (f.important and 20 or 1))
 
@@ -615,9 +655,24 @@ local function ApplyAuraConfig(f)
 	f.auraVersion = NP.auraVersion
 	local cfg = ns.db.nameplates
 	local c = f.Auras
-	ns.SetAuraGroupEnabled(c, 1, cfg.showCC)
-	ns.SetAuraGroupEnabled(c, 2, cfg.showDefensives)
-	ns.SetAuraGroupEnabled(c, 3, cfg.showDefensives)
+	local A = ns.db.arenaAssist
+	local dup = A.bigAuras and A.bigHideSmall
+	ns.SetAuraGroupEnabled(c, 1, cfg.showCC and not (dup and A.bigCC))
+	ns.SetAuraGroupEnabled(c, 2, cfg.showDefensives and not (dup and A.bigDef))
+	ns.SetAuraGroupEnabled(c, 3, cfg.showDefensives and not (dup and A.bigDef))
+
+	local b = f.BigAuras
+	ns.SetAuraGroupEnabled(b, 1, A.bigCC)
+	ns.SetAuraGroupEnabled(b, 2, A.bigDef)
+	ns.SetAuraGroupEnabled(b, 3, A.bigDef)
+	ns.SetAuraGroupEnabled(b, 4, A.bigOff)
+	ns.SetAuraGroupMax(b, 1, A.bigCCMax or 2)
+	ns.SetAuraGroupMax(b, 2, A.bigDefMax or 1)
+	ns.SetAuraGroupMax(b, 3, A.bigDefMax or 1)
+	ns.SetAuraGroupMax(b, 4, A.bigOffMax or 1)
+	b:SetFlowLayoutMaximumLineSize(((A.bigSize or 36) + 3) * 8)
+	-- size / glow changes reach existing icons now, or after the match if auras are secret
+	ns.RestyleAuraButtons(b, BigGlow(), A.bigSize or 36, true)
 	ns.SetAuraGroupMax(c, 4, cfg.maxAuras)
 	ns.SetAuraGroupFilter(c, 4, cfg.auraOnlyMine and ns.AuraFilters.mine or ns.AuraFilters.anyDebuff)
 	local filters
@@ -660,6 +715,7 @@ local function OnPlateAdded(unit)
 		f:Hide()
 		f.Castbar:SetUnit(nil)
 		ns.SetAuraUnit(f.Auras, nil)
+		ns.SetAuraUnit(f.BigAuras, nil)
 		return
 	end
 
@@ -675,6 +731,9 @@ local function OnPlateAdded(unit)
 	f.Castbar:SetUnit(not f.friendly and unit or nil)
 	ns.SetAuraUnit(f.Auras, not f.friendly and unit or nil)
 	f.Auras:SetShown(not f.friendly)
+	local big = BigWanted(f)
+	ns.SetAuraUnit(f.BigAuras, big and unit or nil)
+	f.BigAuras:SetShown(big)
 
 	-- each piece on its own, so an error in one can't skip the others
 	for _, fn in ipairs(plateUpdates) do
@@ -712,6 +771,9 @@ function NP.DebugTarget()
 	local ok, u = pcall(c.GetUnit, c)
 	show("aura icons watching", ok and u or ("error: " .. tostring(u)))
 	show("aura icons shown", c:IsShown())
+	local okb, ub = pcall(f.BigAuras.GetUnit, f.BigAuras)
+	show("big debuffs watching", okb and ub or ("error: " .. tostring(ub)))
+	show("big debuffs shown", f.BigAuras:IsShown())
 	local cfg = ns.db.nameplates
 	show("show CC", cfg.showCC)
 	show("aura mode", cfg.auraMode)
@@ -725,6 +787,7 @@ local function OnPlateRemoved(unit)
 	f:UnregisterAllEvents()
 	f.Castbar:SetUnit(nil)
 	ns.SetAuraUnit(f.Auras, nil)
+	ns.SetAuraUnit(f.BigAuras, nil)
 	f.unit = nil
 	f:Hide()
 end

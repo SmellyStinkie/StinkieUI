@@ -51,6 +51,7 @@ end
 
 local function StyleButtonBody(size, opts, button)
 	button:SetSize(size, size)
+	button.SUISize = size -- our own record: an aura button's GetWidth can be a secret value
 	button:EnableMouse(not opts.disableMouse)
 	if button.SetTooltipAnchorPoint then button:SetTooltipAnchorPoint("ANCHOR_BOTTOMRIGHT", 0, 0) end
 
@@ -212,9 +213,9 @@ end
 -- Re-applies glow settings (and size) to every icon a container has made so far.
 -- Deferred while auras are secret (see ns.AurasLocked); buttons already carry their creation style.
 local function RestyleOne(b, glowCfg, size, assistCountdown)
-	if size then b:SetSize(size, size) end
-	local s = size or b:GetWidth()
-	if b.Cooldown and s and s > 0 then
+	if size then b:SetSize(size, size); b.SUISize = size end
+	local s = size or b.SUISize
+	if b.Cooldown and s then
 		b.Cooldown:SetCountdownFont(assistCountdown and ns.AssistCountdownFont(s) or ns.GetCountdownFont(s * 0.42))
 	end
 	if glowCfg then ns.ApplyGlow(b, glowCfg) end

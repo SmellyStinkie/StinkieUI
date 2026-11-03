@@ -944,7 +944,8 @@ function BG:Init()
 		"PLAYER_FOCUS_CHANGED", "UPDATE_MOUSEOVER_UNIT", "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_ABSORB_AMOUNT_CHANGED",
 		"UNIT_POWER_FREQUENT", "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER",
 		"PLAYER_REGEN_ENABLED",
-		"ARENA_OPPONENT_UPDATE", "UNIT_CLASSIFICATION_CHANGED", "GROUP_ROSTER_UPDATE", "PLAYER_ROLES_ASSIGNED" }) do
+		"ARENA_OPPONENT_UPDATE", "UNIT_CLASSIFICATION_CHANGED", "GROUP_ROSTER_UPDATE", "PLAYER_ROLES_ASSIGNED",
+		"UNIT_IN_RANGE_UPDATE", "UNIT_DISTANCE_CHECK_UPDATE", "UNIT_FLAGS" }) do
 		f:RegisterEvent(e)
 	end
 	local E, A = BG.enemies, BG.allies
@@ -993,6 +994,13 @@ function BG:Init()
 				if unit and UnitExists(unit) then E:TryBind(unit) end
 				E:UpdateCarriers()
 			end
+		elseif event == "UNIT_IN_RANGE_UPDATE" or event == "UNIT_DISTANCE_CHECK_UPDATE" or event == "UNIT_FLAGS" then
+			-- the game's own range-change signal (what Blizzard's raid frames use): fade at once
+			-- (payloads are secret; ApplyRange asks the game again)
+			EachSide(function(side)
+				local row = unit and side.rowByUnit[unit]
+				if row and row:IsShown() then side:ApplyRange(row) end
+			end)
 		elseif event == "UNIT_CLASSIFICATION_CHANGED" then
 			EachSide(function(side) side:UpdateCarriers() end)
 		elseif event == "UNIT_POWER_FREQUENT" or event == "UNIT_MAXPOWER" or event == "UNIT_DISPLAYPOWER" then
@@ -1008,14 +1016,23 @@ function BG:Init()
 		end
 	end)
 
-	-- periodic: refresh scoreboard, drop stale target/focus/mouseover bindings, range, carriers
-	local elapsed, scoreElapsed = 0, 0
+	-- periodic: refresh scoreboard, drop stale target/focus/mouseover bindings, range, carriers.
+	-- Range is also pushed by UNIT_IN_RANGE_UPDATE; this 0.1 s pass catches anything it misses.
+	local rangeElapsed, elapsed, scoreElapsed = 0, 0, 0
 	f:SetScript("OnUpdate", function(_, dt)
 		if not BG.active then return end
-		elapsed, scoreElapsed = elapsed + dt, scoreElapsed + dt
+		rangeElapsed, elapsed, scoreElapsed = rangeElapsed + dt, elapsed + dt, scoreElapsed + dt
 		if scoreElapsed > 5 then
 			scoreElapsed = 0
 			RequestBattlefieldScoreData()
+		end
+		if rangeElapsed >= 0.1 then
+			rangeElapsed = 0
+			EachSide(function(side)
+				for _, row in ipairs(side.rows) do
+					if row:IsShown() then side:ApplyRange(row) end
+				end
+			end)
 		end
 		if elapsed < 0.25 then return end
 		elapsed = 0
@@ -1025,10 +1042,9 @@ function BG:Init()
 					local u = row.unit
 					if not u:match("^nameplate") then
 						-- target/focus/mouseover/arena may now point at someone else
-						if side:FindRowForUnit(u) ~= row then side:Unbind(row) end
+						if side:FindRowForUnit(u) ~= row then side:Unbind(row); side:ApplyRange(row) end
 					end
 				end
-				if row:IsShown() then side:ApplyRange(row) end
 			end
 			side:UpdateCarriers()
 			side:UpdateTargetHighlight()

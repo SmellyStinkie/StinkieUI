@@ -19,6 +19,8 @@ AB.BARS = {
 	{ "PetActionBar", "Pet Bar" },
 	{ "BagsBar", "Bag Bar", true },             -- fade only, not restyled
 	{ "MicroMenuContainer", "Menu Icons", true },
+	{ "MainStatusTrackingBarContainer", "XP / Honor Bar", true },
+	{ "SecondaryStatusTrackingBarContainer", "Second Status Bar (rep / honor)", true },
 }
 
 local skinned = setmetatable({}, { __mode = "k" })

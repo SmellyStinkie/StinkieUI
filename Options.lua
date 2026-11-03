@@ -679,7 +679,7 @@ local function BuildPartyPage(page)
 	page:Slider("Castbar height", 4, 30, 1, Getter(ccfg, "height"), Setter(ccfg, "height"))
 	page:Check("PvP trinket in arena", Getter(cfg, "trinket"), Setter(cfg, "trinket"))
 	page:Slider("Trinket size (0 = frame height)", 0, 80, 1, Getter(cfg, "trinketSize"), Setter(cfg, "trinketSize"))
-	page:Note("Glow options for these icons are on the Arena Assist page.", 22)
+	page:Note("Glow options for these icons are on the PvP Assist page.", 22)
 	page:Check("Hide in battlegrounds and Blitz", Getter(cfg, "hideInBattlegrounds"), Setter(cfg, "hideInBattlegrounds"))
 	page:Note("Big and external defensives show while they're active.", 22)
 	page:Position(nil, function() return "party" end)
@@ -703,14 +703,14 @@ local whereChoices = { { "arena", "Arena" }, { "pvp", "Arena + BGs" }, { "always
 local function BuildArenaAssistPage(page)
 	local function cfg() return ns.db.arenaAssist end
 	page:Column(1)
-	page:Header("Arena Assist")
+	page:Header("PvP Assist")
 	page:Button("Test mode on / off", function()
 		local AA = ns.ArenaAssist
 		AA:SetTestMode(not AA.testMode)
 		if ns.Party.SetTestMode then ns.Party:SetTestMode(AA.testMode, "arena") end
 	end)
 	page:Slider("Countdown text size", 0.5, 2.5, 0.05, Getter(cfg, "countdownScale"), Setter(cfg, "countdownScale"))
-	page:Note("Timer numbers on party CC, trinkets, the healer warning, Precognition and kicks.", 36)
+	page:Note("Timer numbers on party CC, trinkets, the healer warning, Precognition, kicks and Big Debuffs.", 36)
 	page:Header("Healer in CC")
 	page:Check("Warn when your healer is crowd controlled", Getter(cfg, "healerCC"), Setter(cfg, "healerCC"))
 	page:Choice("Where", whereChoices, Getter(cfg, "healerWhere"), Setter(cfg, "healerWhere"))
@@ -723,6 +723,23 @@ local function BuildArenaAssistPage(page)
 	page:Header("Party frame icons")
 	GlowOptions(page, cfg, "cc", "Crowd control glow")
 	GlowOptions(page, cfg, "trinket", "Trinket glow")
+
+	page:Header("Big Debuffs (enemy nameplates)")
+	page:Check("Show big icons right of enemy nameplates", Getter(cfg, "bigAuras"), Setter(cfg, "bigAuras"))
+	page:Choice("Where", whereChoices, Getter(cfg, "bigWhere"), Setter(cfg, "bigWhere"))
+	page:Check("Crowd control (Fear, Mortal Coil, stuns...)", Getter(cfg, "bigCC"), Setter(cfg, "bigCC"))
+	page:Slider("Crowd control icons", 1, 4, 1, Getter(cfg, "bigCCMax"), Setter(cfg, "bigCCMax"))
+	page:Check("Major defensives (own and external)", Getter(cfg, "bigDef"), Setter(cfg, "bigDef"))
+	page:Slider("Defensive icons (each kind)", 1, 3, 1, Getter(cfg, "bigDefMax"), Setter(cfg, "bigDefMax"))
+	page:Check("Major offensive cooldowns", Getter(cfg, "bigOff"), Setter(cfg, "bigOff"))
+	page:Slider("Offensive icons", 1, 4, 1, Getter(cfg, "bigOffMax"), Setter(cfg, "bigOffMax"))
+	page:Note("Offensive = the buffs Blizzard flags as important for enemy nameplates.", 22)
+	page:Slider("Icon size", 16, 100, 1, Getter(cfg, "bigSize"), Setter(cfg, "bigSize"))
+	page:Slider("X offset", -50, 100, 1, Getter(cfg, "bigX"), Setter(cfg, "bigX"))
+	page:Slider("Y offset", -50, 50, 1, Getter(cfg, "bigY"), Setter(cfg, "bigY"))
+	page:Check("Don't repeat them in the small aura row", Getter(cfg, "bigHideSmall"), Setter(cfg, "bigHideSmall"))
+	GlowOptions(page, cfg, "big", "Big Debuffs glow")
+	page:Note("Size and glow changes made during a match apply once it ends (Blizzard locks aura icons while auras are hidden).", 36)
 
 	page:Column(2)
 	page:TextStyle("Warning text style", function() return cfg().healerTextStyle end)
@@ -818,7 +835,7 @@ local function BuildNameplatePage(page)
 	page:Slider("Border outside the bar", 0, 6, 1, Getter(hcfg, "outset"), Setter(hcfg, "outset"))
 	page:Color("Border color", Getter(hcfg, "color"), Setter(hcfg, "color"))
 	page:Check("Show > < around the target", Getter(hcfg, "arrows"), Setter(hcfg, "arrows"))
-	page:Slider("Arrow size", 8, 32, 1, Getter(hcfg, "arrowSize"), Setter(hcfg, "arrowSize"))
+	page:Slider("Arrow size", 8, 80, 1, Getter(hcfg, "arrowSize"), Setter(hcfg, "arrowSize"))
 	page:Slider("Target plate scale", 1, 1.6, 0.05, function() return hcfg().scale or 1 end, Setter(hcfg, "scale"))
 	page:Header("Clicking")
 	page:Slider("Extra click area, sides", 0, 30, 1, Getter(cfg, "clickPadX"), Setter(cfg, "clickPadX"))
@@ -1195,6 +1212,8 @@ local function BuildBGScorePage(page)
 	page:Header("Battleground score")
 	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"))
 	page:Note("Only inside battlegrounds. Elsewhere these stay where Blizzard puts them.", 36)
+	page:Check("Hide Blizzard raid frames in Blitz and battlegrounds", Getter(cfg, "hideRaidFrames"), Setter(cfg, "hideRaidFrames"))
+	page:Note("Not in 40-player battlegrounds. Works even when the score options are off.", 24)
 	page:Button("Test mode on / off", function() ns.BGWidgets:SetTestMode(not ns.BGWidgets.testMode) end)
 	page:Check("Move the score display (top of screen)", Getter(cfg, "moveScore"), Setter(cfg, "moveScore"))
 	page:Slider("Score size", 0.5, 2, 0.05, Getter(cfg, "scoreScale"), Setter(cfg, "scoreScale"))
@@ -1755,7 +1774,7 @@ local pages = {
 	{ "Pet", function(p) BuildUnitPage(p, "pet") end },
 	{ "Party", BuildPartyPage },
 	{ "Arena", BuildArenaPage },
-	{ "Arena Assist", BuildArenaAssistPage },
+	{ "PvP Assist", BuildArenaAssistPage },
 	{ "Battlegrounds", BuildBGPage },
 	{ "BG Score", BuildBGScorePage },
 	{ "Castbars", BuildCastbarPage },

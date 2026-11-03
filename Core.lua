@@ -365,7 +365,7 @@ ns.defaults = {
 		folio = true, folioCorner = "BOTTOMLEFT", folioScale = 0.7, folioInset = 14, folioX = 0, folioY = 0, -- Omnium Folio (expansion button)
 	},
 	arenaAssist = {
-		countdownScale = 1.3, -- timer numbers on Arena Assist and party CC / trinket icons
+		countdownScale = 1.3, -- timer numbers on PvP Assist and party CC / trinket icons
 		-- party frame extras
 		ccGlow = "pulse", ccGlowColor = { 1.00, 0.25, 0.25 }, ccGlowThickness = 2,
 		trinketGlow = "none", trinketGlowColor = { 0.75, 0.80, 0.16 }, trinketGlowThickness = 2,
@@ -392,6 +392,15 @@ ns.defaults = {
 		kickGrowth = "RIGHT",
 		kickGlow = "none", kickGlowColor = { 1.00, 0.55, 0.12 }, kickGlowThickness = 2,
 		kickPoint = { "CENTER", 0, -170 },
+		-- Big Debuffs: crowd control, defensives and offensive cooldowns, big, right of enemy nameplates
+		bigAuras = true,
+		bigWhere = "always", -- arena | pvp | always
+		bigCC = true, bigCCMax = 2,
+		bigDef = true, bigDefMax = 1,
+		bigOff = true, bigOffMax = 1,
+		bigSize = 36, bigX = 4, bigY = 0,
+		bigHideSmall = true, -- don't repeat CC / defensives in the small row above the plate
+		bigGlow = "pulse", bigGlowColor = { 1.00, 0.25, 0.25 }, bigGlowThickness = 2,
 	},
 	nameplates = {
 		enabled = true,
@@ -604,6 +613,7 @@ ns.defaults = {
 		moveCapture = true, capturePoint = { "TOP", 0, -70 }, captureScale = 1,
 		moveGhost = true, ghostPoint = { "TOP", 0, -130 }, ghostScale = 1, -- "Return to Graveyard" button
 		texture = "flat", -- blizzard | flat | any LibSharedMedia statusbar
+		hideRaidFrames = true, -- Blizzard raid frames off in Blitz / battlegrounds up to 15 players
 		leftColor = { 0.25, 0.55, 1.00 },  -- Alliance side of the score bar
 		rightColor = { 0.95, 0.25, 0.25 }, -- Horde side
 	},

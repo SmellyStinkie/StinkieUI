@@ -45,27 +45,55 @@ local function Say(msg)
 	if not ns.db.combatLog.quiet then ns:Print(msg) end
 end
 
+-- What we've done this visit: nil, or the match type we turned logging on for. Each instance
+-- visit fires several events (loading, zone, match state, a delayed re-check), and the client can
+-- report logging as off for a moment after it was turned on; without this, every one of them
+-- turned it on again and each printed a message.
+local ours
+local seen -- logging was already on when we arrived (yours, or kept across a /reload)
+
 function CL:Evaluate()
 	local cfg = ns.db.combatLog
 	local match = CL.MatchType()
 	local want = cfg.enabled and match and cfg[match]
+	local logging = LoggingCombat()
+	if ns.issecret(logging) then logging = nil end
 
 	if want then
 		if cfg.advanced and GetCVar("advancedCombatLogging") ~= "1" then
 			ns:RunOOC(function() SetCVar("advancedCombatLogging", "1") end)
 		end
-		if not LoggingCombat() then
-			LoggingCombat(true)
-			cfg.startedByUs = true
-			Say("Combat logging on (" .. CL.labels[match] .. ").")
+		if ours or seen then return end
+		if logging then
+			seen = true -- already on: started by you, or by us before a /reload (startedByUs stays as saved)
+			return
 		end
-	elseif cfg.startedByUs and not cfg.singleFile then
-		if LoggingCombat() then
-			LoggingCombat(false)
-			Say("Combat logging off.")
+		LoggingCombat(true)
+		ours = match
+		cfg.startedByUs = true
+		Say("Combat logging on (" .. CL.labels[match] .. ").")
+	else
+		seen = nil
+		if (ours or cfg.startedByUs) and not cfg.singleFile then
+			if logging ~= false then
+				LoggingCombat(false)
+				Say("Combat logging off.")
+			end
+			cfg.startedByUs = false
 		end
-		cfg.startedByUs = false
+		ours = nil
 	end
+end
+
+-- several events arrive together on every loading screen: evaluate once, shortly after
+local scheduled = false
+local function Schedule(delay)
+	if scheduled then return end
+	scheduled = true
+	C_Timer.After(delay or 0.2, function()
+		scheduled = false
+		CL:Evaluate()
+	end)
 end
 
 function CL:Init()
@@ -75,7 +103,7 @@ function CL:Init()
 		f:RegisterEvent(e)
 	end
 	f:SetScript("OnEvent", function(_, event)
-		CL:Evaluate()
+		Schedule()
 		-- match type (Shuffle / Blitz) can resolve a moment after loading in
 		if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
 			C_Timer.After(3, function() CL:Evaluate() end)

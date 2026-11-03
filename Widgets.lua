@@ -315,7 +315,7 @@ function ns.ApplyGlow(frame, cfg)
 	return g
 end
 
--- Countdown numbers for Arena Assist and party CC / trinket icons, scaled by the user's setting.
+-- Countdown numbers for PvP Assist and party CC / trinket icons, scaled by the user's setting.
 function ns.AssistCountdownFont(size)
 	local scale = (ns.db and ns.db.arenaAssist and ns.db.arenaAssist.countdownScale) or 1
 	return ns.GetCountdownFont(size * 0.42 * scale)
