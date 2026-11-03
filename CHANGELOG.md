@@ -1,5 +1,17 @@
 # Stinkie UI changelog
 
+## 0.22.1
+- Fixed: Blizzard Cooldown Manager rows didn't center when the bar is positioned by its left or right edge in Edit Mode (Blizzard shrinks the bar to the icons showing). Rows now center on the full bar as placed in Edit Mode.
+
+## 0.22.0
+- Target and focus frames: elite / boss star (gold; silver for rares), with size and corner options.
+- Orb carrier icon redrawn as a Temple of Kotmogu style ball (soccer-ball panels, shading and shine), on nameplates and battleground frames.
+- Flag / orb icons over nameplates sit just above the name instead of above the icon slot. New position choice (above name / left of bar / old spot) and X / Y offsets.
+- Nameplate spec icons no longer have a border (it showed as an empty box when there was no icon).
+
+## 0.21.1
+- Fixed: pinging a Stinkie UI unit frame could leave the ping cursor stuck (you couldn't click anything until you pinged again). When the game hides the unit's identity from addons, the frame now declines the ping instead of breaking Blizzard's ping code.
+
 ## 0.21.0
 - Arena Assist is now PvP Assist (your settings carry over).
 - New Big Debuffs: crowd control (Fear, Mortal Coil, stuns...), major defensives and offensive cooldowns shown big to the right of enemy nameplates, with size, count, offset and glow options. By default they're no longer repeated in the small aura row.

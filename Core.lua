@@ -307,6 +307,7 @@ ns.defaults = {
 		target = unit({
 			width = 150, height = 24, showPower = true, powerHeight = 6,
 			point = { "BOTTOM", 230, 240 },
+			eliteIcon = true, eliteSize = 16, eliteCorner = "TOPLEFT", -- gold star: elite / boss, silver: rare
 			auras = { enabled = true, size = 24, max = 8, position = "BELOW", showSmall = true, ccIcon = true, ccIconSize = 0, ccIconSide = "RIGHT" },
 			castbar = castbar(true, 180, 16, { "BOTTOM", 230, 300 }),
 		}),
@@ -317,6 +318,7 @@ ns.defaults = {
 		focus = unit({
 			width = 120, height = 18, showPower = true, powerHeight = 4, textSize = 11,
 			point = { "BOTTOM", 230, 400 },
+			eliteIcon = true, eliteSize = 14, eliteCorner = "TOPLEFT",
 			auras = { enabled = true, size = 20, max = 6, position = "BELOW", showSmall = true, ccIcon = true, ccIconSize = 0, ccIconSide = "RIGHT" },
 			castbar = castbar(true, 160, 14, { "BOTTOM", 230, 365 }),
 		}),
@@ -437,7 +439,8 @@ ns.defaults = {
 		inspectHealers = true, -- inspect nearby players outside groups to find healers
 		friendlyNameInBar = false,
 		eliteIcon = true, eliteSize = 14,
-		carrierIcon = true, carrierSize = 40, -- flag / orb carrier icon above the plate (battlegrounds)
+		carrierIcon = true, carrierSize = 40, -- flag / orb carrier icon (battlegrounds)
+		carrierAnchor = "ABOVE", carrierX = 0, carrierY = 0, -- ABOVE (just over the name) | LEFT (left of the bar) | TOP (above the icon slot)
 		specIcons = false, specIconsFriendly = false, specIconSize = 20,
 		specAnchor = "LEFT", -- LEFT / RIGHT of the cross, CENTER (cross to its right) or ABOVE (centered, cross on top)
 		nameMaxChars = 0, nameEllipsis = true, -- 0 = full names

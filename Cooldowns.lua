@@ -94,10 +94,13 @@ scheduler:Hide()
 local function CenterViewer(viewer)
 	if not viewer or not viewer.isHorizontal then return end
 	if viewer.IsEditing and viewer:IsEditing() then return end
-	local items = {}
+	local items, total = {}, 0
 	if viewer.itemFramePool then
 		for item in viewer.itemFramePool:EnumerateActive() do
-			if item:IsShown() and item.layoutIndex then table.insert(items, item) end
+			if item.layoutIndex then
+				total = total + 1
+				if item:IsShown() then table.insert(items, item) end
+			end
 		end
 	end
 	if #items == 0 then return end
@@ -111,6 +114,22 @@ local function CenterViewer(viewer)
 	local w, h = first:GetWidth() * scale, first:GetHeight() * scale
 	local goingUp = viewer.layoutFramesGoingUp
 
+	-- Blizzard shrinks the viewer to fit only the icons it shows, and Edit Mode keeps whichever
+	-- edge the viewer is anchored by. So the center of a full row (stride icons) is the reference:
+	-- the viewer's center when it's anchored by a centered point, else measured from its anchored edge.
+	local point = viewer:GetPoint(1)
+	-- as wide as the viewer is in Edit Mode, where every icon shows
+	local fullCount = math.min(stride, math.max(total, #items))
+	local fullWidth = fullCount * w + (fullCount - 1) * pad
+	local edge, base = "", 0
+	if type(point) == "string" and point:find("LEFT") then
+		edge, base = "LEFT", fullWidth / 2
+	elseif type(point) == "string" and point:find("RIGHT") then
+		edge, base = "RIGHT", -fullWidth / 2
+	end
+	local vAnchor = goingUp and "BOTTOM" or "TOP"
+	local relPoint = vAnchor .. edge
+
 	local rows = math.ceil(#items / stride)
 	for row = 0, rows - 1 do
 		local startIndex = row * stride + 1
@@ -118,13 +137,13 @@ local function CenterViewer(viewer)
 		local rowWidth = count * w + (count - 1) * pad
 		for i = 0, count - 1 do
 			local item = items[startIndex + i]
-			local x = -rowWidth / 2 + i * (w + pad)
+			local x = base - rowWidth / 2 + i * (w + pad)
 			local y = row * (h + padY)
 			item:ClearAllPoints()
 			if goingUp then
-				item:SetPoint("BOTTOMLEFT", viewer, "BOTTOM", x / scale, y / scale)
+				item:SetPoint("BOTTOMLEFT", viewer, relPoint, x / scale, y / scale)
 			else
-				item:SetPoint("TOPLEFT", viewer, "TOP", x / scale, -y / scale)
+				item:SetPoint("TOPLEFT", viewer, relPoint, x / scale, -y / scale)
 			end
 		end
 	end

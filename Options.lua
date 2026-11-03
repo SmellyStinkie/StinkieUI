@@ -594,6 +594,12 @@ local function BuildUnitPage(page, unit)
 	page:Check("Show power bar", Getter(cfg, "showPower"), Setter(cfg, "showPower"))
 	page:Slider("Power height", 1, 30, 1, Getter(cfg, "powerHeight"), Setter(cfg, "powerHeight"))
 	page:Check("Shields (absorbs and overshield)", function() return cfg().shields ~= false end, Setter(cfg, "shields"))
+	if unit == "target" or unit == "focus" then
+		page:Check("Elite / boss star (gold; silver for rares)", Getter(cfg, "eliteIcon"), Setter(cfg, "eliteIcon"))
+		page:Slider("Star size", 8, 40, 1, Getter(cfg, "eliteSize"), Setter(cfg, "eliteSize"))
+		page:Dropdown("Star corner", { { "TOPLEFT", "Top left" }, { "TOPRIGHT", "Top right" }, { "BOTTOMLEFT", "Bottom left" }, { "BOTTOMRIGHT", "Bottom right" } },
+			Getter(cfg, "eliteCorner"), Setter(cfg, "eliteCorner"))
+	end
 	page:Position(nil, function() return unit end)
 	if ns.db.units[unit].auras then
 		local function acfg() return ns.db.units[unit].auras end
@@ -872,6 +878,10 @@ local function BuildNameplatePage(page)
 	page:Note("The icon over the unit you soft-target (quest, talk, loot).", 22)
 	page:Check("Flag / orb carrier icon (battlegrounds)", Getter(cfg, "carrierIcon"), Setter(cfg, "carrierIcon"))
 	page:Slider("Carrier icon size", 16, 120, 1, Getter(cfg, "carrierSize"), Setter(cfg, "carrierSize"))
+	page:Choice("Carrier icon position", { { "ABOVE", "Above name" }, { "LEFT", "Left of bar" }, { "TOP", "Top (old)" } },
+		Getter(cfg, "carrierAnchor"), Setter(cfg, "carrierAnchor"))
+	page:Slider("Carrier X offset", -60, 60, 1, Getter(cfg, "carrierX"), Setter(cfg, "carrierX"))
+	page:Slider("Carrier Y offset", -60, 60, 1, Getter(cfg, "carrierY"), Setter(cfg, "carrierY"))
 
 	page:Column(2)
 	page:TextStyle("Enemy name", function() return cfg().nameStyle end, { classColor = true })

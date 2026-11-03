@@ -414,7 +414,7 @@ local function CreatePlateFrame(nameplate)
 		t:SetAlpha(0)
 		spec.arena[i] = t
 	end
-	ns.IconBorder(spec)
+	-- no border: in arena the slot can be up before Blizzard fills the icon, which left an empty box
 	spec:Hide()
 	f.SpecIcon = spec
 
@@ -605,12 +605,20 @@ local function LayoutPlate(f)
 	roles:SetPoint("CENTER", f.Healer, "CENTER", 0, 0)
 	pcall(roles.text.SetFont, roles.text, ns.MEDIA.healerFont, 12, "OUTLINE")
 
-	ns.IconBorder(f.SpecIcon)
 
 	local cs = cfg.carrierSize or 40
 	f.Carrier:SetSize(cs, cs)
 	f.Carrier:ClearAllPoints()
-	f.Carrier:SetPoint("BOTTOM", f.TopSlot, "TOP", 0, 2)
+	local cx, cy = cfg.carrierX or 0, cfg.carrierY or 0
+	if cfg.carrierAnchor == "LEFT" then
+		f.Carrier:SetPoint("RIGHT", f.HealthFrame, "LEFT", -4 + cx, cy)
+	elseif cfg.carrierAnchor == "TOP" then
+		-- the old spot: above the healer / spec icon slot
+		f.Carrier:SetPoint("BOTTOM", f.TopSlot, "TOP", cx, 2 + cy)
+	else
+		-- just above the name, centered on the bar
+		f.Carrier:SetPoint("BOTTOM", f.HealthFrame, "TOP", cx, (nameInBar and 2 or (fontSize + 4)) + cy)
+	end
 
 	local es = cfg.eliteSize or 14
 	f.Elite:SetSize(es, es)

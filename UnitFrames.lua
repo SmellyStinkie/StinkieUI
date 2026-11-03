@@ -57,8 +57,28 @@ function UF.UpdateName(f)
 	end
 end
 
+-- Elite / boss star (target and focus): gold for elite and bosses, silver for rares.
+local STAR_GOLD, STAR_SILVER = { 1.00, 0.82, 0.20 }, { 0.80, 0.84, 0.90 }
+function UF.UpdateElite(f)
+	local star = f.Elite
+	if not star then return end
+	local cfg = ns.db.units[f.unit]
+	if not (cfg and cfg.eliteIcon) then star:Hide() return end
+	local c = UnitClassification(f.unit)
+	if ns.issecret(c) or c == nil then star:Hide() return end
+	local color = (c == "elite" or c == "worldboss") and STAR_GOLD
+		or (c == "rareelite" or c == "rare") and STAR_SILVER or nil
+	if color then
+		star:SetVertexColor(color[1], color[2], color[3], 1)
+		star:Show()
+	else
+		star:Hide()
+	end
+end
+
 function UF.UpdateAll(f)
 	if f.preview or not UnitExists(f.unit) then return end
+	UF.UpdateElite(f)
 	UF.UpdateHealthColor(f)
 	UF.UpdateHealth(f, true) -- full refresh (new target, focus, roster): snap, don't animate
 	UF.UpdatePower(f, true)
@@ -92,6 +112,8 @@ local function OnEvent(f, event, unit)
 		UF.UpdatePower(f)
 	elseif event == "UNIT_NAME_UPDATE" then
 		UF.UpdateName(f)
+	elseif event == "UNIT_CLASSIFICATION_CHANGED" then
+		UF.UpdateElite(f)
 	elseif event == "UNIT_CONNECTION" or event == "UNIT_FACTION" or event == "UNIT_FLAGS" then
 		UF.UpdateHealthColor(f)
 		UF.UpdateHealth(f)
@@ -116,6 +138,7 @@ function UF.RegisterUnitEvents(f)
 	end
 	if u == "target" then f:RegisterEvent("PLAYER_TARGET_CHANGED") end
 	if u == "focus" then f:RegisterEvent("PLAYER_FOCUS_CHANGED") end
+	if u == "target" or u == "focus" then f:RegisterUnitEvent("UNIT_CLASSIFICATION_CHANGED", u) end
 	if u == "pet" then f:RegisterUnitEvent("UNIT_PET", "player") end
 end
 
@@ -132,8 +155,24 @@ local function OnLeave()
 	GameTooltip:Hide()
 end
 
+-- Pinging a unit frame: Blizzard's ping code copies the unit's GUID and errors if it's a hidden
+-- value, which leaves the ping cursor stuck until the next press. Asked from our (addon) frames
+-- the GUID can be hidden, so a frame only offers itself as a ping target while it's readable;
+-- otherwise the ping fails with Blizzard's normal "can't ping that" message.
+local function PingGUID(self)
+	local u = self.unit or self:GetAttribute("unit")
+	if not u then return nil end
+	local guid = UnitGUID(u)
+	if issecretvalue and issecretvalue(guid) then return nil end
+	return guid
+end
+local function PingIsPingable(self) return PingGUID(self) ~= nil end
+local function PingTargetInfo(self) return { guid = PingGUID(self) } end
+
 function UF.CreateFrame(unit, name, noUnitWatch)
 	local f = CreateFrame("Button", name, UIParent, "SecureUnitButtonTemplate, PingableUnitFrameTemplate")
+	f.GetIsPingable = PingIsPingable
+	f.GetTargetInfo = PingTargetInfo
 	f.unit = unit
 	f.compound = unit:match("%wtarget$") ~= nil
 	f:SetAttribute("unit", unit)
@@ -163,6 +202,11 @@ function UF.CreateFrame(unit, name, noUnitWatch)
 	f.TextLayer = textLayer
 	f.Name = ns.CreateText(textLayer, 12, "LEFT")
 	f.HealthText = ns.CreateText(textLayer, 12, "RIGHT")
+	if unit == "target" or unit == "focus" then
+		f.Elite = textLayer:CreateTexture(nil, "OVERLAY", nil, 7)
+		f.Elite:SetTexture(ns.MEDIA.star, "CLAMP", "CLAMP", "TRILINEAR")
+		f.Elite:Hide()
+	end
 
 	f:SetScript("OnEnter", OnEnter)
 	f:SetScript("OnLeave", OnLeave)
@@ -239,6 +283,14 @@ function UF.Layout(f, cfg)
 	f.HealthText:SetShown(f.healthTextMode ~= "none")
 	f.HealthText:ClearAllPoints()
 	f.HealthText:SetPoint("RIGHT", f.Health, "RIGHT", -4, 0)
+
+	if f.Elite then
+		local es = cfg.eliteSize or 16
+		f.Elite:SetSize(es, es)
+		f.Elite:ClearAllPoints()
+		f.Elite:SetPoint("CENTER", f, cfg.eliteCorner or "TOPLEFT", 0, 0) -- centered on the chosen corner
+		if f.preview == nil and UnitExists(f.unit) then UF.UpdateElite(f) end
+	end
 end
 
 ---------------------------------------------------------------------------
