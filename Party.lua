@@ -416,7 +416,9 @@ function Party:Refresh()
 	holder:SetSize(cfg.width, n * step - cfg.spacing)
 	ns:ApplyPoint(holder, cfg.point)
 	for i, f in ipairs(Party.frames) do
-		LayoutPartyFrame(f, i)
+		-- a layout error must never leave a frame unanchored (that hides it for the whole match)
+		local ok, err = pcall(LayoutPartyFrame, f, i)
+		if not ok then geterrorhandler()(err) end
 		f:ClearAllPoints()
 		if cfg.growth == "UP" then
 			f:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 0, (i - 1) * step + castH)

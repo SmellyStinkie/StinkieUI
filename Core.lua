@@ -142,8 +142,11 @@ local fontWarned = false
 
 local function RetryFonts(final)
 	local path = ns.GetFontPath()
+	-- text inside aura buttons is locked while auras are secret: skip it then, and never let one
+	-- refused object stop the rest
+	local locked = ns.AurasLocked and ns.AurasLocked()
 	for obj, args in pairs(fontRegistry) do
-		ns.SetFont(obj, args[1], args[2])
+		if not (args[3] and locked) then pcall(ns.SetFont, obj, args[1], args[2]) end
 	end
 	if final and next(fontFailed) and not fontWarned then
 		fontWarned = true
@@ -166,7 +169,7 @@ function ns.SetFont(obj, size, flags)
 	local path = ns.GetFontPath()
 	if flags == nil and not obj:IsObjectType("FontString") then flags = "" end -- EditBox/Font need a flags string
 	local args = fontRegistry[obj]
-	if args then args[1], args[2] = size, flags else fontRegistry[obj] = { size, flags } end
+	if args then args[1], args[2] = size, flags else fontRegistry[obj] = { size, flags, ns.inAuraInit or nil } end
 	local ok = obj:SetFont(path, size, flags)
 	if ok == false or obj:GetFont() == nil then
 		obj:SetFont(ns.GAME_FONT, size, flags or "")
@@ -1265,6 +1268,8 @@ SlashCmdList.STINKIEUI = function(msg)
 		ns:SetLocked(true)
 	elseif msg == "fontcheck" then
 		ns:FontCheck()
+	elseif msg == "auras" then
+		if ns.Nameplates and ns.Nameplates.DebugTarget then ns.Nameplates.DebugTarget() end
 	elseif msg == "reset" then
 		ns:ResetProfile()
 		ReloadUI()

@@ -59,12 +59,28 @@ local function HealerLabelStyle(fs)
 	fs:SetText(c.healerText or "")
 end
 
+local function StyleHealerButton(b)
+	local c = cfg()
+	local size = c.healerIconSize
+	b:SetSize(size, size)
+	local show = c.healerIcons and 1 or 0
+	b.Icon:SetAlpha(show)
+	if b.Cooldown then
+		b.Cooldown:SetAlpha(show)
+		b.Cooldown:SetCountdownFont(ns.AssistCountdownFont(size))
+	end
+	if b.SUIBorder and b.SUIBorder.SetAlpha then b.SUIBorder:SetAlpha(show) end
+	ns.ApplyGlow(b, c.healerIcons and GlowCfg("healer") or { glow = "none" })
+	if b.SUIWarning then HealerLabelStyle(b.SUIWarning) end
+end
+
 local function DecorateHealerButton(button, textParent)
 	-- the warning text belongs to the icon, so it shows exactly while a CC icon does
 	local fs = textParent:CreateFontString(nil, "OVERLAY")
 	fs:SetPoint("BOTTOM", button, "TOP", 0, 6)
 	button.SUIWarning = fs
-	HealerLabelStyle(fs)
+	-- full style now: once created, the button can't be touched again during a match
+	StyleHealerButton(button)
 end
 
 local function OnHealerIconShown()
@@ -76,22 +92,15 @@ local function OnHealerIconShown()
 	PlaySound(SOUNDKIT.RAID_WARNING, "Master")
 end
 
+-- Restyles existing icons; waits until auras aren't secret (Auras.lua, ns.WhenAurasOpen).
 local function StyleHealerButtons(container)
-	local c = cfg()
 	if not container or not container.SUIButtons then return end
-	local size = c.healerIconSize
-	for _, b in ipairs(container.SUIButtons) do
-		b:SetSize(size, size)
-		local show = c.healerIcons and 1 or 0
-		b.Icon:SetAlpha(show)
-		if b.Cooldown then
-			b.Cooldown:SetAlpha(show)
-			b.Cooldown:SetCountdownFont(ns.AssistCountdownFont(size))
+	ns.WhenAurasOpen(container, function()
+		for _, b in ipairs(container.SUIButtons) do
+			local ok, err = pcall(StyleHealerButton, b)
+			if not ok then geterrorhandler()(err); return end
 		end
-		if b.SUIBorder and b.SUIBorder.SetAlpha then b.SUIBorder:SetAlpha(show) end
-		ns.ApplyGlow(b, c.healerIcons and GlowCfg("healer") or { glow = "none" })
-		if b.SUIWarning then HealerLabelStyle(b.SUIWarning) end
-	end
+	end)
 end
 
 local function HealerContainer(i)
@@ -165,8 +174,8 @@ function AA:UpdateHealers()
 		if u then
 			local w = HealerContainer(i)
 			w.unit = u
-			StyleHealerButtons(w.container)
 			ns.SetAuraUnit(w.container, u)
+			StyleHealerButtons(w.container)
 		elseif healerWatch[i] then
 			healerWatch[i].unit = nil
 			ns.SetAuraUnit(healerWatch[i].container, nil)
@@ -469,10 +478,11 @@ end
 function AA:Refresh()
 	if not AA.healerHolder then return end
 	for _, h in ipairs({ AA.healerHolder, AA.precogHolder, AA.kickHolder }) do h:SetScale(ns.db.scale) end
-	AA:UpdateHealers()
-	AA:UpdatePrecog()
-	AA:UpdateKickEvents()
-	AA:LayoutKicks()
+	-- each part on its own, so a failure in one can't switch off the others
+	for _, fn in ipairs({ AA.UpdateHealers, AA.UpdatePrecog, AA.UpdateKickEvents, AA.LayoutKicks }) do
+		local ok, err = pcall(fn, AA)
+		if not ok then geterrorhandler()(err) end
+	end
 end
 
 ns:RegisterModule("ArenaAssist", AA)

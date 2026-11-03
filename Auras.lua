@@ -11,7 +11,45 @@ ns.AuraFilters = {
 	dispellable = "HARMFUL|RAID_PLAYER_DISPELLABLE|!CROWD_CONTROL",
 }
 
-local function StyleButton(size, opts, button)
+-- Midnight: Blizzard locks every aura button against addon code right after this initializer
+-- runs (DenyTaintedAccessWhenAurasAreSecret). While auras are secret (live PvP match, M+, boss
+-- encounter) any later touch of a button or anything inside it errors. Everything a button needs
+-- is therefore set here, at creation; later restyles wait until auras are no longer secret.
+-- After a /reload inside a match, buttons are locked the moment they're made.
+function ns.AurasLocked()
+	return (C_Secrets and C_Secrets.ShouldAurasBeSecret and C_Secrets.ShouldAurasBeSecret()) == true
+end
+
+local pending = {}
+local function RunSafe(fn)
+	local ok, err = pcall(fn)
+	if not ok then geterrorhandler()(err) end
+end
+
+-- Runs fn now if aura buttons can be touched, otherwise once they can (latest fn per key wins).
+function ns.WhenAurasOpen(key, fn)
+	if not ns.AurasLocked() then
+		pending[key] = nil
+		RunSafe(fn)
+		return true
+	end
+	pending[key] = fn
+	return false
+end
+
+local function FlushPending()
+	if not next(pending) or ns.AurasLocked() then return end
+	local list = pending
+	pending = {}
+	for _, fn in pairs(list) do RunSafe(fn) end
+end
+local function FlushSoon() C_Timer.After(0.5, FlushPending) end
+for _, e in ipairs({ "ADDON_RESTRICTION_STATE_CHANGED", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA",
+	"PVP_MATCH_STATE_CHANGED", "PLAYER_REGEN_ENABLED" }) do
+	ns:On(e, FlushSoon)
+end
+
+local function StyleButtonBody(size, opts, button)
 	button:SetSize(size, size)
 	button:EnableMouse(not opts.disableMouse)
 	if button.SetTooltipAnchorPoint then button:SetTooltipAnchorPoint("ANCHOR_BOTTOMRIGHT", 0, 0) end
@@ -50,7 +88,6 @@ local function StyleButton(size, opts, button)
 		table.insert(owner.SUIButtons, button)
 	end
 	if opts.glow then ns.ApplyGlow(button, opts.glow()) end
-	if opts.onShow then button:HookScript("OnShow", opts.onShow) end
 	if opts.decorate then opts.decorate(button, textParent) end
 
 	if opts.dispelBorder then
@@ -63,6 +100,17 @@ local function StyleButton(size, opts, button)
 			showWhenHelpful = false,
 		})
 	end
+
+	-- last, and allowed to fail: aura buttons forbid addon scripts, so this hook is refused
+	-- whenever the button is created under secret auras
+	if opts.onShow then pcall(button.HookScript, button, "OnShow", opts.onShow) end
+end
+
+local function StyleButton(size, opts, button)
+	ns.inAuraInit = true -- fonts set now are skipped by font retries while auras are secret
+	local ok, err = pcall(StyleButtonBody, size, opts, button)
+	ns.inAuraInit = false
+	if not ok then geterrorhandler()(err) end
 end
 
 -- Creates one AuraContainer with one or more groups.
@@ -162,14 +210,22 @@ function ns.SetAuraGroupEnabled(container, index, enabled)
 end
 
 -- Re-applies glow settings (and size) to every icon a container has made so far.
+-- Deferred while auras are secret (see ns.AurasLocked); buttons already carry their creation style.
+local function RestyleOne(b, glowCfg, size, assistCountdown)
+	if size then b:SetSize(size, size) end
+	local s = size or b:GetWidth()
+	if b.Cooldown and s and s > 0 then
+		b.Cooldown:SetCountdownFont(assistCountdown and ns.AssistCountdownFont(s) or ns.GetCountdownFont(s * 0.42))
+	end
+	if glowCfg then ns.ApplyGlow(b, glowCfg) end
+end
+
 function ns.RestyleAuraButtons(container, glowCfg, size, assistCountdown)
 	if not container or not container.SUIButtons then return end
-	for _, b in ipairs(container.SUIButtons) do
-		if size then b:SetSize(size, size) end
-		local s = size or b:GetWidth()
-		if b.Cooldown and s and s > 0 then
-			b.Cooldown:SetCountdownFont(assistCountdown and ns.AssistCountdownFont(s) or ns.GetCountdownFont(s * 0.42))
+	ns.WhenAurasOpen(container, function()
+		for _, b in ipairs(container.SUIButtons) do
+			local ok, err = pcall(RestyleOne, b, glowCfg, size, assistCountdown)
+			if not ok then geterrorhandler()(err); return end
 		end
-		if glowCfg then ns.ApplyGlow(b, glowCfg) end
-	end
+	end)
 end

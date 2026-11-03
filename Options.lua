@@ -1556,7 +1556,7 @@ local function BuildGeneralPage(page)
 	end)
 	page:Button("Reset this profile", function() StaticPopup_Show("STINKIEUI_RESET") end)
 	page:Note("Settings marked * apply after a reload.", 22)
-	page:Note("Slash commands: /stinkie, /stinkie unlock, /stinkie lock, /stinkie fontcheck, /stinkie reset", 36)
+	page:Note("Slash commands: /stinkie, /stinkie unlock, /stinkie lock, /stinkie fontcheck, /stinkie auras, /stinkie reset", 36)
 	page:Note("PT Sans Narrow is bundled under the SIL Open Font License (Media folder).", 36)
 end
 

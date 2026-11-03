@@ -301,7 +301,14 @@ local function OnEvent(f, event, unit)
 	elseif event == "UNIT_NAME_UPDATE" or event == "UNIT_LEVEL" then
 		UpdateName(f)
 	elseif event == "UNIT_FACTION" or event == "UNIT_FLAGS" then
-		UpdateColor(f)
+		-- hostility can change while a plate stays up (Solo Shuffle reshuffles teams each round,
+		-- arena gates opening). Friendly plates get no auras or castbar, so set the plate up again.
+		local hostile = UnitCanAttack("player", unit)
+		if not issecret(hostile) and (not hostile) ~= f.friendly and NP.SetupPlate then
+			NP.SetupPlate(unit)
+		else
+			UpdateColor(f)
+		end
 	elseif event == "UNIT_CLASSIFICATION_CHANGED" then
 		UpdateClassification(f)
 	end
@@ -684,6 +691,31 @@ local function OnPlateAdded(unit)
 		f.hitHooked = true
 		hooksecurefunc(uf, "UpdateHitTestArea", function() ApplyHitTest(f) end)
 	end
+end
+
+NP.SetupPlate = OnPlateAdded
+
+-- /stinkie auras: what the target's nameplate aura icons are set to (for bug reports)
+function NP.DebugTarget()
+	local function show(label, v)
+		if issecret(v) then v = "<secret>" end
+		ns:Print(label .. ": " .. tostring(v))
+	end
+	show("auras secret now", ns.AurasLocked and ns.AurasLocked())
+	local plate = C_NamePlate.GetNamePlateForUnit("target")
+	local f = plate and plate.SUIFrame
+	if not f then ns:Print("No Stinkie nameplate for your target.") return end
+	show("plate unit", f.unit)
+	show("treated as friendly", f.friendly)
+	show("UnitCanAttack now", UnitCanAttack("player", "target"))
+	local c = f.Auras
+	local ok, u = pcall(c.GetUnit, c)
+	show("aura icons watching", ok and u or ("error: " .. tostring(u)))
+	show("aura icons shown", c:IsShown())
+	local cfg = ns.db.nameplates
+	show("show CC", cfg.showCC)
+	show("aura mode", cfg.auraMode)
+	show("only mine", cfg.auraOnlyMine)
 end
 
 local function OnPlateRemoved(unit)
