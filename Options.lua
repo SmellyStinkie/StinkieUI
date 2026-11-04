@@ -92,6 +92,8 @@ local function EditBox(parent, width)
 	local eb = CreateFrame("EditBox", nil, parent)
 	eb:SetSize(width, 20)
 	eb:SetAutoFocus(false)
+	eb:EnableMouse(true)
+	eb:EnableKeyboard(true)
 	ns.SetFont(eb, 13)
 	eb:SetJustifyH("CENTER")
 	eb:SetTextInsets(4, 4, 0, 0)
@@ -2360,7 +2362,8 @@ local function CreateWindow()
 	local search = EditBox(nav, 142)
 	search:SetPoint("TOPLEFT", 4, -4)
 	search:SetJustifyH("LEFT")
-	local hint = Label(search, "Search options", 12, { 0.5, 0.5, 0.5 })
+	ns.SetBorderColor(search, ACCENT[1], ACCENT[2], ACCENT[3], 0.8)
+	local hint = Label(search, "Search all options...", 12, { 0.6, 0.6, 0.6 })
 	hint:SetPoint("LEFT", 6, 0)
 	local results = {}
 	local function Texts(frame, out, depth)
@@ -2378,11 +2381,13 @@ local function CreateWindow()
 		for i, leaf in ipairs(leaves) do
 			if not built[i] then
 				local page = NewPage(scroll)
-				leaf.build(page)
+				-- one page failing to build must not stop the search
+				local ok, err = pcall(leaf.build, page)
+				if not ok then geterrorhandler()(err) end
 				built[i] = page
 			end
 			local list = {}
-			Texts(built[i], list, 0)
+			pcall(Texts, built[i], list, 0)
 			for _, e in ipairs(list) do
 				-- strip color codes so "|cff..x|r" style labels match plain text
 				local plain = e.text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T.-|t", "")

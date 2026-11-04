@@ -9,7 +9,7 @@ local ACCENT, BRAND = SUI.ACCENT, SUI.BRAND
 local Label, FlatButton, Flat = W.Label, W.FlatButton, W.Flat
 
 local WIN_W, WIN_H, HEAD_H = 1010, 660, 58
-local ROW_H, LIST_ROWS = 24, 18
+local ROW_H, LIST_ROWS = 24, 22 -- fills the window: 22 rows + header = the body height
 
 ---------------------------------------------------------------------------
 -- Formatting helpers
@@ -240,7 +240,7 @@ local function BuildMatches(parent)
 	p.rows = {}
 	for i = 1, LIST_ROWS do
 		local r = CreateFrame("Button", nil, p)
-		r:SetSize(WIN_W - 40, ROW_H - 2)
+		r:SetSize(WIN_W - 54, ROW_H - 2)
 		r:SetPoint("TOPLEFT", 0, -22 - (i - 1) * ROW_H)
 		r.bg = Flat(r, 1, 1, 1, i % 2 == 0 and 0.03 or 0.0)
 		r.hl = r:CreateTexture(nil, "ARTWORK")
@@ -268,9 +268,35 @@ local function BuildMatches(parent)
 		view.offset = math.max(0, math.min(math.max(0, #filtered - LIST_ROWS), view.offset - delta * 3))
 		H.RenderMatches()
 	end)
-	p.track = p:CreateTexture(nil, "ARTWORK")
-	p.track:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.6)
-	p.track:SetWidth(3)
+	-- scroll bar: click anywhere on it to jump there, or drag the thumb
+	local bar = CreateFrame("Button", nil, p)
+	bar:SetWidth(12)
+	bar:SetPoint("TOPRIGHT", p, "TOPRIGHT", 0, -22)
+	bar:SetHeight(LIST_ROWS * ROW_H)
+	bar:SetFrameLevel(p:GetFrameLevel() + 10)
+	bar.bg = bar:CreateTexture(nil, "BACKGROUND")
+	bar.bg:SetAllPoints()
+	bar.bg:SetColorTexture(1, 1, 1, 0.05)
+	p.track = bar:CreateTexture(nil, "ARTWORK")
+	p.track:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.7)
+	p.track:SetWidth(6)
+	local function SeekTo()
+		local _, cy = GetCursorPosition()
+		local scale = bar:GetEffectiveScale()
+		local top, h = bar:GetTop(), bar:GetHeight()
+		if not (top and h and h > 0 and scale > 0) then return end
+		local frac = math.max(0, math.min(1, (top - cy / scale) / h))
+		local maxOff = math.max(0, #filtered - LIST_ROWS)
+		view.offset = math.floor(frac * maxOff + 0.5)
+		H.RenderMatches()
+	end
+	bar:SetScript("OnMouseDown", function(self)
+		SeekTo()
+		self:SetScript("OnUpdate", SeekTo)
+	end)
+	bar:SetScript("OnMouseUp", function(self) self:SetScript("OnUpdate", nil) end)
+	bar:SetScript("OnHide", function(self) self:SetScript("OnUpdate", nil) end)
+	p.scrollBar = bar
 	return p
 end
 
@@ -313,11 +339,13 @@ function H.RenderMatches()
 		local h = math.max(20, viewH * LIST_ROWS / total)
 		local y = (viewH - h) * (view.offset / (total - LIST_ROWS))
 		p.track:ClearAllPoints()
-		p.track:SetPoint("TOPRIGHT", p, "TOPRIGHT", -2, -22 - y)
+		p.track:SetPoint("TOP", p.scrollBar, "TOP", 0, -y)
 		p.track:SetHeight(h)
 		p.track:Show()
+		p.scrollBar:Show()
 	else
 		p.track:Hide()
+		p.scrollBar:Hide()
 	end
 	win.count:SetText(string.format("%d matches  ·  %d saved  ·  %.0f KB", total, #D.Archive().records, D.SizeBytes() / 1024))
 end
@@ -870,11 +898,10 @@ local function CreateWindow()
 	w.tabStats:SetPoint("LEFT", w.tabMatches, "RIGHT", 6, 0)
 	local close = FlatButton(band, "x", 22, function() w:Hide() end)
 	close:SetPoint("TOPRIGHT", -10, -10)
-	-- no delete buttons: history is only ever added to (an accidental click can't lose it)
-	local importBtn = FlatButton(band, "Import Rated Tracker", 160, function() H.StartImport() end)
-	importBtn:SetPoint("RIGHT", close, "LEFT", -8, 0)
+	-- no delete buttons (an accidental click can't lose history); importing Rated Tracker data is
+	-- on the Stinkie UI options page (Match History > History & Import)
 	w.count = Text(band, 12, "RIGHT", { 0.78, 0.66, 0.70 })
-	w.count:SetPoint("RIGHT", importBtn, "LEFT", -12, 0)
+	w.count:SetPoint("RIGHT", close, "LEFT", -12, 0)
 
 	-- filters
 	local bar = CreateFrame("Frame", nil, w)
@@ -895,11 +922,12 @@ local function CreateWindow()
 	add(Dropdown(bar, 90, { { nil, "All results" }, { "W", "Wins" }, { "L", "Losses" } },
 		function() return filters.result end, function(v) filters.result = v; view.offset = 0; Refresh() end), 730)
 	local search = W.EditBox(bar, 160)
+	w.search = search
 	search:SetPoint("LEFT", bar, "LEFT", 826, 0)
 	search:SetJustifyH("LEFT")
 	local hint = Text(search, 12, "LEFT", { 0.5, 0.5, 0.5 })
 	hint:SetPoint("LEFT", 6, 0)
-	hint:SetText("Search map, player, group")
+	hint:SetText("Search: map, player, spec, win...")
 	search:SetScript("OnMouseDown", function(self) self:SetFocus() end)
 	search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 	search:SetScript("OnTextChanged", function(self)

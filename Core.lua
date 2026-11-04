@@ -285,7 +285,7 @@ local function unit(t)
 	return t
 end
 
-ns.DB_VERSION = 12
+ns.DB_VERSION = 13
 ns.defaults = {
 	version = ns.DB_VERSION,
 	scale = 1,
@@ -448,7 +448,7 @@ ns.defaults = {
 		friendlyTargetFull = true, -- your friendly target gets the full-size plate and target border
 		-- how plates push each other apart. enemies / friendly are seeded from the game's setting.
 		-- boxHeight 0 = auto (bar + castbar + 24). spacing / speed / topInset 0 = game default.
-		stacking = { boxHeight = 0, spacing = 0, speed = 0, topInset = 0 },
+		stacking = { enemies = false, friendly = false, boxHeight = 0, spacing = 0, speed = 0, topInset = 0 }, -- plates don't push each other apart
 		healerIcon = true,
 		enemyHealerIcon = true,
 		healerSize = 20,
@@ -913,6 +913,11 @@ local function Migrate(db)
 		-- Character Sheet: window opacity 90% (0.30-0.35 had 55%)
 		local ch = db.character
 		if ch and ch.frameAlpha == 0.55 then ch.frameAlpha = 0.9 end
+	end
+	if v < 13 then
+		-- Nameplates: stacking off for enemies and friendlies (it used to copy the game's setting)
+		local st = db.nameplates and db.nameplates.stacking
+		if st then st.enemies, st.friendly = false, false end
 	end
 	db.version = ns.DB_VERSION
 end

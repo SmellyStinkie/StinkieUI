@@ -208,14 +208,40 @@ function D.Match(s, f)
 	if f.since and s.t < f.since then return false end
 	if f.result and s.result ~= f.result then return false end
 	if f.search and f.search ~= "" then
-		local q = f.search
-		local hit = s.map and s.map:lower():find(q, 1, true)
-		if not hit then
-			for _, n in ipairs(s.names) do if n:find(q, 1, true) then hit = true break end end
+		-- every word must match something: map, a player, a spec / class, bracket, result, comp
+		local text = D.SearchText(s)
+		for word in f.search:gmatch("%S+") do
+			if not text:find(word, 1, true) then return false end
 		end
-		if not hit then return false end
 	end
 	return true
+end
+
+-- one lowercase string per match with everything the search box looks at (built once, kept)
+local RESULT_WORDS = { W = "win won victory", L = "loss lost defeat", D = "draw" }
+function D.SearchText(s)
+	if s.searchText then return s.searchText end
+	local parts = { s.map or "", s.bracket or "", RESULT_WORDS[s.result or ""] or "", s.char or "" }
+	local SH = StinkieUI_Shared
+	local labels = SH and SH.MatchRecorder and SH.MatchRecorder.BRACKET_LABEL
+	local label = labels and labels[s.bracket or ""]
+	if label then parts[#parts + 1] = label end
+	for _, n in ipairs(s.names or {}) do parts[#parts + 1] = n end
+	local specs = {}
+	if s.spec then specs[#specs + 1] = s.spec end
+	for _, id in ipairs(s.enemySpecs or {}) do specs[#specs + 1] = id end
+	for _, id in ipairs(s.allySpecs or {}) do specs[#specs + 1] = id end
+	if GetSpecializationInfoByID then
+		for _, id in ipairs(specs) do
+			if id and id ~= 0 then
+				local ok, _, name, _, _, _, classFile = pcall(GetSpecializationInfoByID, id)
+				if ok and type(name) == "string" then parts[#parts + 1] = name end
+				if ok and type(classFile) == "string" then parts[#parts + 1] = classFile end
+			end
+		end
+	end
+	s.searchText = table.concat(parts, " "):lower()
+	return s.searchText
 end
 
 function D.Filter(list, f)
