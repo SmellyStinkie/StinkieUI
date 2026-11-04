@@ -1,12 +1,14 @@
 # Stinkie UI changelog
 
+## 0.37.2
+- Removes the leftover PvPDR.lua (unused since 0.32; it was still shipping in the zip). No changes in game.
+
 ## 0.37.1
 - Nameplates: stacking is off by default for enemies and friendlies (plates no longer push each other apart); existing profiles are switched off once. Turn it back on under Nameplates.
 - Match History: the list fills the window (22 rows, no empty space at the bottom), and the scroll bar works with the mouse: click anywhere on it to jump, or drag.
 - Match History search: every word you type must match (e.g. "pinkie nagrand"), and it now also matches specs and classes ("frost", "mage"), the bracket ("shuffle"), the result ("win", "loss") and the character, as well as maps and player names.
 - Match History: the Import Rated Tracker button is gone from the window; it's on the options page (Match History > History & Import).
 - Options: the search box at the top of the menu has a visible outline and "Search all options..." hint; a page that fails to build no longer stops the search.
-- Removes PvPDR.lua from the repository (unused since 0.32).
 
 ## 0.37.0
 - New default layout from Stinkie's current settings: character sheet (warband camp background, 144% size, darker character area, longer item names), queue display (bigger, no "Queued as" line), objectives (bigger text, also hidden in dungeons), buff frame (also hidden in dungeons and raids), party targets on, flag cap bars, Return to Graveyard spot and more. Only new profiles start from it; your saved settings don't change. Window positions remembered by Window Mover aren't part of it.
