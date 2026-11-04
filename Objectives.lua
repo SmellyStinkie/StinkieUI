@@ -23,6 +23,8 @@ local function InstanceKind()
 	return "world"
 end
 
+OB.InstanceKind = InstanceKind
+
 function OB.WantHidden()
 	local c = cfg()
 	if not c.enabled then return false end

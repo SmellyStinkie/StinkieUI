@@ -2,7 +2,12 @@
 -- long you've waited, Blizzard's estimated wait, and your MMR in that bracket. The game doesn't
 -- tell addons your MMR outside a match, so it's the MMR after your last match in that bracket on
 -- this character (saved by Match History, including imported Rated Tracker matches).
--- Updates once a second, only while a queue is up.
+-- Updates once a second, only while a queue is up. Hidden inside arenas and battlegrounds.
+--
+-- Queue time for Match History: Blizzard's "time waited" keeps counting while you sit in another
+-- match (your Blitz queue runs on while you play a Shuffle). We count only the time you were
+-- waiting outside a PvP instance, per bracket, and hand it to the match when it is saved.
+-- Kept in StinkieUIDB.queueTrack (epoch seconds) so it survives /reload.
 local _, ns = ...
 
 local Q = {}
@@ -53,16 +58,111 @@ local function CurrentSpec()
 	return id
 end
 
--- your last match in this bracket (for Solo Shuffle and Blitz: with your current spec)
-function Q.LastMMR(bracket)
+Q.CurrentSpec = CurrentSpec
+
+-- the spec you're queued as (Blizzard assigns one per Shuffle / Blitz queue); else your current spec
+function Q.QueuedSpec(index)
+	local id
+	if C_PvP and C_PvP.GetAssignedSpecForBattlefieldQueue then
+		local ok, v = pcall(C_PvP.GetAssignedSpecForBattlefieldQueue, index)
+		if ok and readable(v) and type(v) == "number" and v > 0 then id = v end
+	end
+	return id or CurrentSpec()
+end
+
+function Q.SpecInfo(id)
+	if not (id and GetSpecializationInfoByID) then return nil end
+	local ok, _, name, _, icon = pcall(GetSpecializationInfoByID, id)
+	if ok and readable(name) then return name, icon end
+	return nil
+end
+
+-- your last match in this bracket (for Solo Shuffle and Blitz: with the queued / current spec).
+-- For those, a different spec's MMR is never shown: each spec has its own.
+function Q.LastMMR(bracket, spec)
 	local store = StinkieUIDB and StinkieUIDB.lastMMR
 	local mine = store and store[ns.MatchRecorder.MyChar()]
 	if not mine then return nil end
 	if PER_SPEC[bracket] then
-		local spec = CurrentSpec()
-		if spec and mine[bracket .. ":" .. spec] then return mine[bracket .. ":" .. spec] end
+		spec = spec or CurrentSpec()
+		if spec then
+			if mine[bracket .. ":" .. spec] then return mine[bracket .. ":" .. spec] end
+			-- older records without a spec are still a fair guess; another spec's are not
+			local any = mine[bracket]
+			if any and (any.spec == nil or any.spec == spec) then return any end
+			return nil
+		end
 	end
 	return mine[bracket]
+end
+
+-- in an arena or battleground (or its loading screen into one)
+function Q.InPvP()
+	local _, kind = IsInInstance()
+	if kind == "arena" or kind == "pvp" then return true end
+	return (C_PvP and C_PvP.IsActiveBattlefield and C_PvP.IsActiveBattlefield()) and true or false
+end
+
+---------------------------------------------------------------------------
+-- Queue time tracking (time spent waiting outside other matches)
+---------------------------------------------------------------------------
+local function TrackStore()
+	if not StinkieUIDB then return nil end
+	StinkieUIDB.queueTrack = StinkieUIDB.queueTrack or {}
+	local key = ns.MatchRecorder.MyChar()
+	local t = StinkieUIDB.queueTrack[key]
+	if not t then t = { live = {}, popped = {} }; StinkieUIDB.queueTrack[key] = t end
+	return t
+end
+
+function Q.Track(now)
+	local store = TrackStore()
+	if not store then return end
+	now = now or time()
+	local busy = Q.InPvP()
+	local seen = {}
+	local max = GetMaxBattlefieldID and GetMaxBattlefieldID() or 0
+	for i = 1, max do
+		local status, name, teamSize, registered, suspended, queueType = GetBattlefieldStatus(i)
+		local bracket = (status == "queued" or status == "confirm") and Q.Bracket(queueType, teamSize, registered, name)
+		if bracket then
+			seen[bracket] = true
+			local q = store.live[bracket]
+			if status == "queued" then
+				if not q then
+					-- new queue; if we missed its start (addon just installed), take Blizzard's number
+					local waited = GetBattlefieldTimeWaited and GetBattlefieldTimeWaited(i)
+					waited = (readable(waited) and waited > 0) and math.floor(waited / 1000) or 0
+					q = { idle = (waited > 5 and not busy) and waited or 0 }
+					store.live[bracket] = q
+				end
+				local paused = busy or (readable(suspended) and suspended)
+				if paused and q.since then
+					q.idle, q.since = q.idle + math.max(0, now - q.since), nil
+				elseif not paused and not q.since then
+					q.since = now
+				end
+			elseif q then -- popped
+				store.popped[bracket] = { secs = q.idle + (q.since and math.max(0, now - q.since) or 0), t = now }
+				store.live[bracket] = nil
+			end
+		end
+	end
+	for bracket in pairs(store.live) do
+		if not seen[bracket] then store.live[bracket] = nil end -- left the queue
+	end
+end
+
+-- seconds queued for the match being saved (once); nil if we didn't see it pop in the last 3 hours
+function Q.TakeQueue(bracket)
+	local store = TrackStore()
+	if not (store and bracket) then return nil end
+	local key = tostring(bracket):gsub("%-u$", "")
+	local p = store.popped[key]
+	if not p then return nil end
+	store.popped[key] = nil
+	if time() - (p.t or 0) > 3 * 3600 then return nil end
+	return p.secs
 end
 
 -- "+73" in green / "-40" in red
@@ -88,6 +188,7 @@ function Q.Read()
 				waited = readable(waited) and waited / 1000 or nil,
 				estimate = (readable(est) and est > 0) and est / 1000 or nil,
 				status = status, suspended = suspended,
+				spec = Q.QueuedSpec(i),
 			}
 		end
 	end
@@ -101,12 +202,23 @@ local rows = {}
 
 local function CreateRow(i)
 	local r = CreateFrame("Frame", nil, Q.holder)
+	r.icon = r:CreateTexture(nil, "ARTWORK")
+	r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	r.label = ns.CreateText(r, 14, "LEFT")
-	r.label:SetPoint("LEFT", 6, 0)
 	r.time = ns.CreateText(r, 14, "LEFT")
 	r.extra = ns.CreateText(r, 14, "RIGHT")
 	r.extra:SetPoint("RIGHT", -6, 0)
 	rows[i] = r
+	return r
+end
+
+local function HeaderRow()
+	if Q.header then return Q.header end
+	local r = CreateFrame("Frame", nil, Q.holder)
+	r.icon = r:CreateTexture(nil, "ARTWORK")
+	r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	r.text = ns.CreateText(r, 14, "LEFT")
+	Q.header = r
 	return r
 end
 
@@ -120,23 +232,53 @@ function Q:Layout()
 	if h.SUIBorder then
 		for _, e in ipairs(h.SUIBorder.edges) do e:SetShown(c.background and c.border) end
 	end
+	local icon = c.specIcon and (c.height - 4) or 0
+	local top = 4
+	local hr = HeaderRow()
+	hr:SetSize(c.width, c.height)
+	hr:ClearAllPoints()
+	hr:SetPoint("TOPLEFT", h, "TOPLEFT", 0, -top)
+	hr.icon:SetSize(c.height - 4, c.height - 4)
+	hr.icon:ClearAllPoints()
+	hr.icon:SetPoint("LEFT", 6, 0)
+	hr.text:ClearAllPoints()
+	hr.text:SetPoint("LEFT", hr.icon, "RIGHT", 5, 0)
+	ns.ApplyText(hr.text, c.labelStyle)
+	if c.header then top = top + c.height + c.spacing end
 	for i, r in ipairs(rows) do
 		r:SetSize(c.width, c.height)
 		r:ClearAllPoints()
-		r:SetPoint("TOPLEFT", h, "TOPLEFT", 0, -4 - (i - 1) * (c.height + c.spacing))
+		r:SetPoint("TOPLEFT", h, "TOPLEFT", 0, -top - (i - 1) * (c.height + c.spacing))
+		r.icon:SetSize(math.max(icon, 1), math.max(icon, 1))
+		r.icon:ClearAllPoints()
+		r.icon:SetPoint("LEFT", 6, 0)
+		r.label:ClearAllPoints()
+		if icon > 0 then r.label:SetPoint("LEFT", r.icon, "RIGHT", 4, 0) else r.label:SetPoint("LEFT", 6, 0) end
 		ns.ApplyText(r.label, c.labelStyle)
 		ns.ApplyText(r.time, c.textStyle)
 		ns.ApplyText(r.extra, c.textStyle)
 		r.time:ClearAllPoints()
-		r.time:SetPoint("LEFT", r, "LEFT", math.floor(c.width * 0.36), 0)
+		r.time:SetPoint("LEFT", r, "LEFT", math.floor(c.width * 0.36) + icon, 0)
 	end
 end
 
 local function Render(list)
 	local c = cfg()
+	local hr = HeaderRow()
+	local firstSpec = list[1] and list[1].spec
+	local sname, sicon = Q.SpecInfo(firstSpec)
+	local showHeader = c.header and #list > 0 and sname ~= nil
+	if showHeader then
+		hr.icon:SetTexture(sicon)
+		hr.text:SetText("Queued as " .. sname)
+	end
+	hr:SetShown(showHeader and true or false)
 	for i, q in ipairs(list) do
 		local r = rows[i]
 		if not r then r = CreateRow(i); Q:Layout() end
+		local _, icon = Q.SpecInfo(q.spec)
+		r.icon:SetTexture(icon)
+		r.icon:SetShown(c.specIcon and icon ~= nil)
 		r.label:SetText(q.label)
 		if q.status == "confirm" then
 			r.time:SetText("|cff55ff55Ready!|r")
@@ -148,10 +290,13 @@ local function Render(list)
 		local extra = {}
 		if c.estimate then extra[#extra + 1] = "est " .. (q.estimate and Clock(q.estimate) or "-") end
 		if (c.mmr or c.rating) and q.bracket then
-			local last = q.mmrData or Q.LastMMR(q.bracket)
+			local last = q.mmrData or Q.LastMMR(q.bracket, q.spec)
 			if c.mmr then
-				extra[#extra + 1] = "MMR " .. ((last and last.mmr) and tostring(last.mmr) or "-")
-					.. ((c.mmrChange and last) and Q.DeltaText(last.delta) or "")
+				if last and last.mmr then
+					extra[#extra + 1] = "MMR " .. tostring(last.mmr) .. ((c.mmrChange and Q.DeltaText(last.delta)) or "")
+				else
+					extra[#extra + 1] = "|cffaaaaaaMMR unknown, play a game|r"
+				end
 			end
 			if c.rating then extra[#extra + 1] = "CR " .. ((last and last.rating) and tostring(last.rating) or "-") end
 		end
@@ -160,18 +305,21 @@ local function Render(list)
 	end
 	for i = #list + 1, #rows do rows[i]:Hide() end
 	local h = Q.holder
-	h:SetSize(c.width, math.max(c.height, #list * (c.height + c.spacing) - c.spacing) + 8)
+	local n = #list + (c.header and 1 or 0)
+	h:SetSize(c.width, math.max(c.height, n * (c.height + c.spacing) - c.spacing) + 8)
 	h:SetShown(#list > 0)
 end
 
 local PREVIEW = {
-	{ label = "Blitz", waited = 192, estimate = 160, status = "queued", bracket = "blitz", mmrData = { mmr = 2773, rating = 2677, delta = 74 } },
-	{ label = "Solo Shuffle", waited = 75, estimate = 420, status = "queued", bracket = "shuffle", mmrData = { mmr = 2795, rating = 2817, delta = -22 } },
+	{ label = "Blitz", waited = 192, estimate = 160, status = "queued", bracket = "blitz", spec = 265, mmrData = { mmr = 2773, rating = 2677, delta = 74 } },
+	{ label = "Solo Shuffle", waited = 75, estimate = 420, status = "queued", bracket = "shuffle", spec = 265, mmrData = { mmr = 2795, rating = 2817, delta = -22 } },
+	{ label = "3v3", waited = 40, estimate = 300, status = "queued", bracket = "3v3", spec = 265, mmrData = {} },
 }
 
 function Q:Update()
 	if not cfg().enabled then Q.holder:Hide() return end
 	if Q.testMode or ns.unlocked then Render(PREVIEW) return end
+	if cfg().hideInPvP and Q.InPvP() then Q.holder:Hide(); Q.ticker:Hide() return end
 	local ok, list = pcall(Q.Read)
 	if not ok then list = {} end
 	Render(list)
@@ -201,8 +349,10 @@ function Q:Init()
 		if acc >= 1 then acc = 0; Q:Update() end
 	end)
 	Q.ticker:Hide()
-	ns:On("UPDATE_BATTLEFIELD_STATUS", function() Q:Update() end)
-	ns:On("PLAYER_ENTERING_WORLD", function() Q:Update() end)
+	local function Track() local ok, err = pcall(Q.Track); if not ok then geterrorhandler()(err) end end
+	ns:On("UPDATE_BATTLEFIELD_STATUS", function() Track(); Q:Update() end)
+	ns:On("PLAYER_ENTERING_WORLD", function() Track(); Q:Update() end)
+	ns:On("ZONE_CHANGED_NEW_AREA", function() Track(); Q:Update() end)
 	table.insert(ns.lockCallbacks, function() Q:Update() end)
 	Q:Layout()
 	Q:Update()

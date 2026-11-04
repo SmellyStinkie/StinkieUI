@@ -244,7 +244,7 @@ local function IsShuffle(s) return s.bracket == "shuffle" or s.bracket == "shuff
 -- Accumulates a set of summaries. Solo Shuffle counts rounds (6 per match) for the win rate.
 function D.Aggregate(list)
 	local a = { games = 0, w = 0, l = 0, d = 0, rw = 0, rn = 0, net = 0, rated = 0, dmg = 0, heal = 0, dmgN = 0, healN = 0,
-		dur = 0, durN = 0, kb = 0, deaths = 0 }
+		dur = 0, durN = 0, queue = 0, queueN = 0, kb = 0, deaths = 0 }
 	for _, s in ipairs(list) do
 		a.games = a.games + 1
 		if s.result == "W" then a.w = a.w + 1 elseif s.result == "L" then a.l = a.l + 1 elseif s.result == "D" then a.d = a.d + 1 end
@@ -259,6 +259,7 @@ function D.Aggregate(list)
 		if s.dmg then a.dmg, a.dmgN = a.dmg + s.dmg, a.dmgN + 1 end
 		if s.heal then a.heal, a.healN = a.heal + s.heal, a.healN + 1 end
 		if s.dur then a.dur, a.durN = a.dur + s.dur, a.durN + 1 end
+		if s.queue then a.queue, a.queueN = a.queue + s.queue, a.queueN + 1 end
 		a.kb = a.kb + (s.kb or 0)
 		a.deaths = a.deaths + (s.deaths or 0)
 	end
@@ -267,6 +268,7 @@ function D.Aggregate(list)
 	a.avgDmg = a.dmgN > 0 and a.dmg / a.dmgN or nil
 	a.avgHeal = a.healN > 0 and a.heal / a.healN or nil
 	a.avgDur = a.durN > 0 and a.dur / a.durN or nil
+	a.avgQueue = a.queueN > 0 and a.queue / a.queueN or nil
 	a.avgNet = a.rated > 0 and a.net / a.rated or nil
 	return a
 end

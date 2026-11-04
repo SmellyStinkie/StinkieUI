@@ -67,7 +67,6 @@ local PRESET = {
 		bigCCMax = 3,
 		bigSize = 60,
 		ccGlow = "static",
-		drSpells = { "5782 disorient Fear", "5484 disorient Howl of Terror" },
 		healerGlowThickness = 4,
 		healerIconSize = 95,
 		healerPoint = { "CENTER", 0, 360 },

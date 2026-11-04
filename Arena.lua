@@ -396,11 +396,15 @@ local function LayoutArenaFrame(f)
 	f.HealthText:ClearAllPoints()
 	f.HealthText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -4, -3)
 
+	-- target border: thickness in pixels, drawn just outside the frame so it never covers the bars
 	local e = f.Highlight.edges
-	e[1]:ClearAllPoints(); e[1]:SetPoint("TOPLEFT"); e[1]:SetPoint("TOPRIGHT"); e[1]:SetHeight(px)
-	e[2]:ClearAllPoints(); e[2]:SetPoint("BOTTOMLEFT"); e[2]:SetPoint("BOTTOMRIGHT"); e[2]:SetHeight(px)
-	e[3]:ClearAllPoints(); e[3]:SetPoint("TOPLEFT"); e[3]:SetPoint("BOTTOMLEFT"); e[3]:SetWidth(px)
-	e[4]:ClearAllPoints(); e[4]:SetPoint("TOPRIGHT"); e[4]:SetPoint("BOTTOMRIGHT"); e[4]:SetWidth(px)
+	local t = px * (c.targetBorder or 3)
+	local tc = c.targetColor or { 1, 1, 1, 1 }
+	for i = 1, 4 do e[i]:SetColorTexture(tc[1], tc[2], tc[3], tc[4] or 1) end
+	e[1]:ClearAllPoints(); e[1]:SetPoint("BOTTOMLEFT", f, "TOPLEFT", -t, 0); e[1]:SetPoint("BOTTOMRIGHT", f, "TOPRIGHT", t, 0); e[1]:SetHeight(t)
+	e[2]:ClearAllPoints(); e[2]:SetPoint("TOPLEFT", f, "BOTTOMLEFT", -t, 0); e[2]:SetPoint("TOPRIGHT", f, "BOTTOMRIGHT", t, 0); e[2]:SetHeight(t)
+	e[3]:ClearAllPoints(); e[3]:SetPoint("TOPRIGHT", f, "TOPLEFT"); e[3]:SetPoint("BOTTOMRIGHT", f, "BOTTOMLEFT"); e[3]:SetWidth(t)
+	e[4]:ClearAllPoints(); e[4]:SetPoint("TOPLEFT", f, "TOPRIGHT"); e[4]:SetPoint("BOTTOMLEFT", f, "BOTTOMRIGHT"); e[4]:SetWidth(t)
 
 	local gap = 3
 	local h = c.height

@@ -1,5 +1,14 @@
 # Stinkie UI changelog
 
+## 0.32.0
+- Fixed: in Solo Shuffle and Blitz the character window broke (no stats, titles or equipment sets, gear couldn't be changed). Almost certainly caused by Stinkie UI editing Blizzard's stat list to show stats at 0: that tainted it, and in rated PvP the game's hidden stat values then made Blizzard's own code fail. Stinkie UI no longer touches that list; stats at 0 and movement speed are now its own rows under Blizzard's list, and are skipped in rated PvP where the numbers are hidden.
+- Match History: queue time for every new match, counting only the time you spent waiting outside other matches (a Blitz queue that runs on while you play a Shuffle doesn't count that Shuffle). New Queue column in the match list, Avg queue in Match Stats, and the average in the summary. Imported Rated Tracker matches keep their queue times.
+- Queue Time & MMR: the spec icon you're queued as on each queue, a "Queued as" line on top (both optional), and hidden while you're in an arena or battleground (optional). Solo Shuffle and Blitz MMR come from the spec you queued as. No match yet in a bracket or spec: "MMR unknown, play a game". Default width 360 (was 300).
+- Character Sheet: hovering a stat also highlights that stat's row. Equip and Save buttons and the three side tabs (stats, titles, equipment sets) are flat in Stinkie UI's style.
+- New Buff Frame page (Miscellaneous): Blizzard's buff and debuff icons get zoomed icons, a 1px border and your fonts for duration and stack count. Auto hide in arenas and battlegrounds (on by default), dungeons, raids, in combat or always; debuffs only if you choose; mouse over the spot to see them. Layout stays in Edit Mode.
+- Arena frames: the border on your target is thicker (3 px, outside the frame) with thickness and color options.
+- Removed the personal DR timers from PvP Assist.
+
 ## 0.31.0
 - New Window Mover (Miscellaneous), replacing BlizzMove: drag Blizzard's windows by any empty part of them, Ctrl + mouse wheel over a window to make it bigger or smaller. Positions and sizes are remembered across sessions (or just until logout) and put back whenever the window opens or Blizzard re-arranges its side panels. Alt + right-click resets one window; a button resets them all. Optional key to hold while dragging; add any other window by name. Windows Blizzard protects (spellbook, map) only move out of combat. It switches itself off while BlizzMove is enabled, since both would fight over the same windows: disable BlizzMove to use it.
 - The character and inspect window sizes are the same setting in Window Mover and on the Character Sheet page.

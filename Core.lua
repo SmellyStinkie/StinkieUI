@@ -280,7 +280,7 @@ local function unit(t)
 	return t
 end
 
-ns.DB_VERSION = 8
+ns.DB_VERSION = 9
 ns.defaults = {
 	version = ns.DB_VERSION,
 	scale = 1,
@@ -396,15 +396,6 @@ ns.defaults = {
 		kickGrowth = "RIGHT",
 		kickGlow = "none", kickGlowColor = { 1.00, 0.55, 0.12 }, kickGlowThickness = 2,
 		kickPoint = { "CENTER", 0, -170 },
-		-- DR timers for your own CC (Midnight hides real DR): started when your listed spell lands.
-		-- 12.1: DR resets 20 s after the CC ends; drCC = assumed CC length (full PvP duration).
-		dr = true, drWhere = "pvp",
-		drSpells = { "5782 disorient Fear" },
-		drReset = 20, drCC = 6,
-		drPlate = true, drPlateSize = 22, drPlateX = 0, drPlateY = -3,
-		drList = true, drListSize = 24, drMax = 3, drNumbers = true,
-		drNameStyle = text(12),
-		drPoint = { "CENTER", -320, -60 },
 		-- Big Debuffs: crowd control, defensives and offensive cooldowns, big, right of enemy nameplates
 		bigAuras = true,
 		bigWhere = "always", -- arena | pvp | always
@@ -495,6 +486,7 @@ ns.defaults = {
 		trinket = true, trinketSize = 34,
 		dr = true, drSize = 26, drSide = "RIGHT", drOnlyMine = false,
 		drCategories = { Stun = true, Incapacitate = true, Disorient = true, Silence = true, Root = true, Disarm = true, Taunt = false, AoEKnockback = false },
+		targetBorder = 3, targetColor = { 1, 1, 1, 1 }, -- border around the frame you have targeted (pixels)
 		targetDots = true, dotSize = 7,
 		dotColor = { 0.20, 1.00, 0.20 }, dotClassColor = false, -- bright green squares by default
 		healerSize = 14, healerAnchor = "BOTTOMRIGHT", -- TOPLEFT | TOPRIGHT | BOTTOMLEFT | BOTTOMRIGHT
@@ -740,6 +732,16 @@ ns.defaults = {
 		flat = true, -- flat headers, progress bars and quest item buttons (no gradients)
 		hideArena = true, hideBG = true, hideRaid = true, hideMPlus = false, hideDungeon = false,
 	},
+	-- Buff frame: Blizzard's buff / debuff icons, flat look and auto hide (layout stays in Edit Mode)
+	buffs = {
+		enabled = true,
+		skin = true, zoom = true, border = true,
+		durationStyle = { size = 11, outline = "OUTLINE", color = { 1.00, 0.82, 0.00 }, classColor = false },
+		countStyle = text(12),
+		hideArena = true, hideBG = true, hideDungeon = false, hideRaid = false, hideAlways = false, hideCombat = false,
+		debuffs = false,  -- also hide debuffs (off: debuffs always show)
+		mouseover = true, -- mouse over the spot to see them while hidden
+	},
 	-- Window Mover (replaces BlizzMove): drag Blizzard windows, Ctrl + wheel to resize
 	windowMover = {
 		enabled = true,
@@ -754,7 +756,8 @@ ns.defaults = {
 	queueInfo = {
 		enabled = true,
 		estimate = true, mmr = true, mmrChange = true, rating = false,
-		width = 300, height = 22, spacing = 2, scale = 1,
+		specIcon = true, header = true, hideInPvP = true, -- queued spec icon per row, "Queued as" line
+		width = 360, height = 22, spacing = 2, scale = 1,
 		background = true, bgColor = { 0.04, 0.04, 0.05 }, bgAlpha = 0.65, border = true,
 		textStyle = text(14),
 		labelStyle = { size = 14, outline = "OUTLINE", color = { 0.75, 0.80, 0.16 }, classColor = false },
@@ -846,6 +849,15 @@ local function Migrate(db)
 		if ch then
 			if ch.frameAlpha == 0.95 then ch.frameAlpha = 0.55 end
 			if ch.textWidth == 110 then ch.textWidth = 140 end
+		end
+	end
+	if v < 9 then
+		-- Queue display: wider for the spec icon and "MMR unknown"; the personal DR timers are gone
+		local qi = db.queueInfo
+		if qi and qi.width == 300 then qi.width = 360 end
+		local aa = db.arenaAssist
+		if aa then
+			for k in pairs(aa) do if k == "dr" or (k:match("^dr%u")) then aa[k] = nil end end
 		end
 	end
 	db.version = ns.DB_VERSION

@@ -714,7 +714,6 @@ local function BuildArenaAssistPage(page)
 		local AA = ns.ArenaAssist
 		AA:SetTestMode(not AA.testMode)
 		if ns.Party.SetTestMode then ns.Party:SetTestMode(AA.testMode, "arena") end
-		if ns.PvPDR then ns.PvPDR:SetTestMode(AA.testMode) end
 	end)
 	page:Slider("Countdown text size", 0.5, 2.5, 0.05, Getter(cfg, "countdownScale"), Setter(cfg, "countdownScale"))
 	page:Note("Timer numbers on party CC, trinkets, the healer warning, Precognition, kicks and Big Debuffs.", 36)
@@ -780,30 +779,6 @@ local function BuildArenaAssistPage(page)
 	GlowOptions(page, cfg, "kick")
 	page:Position(nil, function() return "enemyKicks" end)
 
-	page:Header("DR timers (your crowd control)")
-	page:Check("Start a DR timer when my CC lands", Getter(cfg, "dr"), Setter(cfg, "dr"))
-	page:Choice("Where", whereChoices, Getter(cfg, "drWhere"), Setter(cfg, "drWhere"))
-	page:Note("The game hides real DR, so this is an estimate from your own casts: 50% = their next one is half length, IMM = immune. It assumes the CC ran its full length, so if it broke early the real reset comes sooner than shown.", 76)
-	page:Slider("DR reset (seconds after CC ends)", 10, 30, 1, Getter(cfg, "drReset"), Setter(cfg, "drReset"))
-	page:Slider("Assumed CC length", 1, 10, 0.5, Getter(cfg, "drCC"), Setter(cfg, "drCC"))
-	page:TextList("Spells", 50, function() return table.concat(cfg().drSpells, "\n") end, function(t)
-		local list = {}
-		for line in t:gmatch("[^\n]+") do
-			line = strtrim(line)
-			if line ~= "" then table.insert(list, line) end
-		end
-		cfg().drSpells = list
-	end, "One per line: spell ID, DR category, name. Same category = shared DR (e.g. 6789 incapacitate Mortal Coil).")
-	page:Check("On the enemy's nameplate", Getter(cfg, "drPlate"), Setter(cfg, "drPlate"))
-	page:Slider("Nameplate icon size", 12, 50, 1, Getter(cfg, "drPlateSize"), Setter(cfg, "drPlateSize"))
-	page:Slider("Nameplate icon X", -60, 60, 1, Getter(cfg, "drPlateX"), Setter(cfg, "drPlateX"))
-	page:Slider("Nameplate icon Y", -60, 30, 1, Getter(cfg, "drPlateY"), Setter(cfg, "drPlateY"))
-	page:Check("List with names (movable)", Getter(cfg, "drList"), Setter(cfg, "drList"))
-	page:Slider("List icon size", 14, 50, 1, Getter(cfg, "drListSize"), Setter(cfg, "drListSize"))
-	page:Slider("List rows", 1, 6, 1, Getter(cfg, "drMax"), Setter(cfg, "drMax"))
-	page:Check("Countdown numbers", Getter(cfg, "drNumbers"), Setter(cfg, "drNumbers"))
-	page:TextStyle("List name text", function() return cfg().drNameStyle end)
-	page:Position(nil, function() return "drTimers" end)
 end
 
 local function BuildMinimapPage(page)
@@ -1181,6 +1156,8 @@ local function BuildArenaPage(page)
 	page:Slider("Healer cross size", 6, 100, 1, Getter(cfg, "healerSize"), Setter(cfg, "healerSize"))
 	page:Dropdown("Healer cross corner", { { "TOPLEFT", "Top left" }, { "TOPRIGHT", "Top right" }, { "BOTTOMLEFT", "Bottom left" }, { "BOTTOMRIGHT", "Bottom right" } },
 		Getter(cfg, "healerAnchor"), Setter(cfg, "healerAnchor"))
+	page:Slider("My target: border thickness", 1, 8, 1, Getter(cfg, "targetBorder"), Setter(cfg, "targetBorder"))
+	page:Color("My target: border color", Getter(cfg, "targetColor"), Setter(cfg, "targetColor"))
 	page:Check("Teammates targeting (one square each)", Getter(cfg, "targetDots"), Setter(cfg, "targetDots"))
 	page:Slider("Square size", 3, 20, 1, Getter(cfg, "dotSize"), Setter(cfg, "dotSize"))
 	page:Color("Square color", Getter(cfg, "dotColor"), Setter(cfg, "dotColor"))
@@ -1404,7 +1381,10 @@ local function BuildQueueInfoPage(page)
 	page:Check("MMR", Getter(cfg, "mmr"), Setter(cfg, "mmr"))
 	page:Check("MMR change from your last game (+73 green / -40 red)", Getter(cfg, "mmrChange"), Setter(cfg, "mmrChange"))
 	page:Check("Rating (CR)", Getter(cfg, "rating"), Setter(cfg, "rating"))
-	page:Note("The game only shows MMR at the end of a match, so this is your MMR after your last match in that bracket on this character (recorded or imported), and how much that match changed it. Solo Shuffle and Blitz use your current spec. It shows - until there is one.", 76)
+	page:Check("Spec icon (the spec you're queued as)", Getter(cfg, "specIcon"), Setter(cfg, "specIcon"))
+	page:Check("\"Queued as\" line on top", Getter(cfg, "header"), Setter(cfg, "header"))
+	page:Check("Hide while in an arena or battleground", Getter(cfg, "hideInPvP"), Setter(cfg, "hideInPvP"))
+	page:Note("The game only shows MMR at the end of a match, so this is your MMR after your last match in that bracket on this character (recorded or imported), and how much that match changed it. Solo Shuffle and Blitz use the spec you queued as. Until there is a match it says 'MMR unknown, play a game'.", 76)
 	page:Header("Size")
 	page:Slider("Size", 0.5, 2.5, 0.05, Getter(cfg, "scale"), Setter(cfg, "scale"))
 	page:Slider("Width", 150, 600, 1, Getter(cfg, "width"), Setter(cfg, "width"))
@@ -1462,11 +1442,12 @@ local function BuildCharacterPage(page)
 	page:Slider("Text width", 80, 300, 1, Getter(cfg, "textWidth"), Setter(cfg, "textWidth"))
 	page:Column(2)
 	page:Header("Stats and item level")
-	page:Check("Hovering a secondary or tertiary stat highlights items with it", Getter(cfg, "statHighlight"), Setter(cfg, "statHighlight"))
+	page:Check("Hovering a stat highlights it and the items with it", Getter(cfg, "statHighlight"), Setter(cfg, "statHighlight"))
 	page:Color("Highlight color", Getter(cfg, "highlightColor"), Setter(cfg, "highlightColor"))
 	page:Note("Critical strike, haste, mastery, versatility, speed (also movement speed), leech and avoidance.", 36)
 	page:Check("Hide stats you have none of (Blizzard's default)", Getter(cfg, "hideZeroStats"), Setter(cfg, "hideZeroStats"))
 	page:Check("Movement speed in the stat list", Getter(cfg, "moveSpeed"), Setter(cfg, "moveSpeed"))
+	page:Note("Extra rows (stats at 0, movement speed) are added under Blizzard's list and skipped in rated PvP, where the game hides the numbers.", 36)
 	page:Check("Item level to two decimals, with overall and PvP", Getter(cfg, "ilvlDecimals"), Setter(cfg, "ilvlDecimals"))
 	page:Note("Inspected players show their item level and PvP item level at the top of the window.", 36)
 	page:TextStyle("First line text", function() return cfg().nameStyle end, {})
@@ -1504,6 +1485,32 @@ local function BuildObjectivesPage(page)
 	page:Check("Mythic+", Getter(cfg, "hideMPlus"), Setter(cfg, "hideMPlus"))
 	page:Check("Other dungeons", Getter(cfg, "hideDungeon"), Setter(cfg, "hideDungeon"))
 	page:Note("Changes wait until you're out of combat (Blizzard protects the tracker in combat).", 36)
+end
+
+local function BuildBuffsPage(page)
+	local function cfg() return ns.db.buffs end
+	page:Column(1)
+	page:Header("Buff frame")
+	page:Note("Blizzard's buff and debuff icons. Move them, change the size, icons per row and direction in Edit Mode.", 36)
+	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"), true)
+	page:Header("Look")
+	page:Check("Flat look (your fonts on duration and stacks)", Getter(cfg, "skin"), Setter(cfg, "skin"))
+	page:Check("Zoom icons (crop the edges)", Getter(cfg, "zoom"), Setter(cfg, "zoom"))
+	page:Check("1px border", Getter(cfg, "border"), Setter(cfg, "border"))
+	page:Note("Debuffs keep Blizzard's colored border by type. Turning the flat look off fully undoes the fonts after a /reload.", 36)
+	page:TextStyle("Duration text", function() return cfg().durationStyle end, {})
+	page:TextStyle("Stack count text", function() return cfg().countStyle end, {})
+	page:Column(2)
+	page:Header("Auto hide")
+	page:Check("In arenas", Getter(cfg, "hideArena"), Setter(cfg, "hideArena"))
+	page:Check("In battlegrounds and Blitz", Getter(cfg, "hideBG"), Setter(cfg, "hideBG"))
+	page:Check("In dungeons and Mythic+", Getter(cfg, "hideDungeon"), Setter(cfg, "hideDungeon"))
+	page:Check("In raids", Getter(cfg, "hideRaid"), Setter(cfg, "hideRaid"))
+	page:Check("In combat (anywhere)", Getter(cfg, "hideCombat"), Setter(cfg, "hideCombat"))
+	page:Check("Always", Getter(cfg, "hideAlways"), Setter(cfg, "hideAlways"))
+	page:Check("Hide debuffs too", Getter(cfg, "debuffs"), Setter(cfg, "debuffs"))
+	page:Check("Show them while the mouse is over the spot", Getter(cfg, "mouseover"), Setter(cfg, "mouseover"))
+	page:Note("Hidden means invisible: the icons are still there, so a right-click on that spot still cancels a buff.", 36)
 end
 
 local function BuildWindowMoverPage(page)
@@ -2118,6 +2125,7 @@ local pages = {
 		{ "Minimap", BuildMinimapPage },
 		{ "Damage Meter", BuildDamageMeterPage },
 		{ "Objectives", BuildObjectivesPage },
+		{ "Buff Frame", BuildBuffsPage },
 		{ "Window Mover", BuildWindowMoverPage },
 	} },
 }

@@ -345,6 +345,23 @@ function CS.Highlight(prefix, statKey)
 	end)
 end
 
+-- the stat row under the mouse gets a tint in the highlight color
+function CS.HoverRow(row, on)
+	if not row.SUIHover then
+		row.SUIHover = row:CreateTexture(nil, "ARTWORK", nil, 1)
+		row.SUIHover:SetAllPoints()
+		row.SUIHover:Hide()
+	end
+	local c = cfg()
+	if on and c.enabled and c.statHighlight then
+		local col = c.highlightColor
+		row.SUIHover:SetColorTexture(col[1], col[2], col[3], 0.22)
+		row.SUIHover:Show()
+	else
+		row.SUIHover:Hide()
+	end
+end
+
 local function HookStatFrames()
 	local pane = _G.CharacterStatsPane
 	if not (pane and pane.statsFramePool) then return end
@@ -352,50 +369,101 @@ local function HookStatFrames()
 		if not f.SUIStatHook then
 			f.SUIStatHook = true
 			f:HookScript("OnEnter", function(self)
+				CS.HoverRow(self, true)
 				if not cfg().statHighlight then return end
 				local stat = self.Label and StatForLabel(self.Label:GetText())
 				if stat then CS.Highlight("Character", stat) end
 			end)
-			f:HookScript("OnLeave", function() CS.Highlight("Character", nil) end)
+			f:HookScript("OnLeave", function(self) CS.HoverRow(self, false); CS.Highlight("Character", nil) end)
 		end
 	end
 end
 
 ---------------------------------------------------------------------------
--- Stat list: Blizzard hides crit, haste, mastery, versatility, leech, avoidance and speed at 0.
--- By default all of them show (and movement speed is added); "hide stats at 0" restores
--- Blizzard's behavior. This edits Blizzard's PAPERDOLL_STATCATEGORIES rows in place.
+-- Stat list extras. Blizzard hides leech, avoidance, speed (and any stat at 0). We never edit
+-- Blizzard's PAPERDOLL_STATCATEGORIES: doing that tainted the stat update, and in rated PvP
+-- (secret stat values) it broke the whole character window. Instead we draw our own rows under
+-- Blizzard's list, only for stats Blizzard left out, and only when the values are readable.
 ---------------------------------------------------------------------------
-local ZERO_HIDDEN = { CRITCHANCE = true, HASTE = true, MASTERY = true, VERSATILITY = true, LIFESTEAL = true, AVOIDANCE = true, SPEED = true }
-local moveRow
-function CS.ApplyStatRows()
-	local cats = _G.PAPERDOLL_STATCATEGORIES
-	if type(cats) ~= "table" then return end
+local EXTRA_STATS = {
+	{ key = "versatility", label = function() return STAT_VERSATILITY or "Versatility" end,
+		value = function()
+			local d = GetCombatRatingBonus and CR_VERSATILITY_DAMAGE_DONE and GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_DONE)
+			local b = GetVersatilityBonus and CR_VERSATILITY_DAMAGE_DONE and GetVersatilityBonus(CR_VERSATILITY_DAMAGE_DONE)
+			if not (readable(d) and readable(b)) then return nil end
+			return (d or 0) + (b or 0)
+		end },
+	{ key = "leech", label = function() return STAT_LIFESTEAL or "Leech" end, value = function() return GetLifesteal and GetLifesteal() end },
+	{ key = "avoidance", label = function() return STAT_AVOIDANCE or "Avoidance" end, value = function() return GetAvoidance and GetAvoidance() end },
+	{ key = "speed", label = function() return STAT_SPEED or "Speed" end, value = function() return GetSpeed and GetSpeed() end },
+	{ key = "move", label = function() return STAT_MOVEMENT_SPEED or "Movement Speed" end, move = true,
+		value = function()
+			if not GetUnitSpeed then return nil end
+			local _, run = GetUnitSpeed("player")
+			if not readable(run) or not run then return nil end
+			return run / 7 * 100
+		end },
+}
+CS.EXTRA_STATS = EXTRA_STATS
+
+local function ExtraRow(pane, i)
+	pane.SUIExtraRows = pane.SUIExtraRows or {}
+	local r = pane.SUIExtraRows[i]
+	if r then return r end
+	r = CreateFrame("Frame", nil, pane)
+	r:SetHeight(15)
+	r.bg = r:CreateTexture(nil, "BACKGROUND")
+	r.bg:SetAllPoints()
+	r.Label = r:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	r.Label:SetPoint("LEFT", 11, 0)
+	r.Value = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	r.Value:SetPoint("RIGHT", -8, 0)
+	r:EnableMouse(true)
+	r:SetScript("OnEnter", function(self)
+		CS.HoverRow(self, true)
+		if cfg().statHighlight and self.statKey and CS.STAT_KEYS[self.statKey] then CS.Highlight("Character", self.statKey) end
+	end)
+	r:SetScript("OnLeave", function(self) CS.HoverRow(self, false); CS.Highlight("Character", nil) end)
+	pane.SUIExtraRows[i] = r
+	return r
+end
+
+function CS.UpdateExtraStats()
+	local pane = _G.CharacterStatsPane
+	if not pane then return end
 	local c = cfg()
-	local showAll = c.enabled and not c.hideZeroStats
-	for _, cat in ipairs(cats) do
-		if cat.categoryFrame == "EnhancementsCategory" and type(cat.stats) == "table" then
-			for _, row in ipairs(cat.stats) do
-				if ZERO_HIDDEN[row.stat] then
-					if row.SUIHideAt == nil then row.SUIHideAt = row.hideAt or false end
-					if showAll then row.hideAt = nil else row.hideAt = row.SUIHideAt or nil end
+	local shown, lowest = {}, nil
+	if pane.statsFramePool then
+		for f in pane.statsFramePool:EnumerateActive() do
+			local t = f.Label and f.Label:GetText()
+			if readable(t) and t then shown[(t:gsub(":%s*$", ""):gsub("%s+$", ""))] = true end
+			local bottom = f:IsShown() and f:GetBottom()
+			if readable(bottom) and bottom and (not lowest or bottom < lowest:GetBottom()) then lowest = f end
+		end
+	end
+	local n = 0
+	if c.enabled and lowest then
+		for _, st in ipairs(EXTRA_STATS) do
+			local want = st.move and c.moveSpeed or (not st.move and not c.hideZeroStats)
+			local label = st.label()
+			if want and not shown[label] then
+				local ok, v = pcall(st.value)
+				if ok and readable(v) and v then
+					n = n + 1
+					local r = ExtraRow(pane, n)
+					r:ClearAllPoints()
+					r:SetPoint("TOPLEFT", lowest, "BOTTOMLEFT", 0, -(n - 1) * 15)
+					r:SetPoint("TOPRIGHT", lowest, "BOTTOMRIGHT", 0, -(n - 1) * 15)
+					r.statKey = st.key
+					r.Label:SetText(label .. ":")
+					r.Value:SetText(string.format("%.2f%%", v))
+					r.bg:SetColorTexture(1, 1, 1, (n % 2 == 1) and 0.04 or 0)
+					r:Show()
 				end
-			end
-			-- movement speed row, after Speed
-			local wantMove = c.enabled and c.moveSpeed and _G.PAPERDOLL_STATINFO and _G.PAPERDOLL_STATINFO.MOVESPEED
-			local idx
-			for i, row in ipairs(cat.stats) do if row == moveRow then idx = i end end
-			if wantMove and not idx then
-				moveRow = moveRow or { stat = "MOVESPEED" }
-				local at = #cat.stats + 1
-				for i, row in ipairs(cat.stats) do if row.stat == "SPEED" then at = i + 1 end end
-				table.insert(cat.stats, at, moveRow)
-			elseif not wantMove and idx then
-				table.remove(cat.stats, idx)
 			end
 		end
 	end
-	if _G.PaperDollFrame and _G.PaperDollFrame:IsShown() and _G.PaperDollFrame_UpdateStats then pcall(_G.PaperDollFrame_UpdateStats) end
+	for i = n + 1, #(pane.SUIExtraRows or {}) do pane.SUIExtraRows[i]:Hide() end
 end
 
 ---------------------------------------------------------------------------
@@ -714,6 +782,90 @@ end
 if _G.PanelTemplates_SelectTab then hooksecurefunc("PanelTemplates_SelectTab", function(tab) PaintTab(tab, true) end) end
 if _G.PanelTemplates_DeselectTab then hooksecurefunc("PanelTemplates_DeselectTab", function(tab) PaintTab(tab, false) end) end
 
+-- Blizzard panel button (Equip, Save): flat fill, 1px border, plum on hover. Blizzard swaps the
+-- Left/Middle/Right textures on press and disable; they stay at alpha 0, so only our look shows.
+function CS.SkinButton(b)
+	if not b then return end
+	for _, k in ipairs({ "Left", "Middle", "Right" }) do Hide(b[k]) end
+	local hl = b.GetHighlightTexture and b:GetHighlightTexture()
+	if hl then hl:SetAlpha(0) end
+	if b.SUIFill then return end
+	b.SUIFill = b:CreateTexture(nil, "BACKGROUND", nil, -6)
+	b.SUIFill:SetAllPoints()
+	ns.CreateBackdrop(b, 0)
+	local P = ns.BRAND.plum
+	local function paint(self, over)
+		if not self:IsEnabled() then
+			self.SUIFill:SetColorTexture(0.10, 0.09, 0.08, 0.9)
+		elseif over then
+			self.SUIFill:SetColorTexture(P[1], P[2], P[3], 1)
+		else
+			self.SUIFill:SetColorTexture(0.15, 0.13, 0.11, 1)
+		end
+	end
+	b:HookScript("OnEnter", function(self) paint(self, true) end)
+	b:HookScript("OnLeave", function(self) paint(self, false) end)
+	b:HookScript("OnEnable", function(self) paint(self, false) end)
+	b:HookScript("OnDisable", function(self) paint(self, false) end)
+	paint(b, false)
+	local fs = b.GetFontString and b:GetFontString()
+	if fs then ns.SetFont(fs, 12) end
+end
+
+-- the three sidebar tabs (stats, titles, equipment sets): flat squares, plum + green line when open
+local function PaintSidebarTab(tab)
+	local f = tab.SUIFlat
+	if not f then return end
+	Hide(tab.TabBg); Hide(tab.Hider); Hide(tab.Highlight)
+	local index = tab:GetID()
+	local pane = _G.GetPaperDollSideBarFrame and index and _G.GetPaperDollSideBarFrame(index)
+	local open = pane and pane:IsShown()
+	local c = cfg()
+	if open then
+		local p = ns.BRAND.plum
+		f.tex:SetColorTexture(p[1], p[2], p[3], 1)
+	else
+		local col = c.frameColor
+		f.tex:SetColorTexture(col[1], col[2], col[3], c.tabAlpha)
+	end
+	tab.SUILine:SetShown(open and true or false)
+	if tab.Icon then tab.Icon:SetDesaturated(not open and not tab:IsEnabled()) end
+end
+CS.PaintSidebarTab = PaintSidebarTab
+
+function CS.SkinSidebarTabs()
+	for i = 1, 3 do
+		local tab = _G["PaperDollSidebarTab" .. i]
+		if tab then
+			if not tab.SUIFlat then
+				local f = FlatBackdrop(tab, "tabAlpha")
+				f:ClearAllPoints()
+				f:SetPoint("TOPLEFT", 1, -1)
+				f:SetPoint("BOTTOMRIGHT", -1, 1)
+				tab.SUILine = f:CreateTexture(nil, "ARTWORK")
+				tab.SUILine:SetPoint("BOTTOMLEFT")
+				tab.SUILine:SetPoint("BOTTOMRIGHT")
+				tab.SUILine:SetHeight(2)
+				tab.SUILine:SetColorTexture(ns.ACCENT[1], ns.ACCENT[2], ns.ACCENT[3], 1)
+				if tab.Icon then
+					tab.Icon:ClearAllPoints()
+					tab.Icon:SetPoint("TOPLEFT", 3, -3)
+					tab.Icon:SetPoint("BOTTOMRIGHT", -3, 3)
+				end
+				tab:HookScript("OnEnter", function(self) if self.SUIFlat and not self.SUILine:IsShown() then local p = ns.BRAND.plum; self.SUIFlat.tex:SetColorTexture(p[1] * 0.6, p[2] * 0.6, p[3] * 0.6, 1) end end)
+				tab:HookScript("OnLeave", PaintSidebarTab)
+			end
+			PaintSidebarTab(tab)
+		end
+	end
+end
+if _G.PaperDollFrame_UpdateSidebarTabs then
+	hooksecurefunc("PaperDollFrame_UpdateSidebarTabs", function()
+		local c = cfg()
+		if c.enabled and c.flat then for i = 1, 3 do local t = _G["PaperDollSidebarTab" .. i]; if t then PaintSidebarTab(t) end end end
+	end)
+end
+
 function CS.ApplySkin(which)
 	local c = cfg()
 	if not (c.enabled and c.flat) then return end
@@ -722,6 +874,9 @@ function CS.ApplySkin(which)
 		SkinModel(_G.CharacterModelScene)
 		SkinStats()
 		EachSlot("Character", function(b) SkinSlot(b) end)
+		CS.SkinSidebarTabs()
+		local em = _G.PaperDollFrame and _G.PaperDollFrame.EquipmentManagerPane
+		if em then CS.SkinButton(em.EquipSet); CS.SkinButton(em.SaveSet) end
 	end
 	if which ~= "Character" and c.inspect then
 		SkinPanel(_G.InspectFrame, true)
@@ -900,6 +1055,7 @@ function CS:Init()
 				CS.UpdateItemLevel()
 				if cfg().flat then SkinStats() end
 			end
+			CS.UpdateExtraStats()
 		end)
 	end
 	if _G.PaperDollFrame then
@@ -922,7 +1078,6 @@ function CS:Init()
 	ns:On("PLAYER_AVG_ITEM_LEVEL_UPDATE", RefreshOpen)
 	ns:On("ZONE_CHANGED_NEW_AREA", RefreshOpen)
 	ns:On("PVP_MATCH_STATE_CHANGED", RefreshOpen)
-	CS.ApplyStatRows()
 	ns:On("GET_ITEM_INFO_RECEIVED", function()
 		if _G.PaperDollFrame and _G.PaperDollFrame:IsShown() then Queue("Character", "player") end
 		if _G.InspectFrame and _G.InspectFrame:IsShown() and _G.InspectFrame.unit then Queue("Inspect", _G.InspectFrame.unit) end
@@ -936,7 +1091,7 @@ function CS:Init()
 end
 
 function CS:Refresh()
-	CS.ApplyStatRows()
+	if _G.PaperDollFrame and _G.PaperDollFrame:IsShown() then CS.UpdateExtraStats() end
 	CS.ApplyScale()
 	CS.ApplyLayout()
 	CS.ApplySkin()

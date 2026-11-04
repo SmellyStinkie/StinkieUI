@@ -399,7 +399,10 @@ local function TryRecord()
 	if ok and m then
 		state.done, state.pending = true, false
 		local key = R.BRACKET_SETTING[m.bracket]
+		-- queue time (waiting outside other matches only), taken even if this bracket isn't saved
+		local queued = ns.QueueInfo and ns.QueueInfo.TakeQueue and ns.QueueInfo.TakeQueue(m.bracket)
 		if key and cfg()[key] == false then return end
+		if queued and not m.queue then m.queue = queued end
 		R.Save(m)
 		return
 	end

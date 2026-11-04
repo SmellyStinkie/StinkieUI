@@ -218,8 +218,8 @@ end
 -- Matches tab
 ---------------------------------------------------------------------------
 local COLUMNS = {
-	{ "Date", 92 }, { "Bracket", 98 }, { "Map", 150 }, { "Result", 52 }, { "Rating", 92 }, { "MMR", 52 },
-	{ "Length", 48 }, { "Me", 30 }, { "Opponents", 150 }, { "Damage", 56 }, { "Healing", 56 },
+	{ "Date", 92 }, { "Bracket", 98 }, { "Map", 140 }, { "Result", 52 }, { "Rating", 92 }, { "MMR", 52 },
+	{ "Length", 48 }, { "Queue", 48 }, { "Me", 30 }, { "Opponents", 150 }, { "Damage", 56 }, { "Healing", 56 },
 }
 
 local function BuildMatches(parent)
@@ -287,14 +287,15 @@ function H.RenderMatches()
 			end
 			c[6]:SetText(s.mmrAfter or s.mmr or "")
 			c[7]:SetText(Clock(s.dur))
-			c[8]:SetText(SpecIcon(s.spec, 16))
+			c[8]:SetText(Clock(s.queue))
+			c[9]:SetText(SpecIcon(s.spec, 16))
 			if #s.enemySpecs <= 6 then
-				c[9]:SetText(CompIcons(s.enemyComp, 16))
+				c[10]:SetText(CompIcons(s.enemyComp, 16))
 			else
-				c[9]:SetText(#s.enemySpecs .. " players")
+				c[10]:SetText(#s.enemySpecs .. " players")
 			end
-			c[10]:SetText(Short(s.dmg))
-			c[11]:SetText(Short(s.heal))
+			c[11]:SetText(Short(s.dmg))
+			c[12]:SetText(Short(s.heal))
 			r:Show()
 		else
 			r:Hide()
@@ -517,8 +518,8 @@ local GROUP_ITEMS = {
 	{ "length", "Match length" }, { "hour", "Time of day" }, { "weekday", "Day of week" },
 	{ "bracket", "Bracket" }, { "char", "Character" }, { "season", "Season" },
 }
-local STAT_COLS = { { "", 300 }, { "Games", 56 }, { "Win %", 56 }, { "95% range", 90 }, { "W-L", 70 }, { "Net rating", 76 }, { "Per game", 62 },
-	{ "Avg damage", 78 }, { "Avg healing", 78 }, { "Avg length", 70 } }
+local STAT_COLS = { { "", 250 }, { "Games", 52 }, { "Win %", 56 }, { "95% range", 90 }, { "W-L", 70 }, { "Net rating", 76 }, { "Per game", 62 },
+	{ "Avg damage", 78 }, { "Avg healing", 78 }, { "Avg length", 70 }, { "Avg queue", 70 } }
 local STAT_ROWS = 15
 
 local function BuildStats(parent)
@@ -632,6 +633,7 @@ local SORT_VALUE = {
 	function(r) return r.avgDmg or -1 end,
 	function(r) return r.avgHeal or -1 end,
 	function(r) return r.avgDur or -1 end,
+	function(r) return r.avgQueue or -1 end,
 }
 
 function H.SortRows(rows)
@@ -726,9 +728,10 @@ function H.RenderStats()
 			lines[#lines + 1] = string.format("Rating: net %s over %d rated (%s per game)%s%s", Signed(all.net), all.rated, Signed(all.avgNet),
 				latest and ("   current " .. latest.ratingAfter .. " (" .. (BRACKET_LABEL[latest.bracket] or "") .. ")") or "", peak and ("   peak " .. peak) or "")
 		end
-		lines[#lines + 1] = string.format("Average: %s damage, %s healing, %s long, %.1f killing blows, %.1f deaths",
+		lines[#lines + 1] = string.format("Average: %s damage, %s healing, %s long, %.1f killing blows, %.1f deaths%s",
 			Short(all.avgDmg and math.floor(all.avgDmg)), Short(all.avgHeal and math.floor(all.avgHeal)), Clock(all.avgDur and math.floor(all.avgDur)),
-			all.kb / all.games, all.deaths / all.games)
+			all.kb / all.games, all.deaths / all.games,
+			all.avgQueue and string.format(", %s in queue (%d with a queue time)", Clock(math.floor(all.avgQueue)), all.queueN) or "")
 		lines[#lines + 1] = string.format("Streaks: best %d wins, worst %d losses, now %d %s", bestW, bestL, cur, curType == "W" and "wins" or curType == "L" and "losses" or "")
 		-- best and worst map with enough games
 		local maps = D.Group(filtered, "map")
@@ -765,6 +768,7 @@ function H.RenderStats()
 			c[8]:SetText(Short(g.avgDmg and math.floor(g.avgDmg)))
 			c[9]:SetText(Short(g.avgHeal and math.floor(g.avgHeal)))
 			c[10]:SetText(Clock(g.avgDur and math.floor(g.avgDur)))
+			c[11]:SetText(Clock(g.avgQueue and math.floor(g.avgQueue)))
 			local wr = g.winRate or 0
 			r.bar:SetWidth(math.max(1, 52 * wr))
 			local good = wr >= 0.5
