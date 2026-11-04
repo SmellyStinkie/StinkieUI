@@ -1443,8 +1443,17 @@ local function BuildCharacterPage(page)
 	page:Check("Only warband camps I own", Getter(cfg, "ownedOnly"), Setter(cfg, "ownedOnly"))
 	page:EditText("Custom texture or atlas", Getter(cfg, "customTexture"), function(v) cfg().customTexture = v; bgChanged() end)
 	page:Note("For Custom: an atlas name or a file path / ID, e.g. Interface\\Glues\\... Warband camps are cropped to fit, not stretched.", 48)
-	page:Slider("Darken background", 0, 0.9, 0.05, Getter(cfg, "dim"), Setter(cfg, "dim"))
+	page:Check("Arrow under the trinkets to hide / show stats, titles and sets", Getter(cfg, "collapseButton"), function(v) cfg().collapseButton = v; bgChanged() end)
+	page:Check("Name and level centered over the character", Getter(cfg, "centerHeader"), function(v) cfg().centerHeader = v; bgChanged() end)
+	page:Check("Background across the whole window (flat look)", Getter(cfg, "wideBackground"), function(v) cfg().wideBackground = v; bgChanged() end)
+	page:Slider("Darken background (character area)", 0, 0.9, 0.05, Getter(cfg, "dim"), function(v) cfg().dim = v; bgChanged() end)
+	page:Slider("Darken background (names and stats)", 0, 1, 0.05, Getter(cfg, "outerDim"), function(v) cfg().outerDim = v; bgChanged() end)
 	page:Header("Item details")
+	page:Check("Compact (less busy)", Getter(cfg, "compact"), Setter(cfg, "compact"))
+	page:Note("Drops the set name from items (Gladiator's Amulet -> Amulet), short track (C1/6 = Champion 1/6), and puts the weapons' text under the weapons.", 50)
+	page:Slider("Longest item name (characters, 0 = no limit)", 0, 40, 1, Getter(cfg, "nameChars"), Setter(cfg, "nameChars"))
+	page:Check("Enchants as an icon (check / red cross) on the item level line", Getter(cfg, "enchantIcons"), Setter(cfg, "enchantIcons"))
+	page:Check("No text on shirt and tabard", Getter(cfg, "hideShirt"), Setter(cfg, "hideShirt"))
 	page:Choice("First line", { { "name", "Item name" }, { "track", "Upgrade track" }, { "none", "Nothing" } }, Getter(cfg, "line1"), Setter(cfg, "line1"))
 	page:Note("Item level, PvP item level and the upgrade track (e.g. Mythic 6/6, in the track's color) share one line. With Upgrade track it's the first line, in place of the name; items without a track show their name.", 62)
 	page:Check("Item level", Getter(cfg, "ilvl"), Setter(cfg, "ilvl"))
@@ -1453,7 +1462,7 @@ local function BuildCharacterPage(page)
 	page:Check("Gems beside each icon, on the outside (empty sockets too)", Getter(cfg, "gems"), Setter(cfg, "gems"))
 	page:Slider("Gem icon size", 8, 28, 1, Getter(cfg, "gemSize"), Setter(cfg, "gemSize"))
 	page:Check("Enchants", Getter(cfg, "enchants"), Setter(cfg, "enchants"))
-	page:Check("Enchant names (otherwise just Enchanted)", Getter(cfg, "enchantNames"), Setter(cfg, "enchantNames"))
+	page:Check("Enchant names (when not shown as an icon)", Getter(cfg, "enchantNames"), Setter(cfg, "enchantNames"))
 	page:Check("Enchant Missing in red", Getter(cfg, "missing"), Setter(cfg, "missing"))
 	page:Note("Checked slots: helm, shoulders, chest, legs, boots, rings and weapons (an off-hand only if it's a weapon).", 36)
 	page:Slider("Text width", 80, 300, 1, Getter(cfg, "textWidth"), Setter(cfg, "textWidth"))
@@ -1502,6 +1511,35 @@ local function BuildObjectivesPage(page)
 	page:Check("Mythic+", Getter(cfg, "hideMPlus"), Setter(cfg, "hideMPlus"))
 	page:Check("Other dungeons", Getter(cfg, "hideDungeon"), Setter(cfg, "hideDungeon"))
 	page:Note("Hidden means invisible (it stays where it is). New text sizes show on the tracker's next update or a /reload.", 36)
+end
+
+local function BuildTooltipPage(page)
+	local function cfg() return ns.db.tooltip end
+	page:Column(1)
+	page:Header("Tooltip")
+	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"), true)
+	page:Slider("Size", 0.5, 2, 0.05, Getter(cfg, "scale"), Setter(cfg, "scale"))
+	page:Header("Where it shows")
+	page:Choice("Anchor", { { "mouse", "Mouse" }, { "fixed", "Fixed spot" }, { "blizzard", "Blizzard" } }, Getter(cfg, "anchor"), Setter(cfg, "anchor"))
+	page:Slider("Offset X (from the mouse)", -300, 300, 1, Getter(cfg, "offsetX"), Setter(cfg, "offsetX"))
+	page:Slider("Offset Y (from the mouse)", -300, 300, 1, Getter(cfg, "offsetY"), Setter(cfg, "offsetY"))
+	page:Dropdown("Fixed spot: tooltip corner", { { "BOTTOMRIGHT", "Bottom right" }, { "BOTTOMLEFT", "Bottom left" }, { "TOPRIGHT", "Top right" }, { "TOPLEFT", "Top left" } },
+		Getter(cfg, "fixedPoint"), Setter(cfg, "fixedPoint"))
+	page:Position("Fixed spot", function() return "tooltip" end)
+	page:Note("Applies to tooltips that go to Blizzard's default spot (units in the world, most buttons). Tooltips other windows place themselves stay where they are.", 50)
+	page:Column(2)
+	page:Header("Combat")
+	page:Choice("In combat", { { "show", "Show" }, { "units", "Hide units" }, { "all", "Hide all" } }, Getter(cfg, "combat"), Setter(cfg, "combat"))
+	page:Check("Hold Shift to show them anyway", Getter(cfg, "combatShift"), Setter(cfg, "combatShift"))
+	page:Header("Units")
+	page:Check("Health bar", Getter(cfg, "healthBar"), Setter(cfg, "healthBar"))
+	page:Check("Their target (YOU in red when it's you)", Getter(cfg, "target"), Setter(cfg, "target"))
+	page:Check("Player names in class color", Getter(cfg, "classNames"), Setter(cfg, "classNames"))
+	page:Check("Guild rank: my guild", Getter(cfg, "rankOwn"), Setter(cfg, "rankOwn"))
+	page:Check("Guild rank: other guilds", Getter(cfg, "rankOther"), Setter(cfg, "rankOther"))
+	page:Note("Rated PvP hides names and classes from addons; the target line and colors are left out there rather than guessed.", 36)
+	page:Header("Extra")
+	page:Check("Spell and item IDs", Getter(cfg, "ids"), Setter(cfg, "ids"))
 end
 
 local function BuildBuffsPage(page)
@@ -2143,6 +2181,7 @@ local pages = {
 		{ "Damage Meter", BuildDamageMeterPage },
 		{ "Objectives", BuildObjectivesPage },
 		{ "Buff Frame", BuildBuffsPage },
+		{ "Tooltip", BuildTooltipPage },
 		{ "Window Mover", BuildWindowMoverPage },
 	} },
 }

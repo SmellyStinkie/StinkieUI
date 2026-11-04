@@ -139,9 +139,20 @@ local PRESET = {
 	bgWidgets = {
 		capturePoint = { "TOP", 0, -120 },
 		captureScale = 1.5,
-		ghostPoint = { "TOP", 0, -190 },
+		ghostPoint = { "TOP", 0, -230 },
 		ghostScale = 1.2,
 		scoreScale = 1.75,
+	},
+	buffs = {
+		hideDungeon = true,
+		hideRaid = true,
+	},
+	character = {
+		background = "warband:7",
+		dim = 0.55,
+		gemSize = 13,
+		nameChars = 20,
+		scale = 1.44,
 	},
 	chat = {
 		bgAlpha = 0.6,
@@ -183,6 +194,7 @@ local PRESET = {
 	},
 	combatLog = {
 		mplus = true,
+		raid = true,
 		singleFile = true,
 	},
 	cooldowns = {
@@ -195,7 +207,7 @@ local PRESET = {
 					size = 20,
 				},
 				enabled = true,
-				entries = { "spell:1276452", "spell:119898", "spell:6789", "item:224464", "spell:5484", "slot:14" },
+				entries = { "spell:1276452", "spell:119898", "spell:6789", "item:224464", "item:235895", "spell:5484", "slot:14" },
 				perRow = 12,
 				point = { "BOTTOM", 0, 275 },
 				showCount = true,
@@ -224,7 +236,6 @@ local PRESET = {
 		ring = true,
 		ringAlpha = 0.85,
 		ringColor = { 0.858824, 0.690196, 1 },
-		ringCombatOnly = true,
 		ringSize = 69,
 	},
 	damageMeter = {
@@ -249,14 +260,14 @@ local PRESET = {
 		onCapColor = { 0, 1, 0.082353 },
 		onlyYardsWhenNotOnCap = true,
 		point = { "TOP", 0, -59 },
-		spacing = 6,
+		spacing = 20,
 		statusStyle = {
 			size = 18,
 		},
 		textStyle = {
 			size = 17,
 		},
-		width = 229,
+		width = 185,
 	},
 	minimap = {
 		buttons = "hide",
@@ -307,7 +318,6 @@ local PRESET = {
 		highlight = {
 			arrowSize = 50,
 			arrows = true,
-			scale = 1.15,
 			thickness = 3,
 		},
 		important = {
@@ -325,13 +335,16 @@ local PRESET = {
 		specIcons = true,
 		specIconsFriendly = true,
 		stacking = {
-			enemies = true,
-			friendly = true,
 			spacing = 0.6,
 			speed = 0.05,
 			topInset = 0.17,
 		},
 		width = 210,
+	},
+	objectives = {
+		headerSize = 15,
+		hideDungeon = true,
+		lineSize = 14,
 	},
 	party = {
 		castbar = {
@@ -345,7 +358,27 @@ local PRESET = {
 		},
 		point = { "LEFT", 560, 84 },
 		power = "healer",
+		trinketSize = 0,
 		width = 200,
+	},
+	partyTargets = {
+		enabled = true,
+		height = 20,
+		hideInPvP = false,
+	},
+	queueInfo = {
+		bgAlpha = 0.75,
+		header = false,
+		height = 24,
+		labelStyle = {
+			size = 17,
+		},
+		point = { "TOP", 0, -10 },
+		scale = 1.55,
+		textStyle = {
+			size = 17,
+		},
+		width = 523,
 	},
 	units = {
 		focus = {

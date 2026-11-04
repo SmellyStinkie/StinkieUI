@@ -1,5 +1,40 @@
 # Stinkie UI changelog
 
+## 0.37.0
+- New default layout from Stinkie's current settings: character sheet (warband camp background, 144% size, darker character area, longer item names), queue display (bigger, no "Queued as" line), objectives (bigger text, also hidden in dungeons), buff frame (also hidden in dungeons and raids), party targets on, flag cap bars, Return to Graveyard spot and more. Only new profiles start from it; your saved settings don't change. Window positions remembered by Window Mover aren't part of it.
+- WoW Forever: no red "missing enchant" cross on the character sheet (Forever's enchantable slots aren't known yet; enchanted items still get the check). Forever is now also recognized by its interface number if the game's project constants are missing.
+- Stinkie UI is built for Midnight and WoW Forever from one build going forward.
+- Character Sheet: your name and "Level 90 ..." are centered over the character again (the window is wider than Blizzard's, so they had drifted off center).
+- Character Sheet: a small arrow under the trinkets hides or shows the right side (stats, titles, equipment sets); the window gets narrower while it's hidden, and it remembers.
+- Character Sheet: no more dark vertical bars beside the item columns. With the background across the window, only the name band at the top and the stat sheet get the darker shade; the item columns share the character's lighter one.
+
+## 0.36.0
+- New Tooltip page (Miscellaneous):
+  - Size slider.
+  - Position: at the mouse (default, offset +128 / +25, both adjustable), at a fixed spot you drag when unlocked, or Blizzard's own spot.
+  - Combat: show, hide unit tooltips, or hide all; hold Shift to see them anyway.
+  - Health bar on or off.
+  - The unit's target: "Target: Name" in class color, or YOU in red when it's targeting you.
+  - Guild rank after the guild name, separately for your guild (shown in green) and other guilds.
+  - Player names in class color.
+  - Spell and item IDs (off by default; handy for the spell ID lists in Stinkie UI).
+  - Rated PvP hides names and classes from addons; the target line and colors are left out there.
+- Character Sheet:
+  - Back to "PvP 344" (compact kept everything else).
+  - Window opacity 90% by default (profiles on 55% move up).
+  - The chosen background now fills the whole window, not just the character: the name bar, item columns and stat sheet show it too, under a darker shade (adjustable) so text stays readable. The character area keeps its own lighter shade.
+  - The window reaches further left so the gems beside the left item column sit inside it.
+
+## 0.35.0
+- Character Sheet, compact (on by default, one checkbox to go back):
+  - Item names drop the set / season prefix that every piece shares ("Venomous Gladiator's Amulet" -> "Amulet", "Thalassian Competitor's Plate Sabatons" -> "Plate Sabatons") and are capped at 16 characters (slider; 0 = no limit).
+  - Enchants are a small icon at the end of the item level line, a green check when enchanted, a red cross when an enchantable slot has none, instead of a whole line. (Hover the item for the enchant's name.)
+  - Shorter item level line: "292 P344 C1/6" = item level, PvP item level, Champion 1/6 (track letters: Ex, Ad, V, C, H, M, in the track's color).
+  - The weapons' text sits under the weapons (which move up to make room), so it no longer runs into the bottom of the side columns.
+  - No text on the shirt and tabard.
+  - Smaller text: 11 / 10 (was 12 / 11); profiles still on the old sizes move down.
+  - Every item is two lines at most (it was three).
+
 ## 0.34.1
 - Flag Cap Indicator: each flag now sits under the score of the team carrying it (a Horde player with the Alliance flag shows under the Horde bar), and keeps that side when it's the only flag out. Before, bars filled from the left, so a lone flag, for example after the other carrier died, showed under the wrong team, and the Alliance side showed a flag even when the Alliance didn't have one. Option to swap if your score shows Horde on the left.
 - Flag Cap Indicator: when the map shows a flag with art that doesn't name its team (after a drop and re-pickup), it's matched to the flag last seen nearest that spot instead of being treated as a new flag.

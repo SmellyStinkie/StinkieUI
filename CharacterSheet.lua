@@ -31,6 +31,9 @@ CS.SLOTS = {
 }
 -- slots that take a permanent enchant in Midnight: helm, shoulders, chest, legs, boots, rings, weapons
 CS.ENCHANTABLE = { [1] = true, [3] = true, [5] = true, [7] = true, [8] = true, [11] = true, [12] = true, [16] = true, [17] = "weapon" }
+-- WoW Forever: which slots take an enchant isn't known yet, so no "missing" cross there (an
+-- enchanted item still gets its check, which comes from the item itself)
+if ns.IS_FOREVER then CS.ENCHANTABLE = {} end
 CS.NO_INFO = { [4] = true, [19] = true } -- shirt, tabard: name only
 
 -- secondary / tertiary stats: stat pane label -> item stat key
@@ -175,6 +178,13 @@ local function Overlay(button, side)
 	return o
 end
 
+-- weapons: with the compact layout their text sits under the icons (main hand right-aligned to
+-- its icon, off hand left-aligned), clear of the bottom of the side columns
+CS.WEAPONS = { [16] = "RIGHT", [17] = "LEFT" }
+local function BelowSide(o)
+	return cfg().compact and o.slot and CS.WEAPONS[o.slot] or nil
+end
+
 local function LayoutOverlay(o, button)
 	local c = cfg()
 	local side = o.side
@@ -182,7 +192,13 @@ local function LayoutOverlay(o, button)
 	local anchor = side == "RIGHT" and "LEFT" or "RIGHT"
 	local gap = side == "RIGHT" and 6 or -6
 	o:ClearAllPoints()
-	o:SetPoint(anchor, button, side, gap, 0)
+	local below = BelowSide(o)
+	if below then
+		justify = below == "RIGHT" and "RIGHT" or "LEFT"
+		o:SetPoint("TOP" .. below, button, "BOTTOM" .. below, 0, -2)
+	else
+		o:SetPoint(anchor, button, side, gap, 0)
+	end
 	for _, fs in ipairs({ o.line1, o.line2, o.line3 }) do
 		fs:SetJustifyH(justify)
 		fs:SetWordWrap(false)
@@ -226,26 +242,80 @@ local function PlaceGems(o, button, slot, sockets, size)
 end
 
 local GREEN, RED = "|cff40ff40", "|cffff3030"
+local ICON_OK = "|TInterface\\RaidFrame\\ReadyCheck-Ready:0:0|t"
+local ICON_MISSING = "|TInterface\\RaidFrame\\ReadyCheck-NotReady:0:0|t"
+CS.ICON_OK, CS.ICON_MISSING = ICON_OK, ICON_MISSING
+
+-- "Venomous Gladiator's Amulet" -> "Amulet", "Thalassian Competitor's Plate Sabatons" -> "Plate
+-- Sabatons": the set / season prefix is the same on every piece, so it's dropped. Then capped at
+-- max characters (UTF-8 safe) with "..".
+function CS.ShortName(name, maxChars)
+	if not name then return nil end
+	local rest = name:match("^.-'s (.+)$")
+	if rest and rest ~= "" then name = rest end
+	maxChars = maxChars or 0
+	if maxChars > 0 then
+		local chars, cut = 0, nil
+		for pos in name:gmatch("()[^\128-\191]") do
+			chars = chars + 1
+			if chars == maxChars + 1 then cut = pos break end
+		end
+		if cut then name = name:sub(1, cut - 1):gsub("%s+$", "") .. ".." end
+	end
+	return name
+end
+
+-- "Champion" -> "C": one letter per track (Explorer Ex, Adventurer Ad, Veteran V, Champion C,
+-- Hero H, Myth M); unknown tracks keep their first letters
+local TRACK_SHORT = { explorer = "Ex", adventurer = "Ad", veteran = "V", champion = "C", hero = "H", myth = "M", mythic = "M" }
+function CS.ShortTrack(track)
+	local t = tostring(track or "")
+	return TRACK_SHORT[t:lower()] or t:sub(1, 2)
+end
 
 -- Text for one item. Returns line1, line2, line3 (line3 excludes the gem icons, which are drawn)
 function CS.Lines(info, c)
 	if not info then return "", "", "" end
+	local compact = c.compact
 	local r, g, b = CS.TrackColor(nil, info.quality)
 	local qhex = string.format("%02x%02x%02x", r * 255, g * 255, b * 255)
 	local trackText
 	if info.track and info.cur and info.max then
 		local tr, tg, tb = CS.TrackColor(info.track, info.quality)
-		trackText = string.format("|cff%02x%02x%02x%s %d/%d|r", tr * 255, tg * 255, tb * 255, info.track, info.cur, info.max)
+		if compact then
+			trackText = string.format("|cff%02x%02x%02x%s%d/%d|r", tr * 255, tg * 255, tb * 255, CS.ShortTrack(info.track), info.cur, info.max)
+		else
+			trackText = string.format("|cff%02x%02x%02x%s %d/%d|r", tr * 255, tg * 255, tb * 255, info.track, info.cur, info.max)
+		end
 	end
-	local name = info.name and ("|cff" .. qhex .. info.name .. "|r") or nil
-	if CS.NO_INFO[info.slot] then return (c.line1 ~= "none" and name) or "", "", "" end
+	local shown = info.name
+	if shown and compact then shown = CS.ShortName(shown, c.nameChars) end
+	local name = shown and ("|cff" .. qhex .. shown .. "|r") or nil
+	if CS.NO_INFO[info.slot] then return (c.line1 ~= "none" and not c.hideShirt and name) or "", "", "" end
+	-- enchant: a check / cross icon on the item level line, or its own line with the enchant name
+	local icon, line3 = nil, ""
+	if c.enchants then
+		if c.enchantIcons then
+			if info.enchanted then icon = ICON_OK
+			elseif info.enchantable and c.missing then icon = ICON_MISSING end
+		elseif info.enchanted and info.enchant then
+			line3 = GREEN .. (c.enchantNames and info.enchant or "Enchanted") .. "|r"
+		elseif info.enchanted then
+			line3 = GREEN .. "Enchanted|r"
+		elseif info.enchantable and c.missing then
+			line3 = RED .. "Enchant Missing|r"
+		end
+	end
 	-- item level, PvP item level (only where it differs) and the upgrade track share one line
 	local parts = {}
 	if c.ilvl and info.ilvl then parts[#parts + 1] = "|cff" .. qhex .. info.ilvl .. "|r" end
-	if c.pvp and info.pvp and info.pvp ~= info.ilvl then parts[#parts + 1] = "|cffb0b0ffPvP " .. info.pvp .. "|r" end
+	if c.pvp and info.pvp and info.pvp ~= info.ilvl then
+		parts[#parts + 1] = "|cffb0b0ffPvP " .. info.pvp .. "|r"
+	end
 	local showTrack = trackText and (c.line1 == "track" or c.track)
 	if showTrack then parts[#parts + 1] = trackText end
-	local levels = table.concat(parts, "  ")
+	local levels = table.concat(parts, compact and " " or "  ")
+	if icon then levels = (levels ~= "" and (levels .. " ") or "") .. icon end
 	local line1, line2
 	if c.line1 == "name" then
 		line1, line2 = name or "", levels
@@ -255,22 +325,13 @@ function CS.Lines(info, c)
 	else
 		line1, line2 = levels, ""
 	end
-	local line3 = ""
-	if c.enchants then
-		if info.enchanted and info.enchant then
-			line3 = GREEN .. (c.enchantNames and info.enchant or "Enchanted") .. "|r"
-		elseif info.enchanted then
-			line3 = GREEN .. "Enchanted|r"
-		elseif info.enchantable and c.missing then
-			line3 = RED .. "Enchant Missing|r"
-		end
-	end
 	return line1, line2, line3
 end
 
 function CS.UpdateButton(button, unit, slot, side)
 	local c = cfg()
 	local o = Overlay(button, side)
+	o.slot = slot
 	LayoutOverlay(o, button)
 	local ok, info = pcall(CS.ReadSlot, unit, slot)
 	if not ok then info = nil end
@@ -282,14 +343,19 @@ function CS.UpdateButton(button, unit, slot, side)
 	if l1 ~= "" then rows[#rows + 1] = { o.line1, l1 } else o.line1:Hide() end
 	if l2 ~= "" then rows[#rows + 1] = { o.line2, l2 } else o.line2:Hide() end
 	if l3 ~= "" then rows[#rows + 1] = { o.line3, l3 } else o.line3:Hide() end
-	-- rows stacked around the icon's middle
+	-- rows stacked around the icon's middle (weapons in compact mode: from the top, under the icon)
 	local lh = c.infoStyle.size + 3
 	local total = #rows * lh
 	local anchor = side == "RIGHT" and "LEFT" or "RIGHT"
+	local below = BelowSide(o)
 	for i, row in ipairs(rows) do
 		local fs, text = row[1], row[2]
 		fs:ClearAllPoints()
-		fs:SetPoint(anchor, o, anchor, 0, total / 2 - (i - 0.5) * lh)
+		if below then
+			fs:SetPoint("TOP" .. below, o, "TOP" .. below, 0, -(i - 1) * lh)
+		else
+			fs:SetPoint(anchor, o, anchor, 0, total / 2 - (i - 0.5) * lh)
+		end
 		fs:SetWidth(c.textWidth)
 		fs:SetText(text)
 		fs:Show()
@@ -577,9 +643,64 @@ local function SetAtlasCropped(tex, atlas, w, h)
 end
 CS.SetAtlasCropped = SetAtlasCropped
 
+-- The chosen background across the whole window (name bar, item columns, stat sheet), darker
+-- outside the character area so text stays readable: one picture, five dark panes over it.
+local PANEL_OF = {}
+local function WideBackground(model, panel)
+	local c = cfg()
+	local w = panel.SUIWide
+	if not w then
+		w = CreateFrame("Frame", nil, panel)
+		w:SetFrameLevel(math.max(0, panel:GetFrameLevel()))
+		w.bg = w:CreateTexture(nil, "BACKGROUND", nil, -6)
+		w.panes = {}
+		for i = 1, 5 do
+			local t = w:CreateTexture(nil, "BACKGROUND", nil, -5)
+			t:SetColorTexture(0, 0, 0, 1)
+			w.panes[i] = t
+		end
+		panel.SUIWide = w
+	end
+	local flat = panel.SUIFlat or panel
+	w:ClearAllPoints()
+	w:SetAllPoints(flat)
+	w.bg:ClearAllPoints()
+	w.bg:SetAllPoints(w)
+	-- the character area, relative to the window (both share the window's scale)
+	local L, R, T, B = w:GetLeft(), w:GetRight(), w:GetTop(), w:GetBottom()
+	local ml, mr, mt, mb = model:GetLeft(), model:GetRight(), model:GetTop(), model:GetBottom()
+	if not (L and ml) then w:Hide() return false end
+	local ms, ws = model:GetEffectiveScale(), w:GetEffectiveScale()
+	local k = (ws > 0) and ms / ws or 1
+	ml, mr, mt, mb = ml * k, mr * k, mt * k, mb * k
+	local p = w.panes
+	local outer, inner = c.outerDim or 0.6, c.dim or 0
+	-- darker: the name / level band across the top, and the stat sheet on the right.
+	-- The item columns and the character share the lighter shade (no dark bars beside them).
+	local top = T - mt
+	local ir = panel.InsetRight
+	local split = R - L -- where the stat sheet starts (none: full width)
+	if ir and ir:IsShown() and ir:GetLeft() then
+		local irl = ir:GetLeft() * ((ir:GetEffectiveScale() > 0 and ws > 0) and ir:GetEffectiveScale() / ws or 1)
+		if irl > L and irl < R then split = irl - L end
+	end
+	p[1]:ClearAllPoints(); p[1]:SetPoint("TOPLEFT", w, "TOPLEFT"); p[1]:SetPoint("BOTTOMRIGHT", w, "TOPRIGHT", 0, -top)
+	p[3]:ClearAllPoints(); p[3]:SetPoint("TOPLEFT", w, "TOPLEFT", split, -top); p[3]:SetPoint("BOTTOMRIGHT", w, "BOTTOMRIGHT")
+	p[5]:ClearAllPoints(); p[5]:SetPoint("TOPLEFT", w, "TOPLEFT", 0, -top); p[5]:SetPoint("BOTTOMRIGHT", w, "BOTTOMLEFT", split, 0)
+	p[1]:SetAlpha(outer); p[3]:SetAlpha(outer); p[5]:SetAlpha(inner)
+	p[3]:SetShown(split < (R - L) - 1)
+	p[5]:SetShown(inner > 0)
+	p[2]:Hide(); p[4]:Hide()
+	w:Show()
+	return w.bg, w:GetWidth(), w:GetHeight()
+end
+CS.WideBackground = WideBackground
+
 local function ApplyBackground(model)
 	if not model then return end
 	local c = cfg()
+	local panel = (model == _G.CharacterModelScene and _G.CharacterFrame) or (model == _G.InspectModelFrame and _G.InspectFrame) or nil
+	PANEL_OF[model] = panel
 	local mode = c.enabled and c.background or "blizzard"
 	local blizz = { model.BackgroundTopLeft, model.BackgroundTopRight, model.BackgroundBotLeft, model.BackgroundBotRight, model.BackgroundOverlay }
 	if not model.SUIBg then
@@ -593,10 +714,22 @@ local function ApplyBackground(model)
 	if mode == "blizzard" then
 		for _, t in ipairs(blizz) do if t then t:SetAlpha(t == model.BackgroundOverlay and t:GetAlpha() or 1) end end
 		bg:Hide(); dim:Hide()
+		if panel and panel.SUIWide then panel.SUIWide:Hide() end
 		return
 	end
 	for _, t in ipairs(blizz) do if t then t:SetAlpha(0) end end
 	local w, h = model:GetWidth(), model:GetHeight()
+	-- whole window (flat look): the picture goes on the window, the model's own copy is hidden
+	if panel and c.flat and c.wideBackground then
+		local wideTex, ww, wh = WideBackground(model, panel)
+		if wideTex then
+			model.SUIBg:Hide(); model.SUIDim:Hide()
+			bg, w, h = wideTex, ww, wh
+			dim = nil
+		end
+	elseif panel and panel.SUIWide then
+		panel.SUIWide:Hide()
+	end
 	bg:SetTexCoord(0, 1, 0, 1)
 	bg:SetVertexColor(1, 1, 1, 1)
 	if mode == "dark" then
@@ -616,8 +749,10 @@ local function ApplyBackground(model)
 		if e and readable(e.textureKit) then SetAtlasCropped(bg, e.textureKit, w, h) else bg:SetColorTexture(0.06, 0.06, 0.07, 1) end
 	end
 	bg:Show()
-	dim:SetAlpha(c.dim)
-	dim:SetShown(c.dim > 0)
+	if dim then
+		dim:SetAlpha(c.dim)
+		dim:SetShown(c.dim > 0)
+	end
 end
 CS.ApplyBackground = ApplyBackground
 
@@ -668,7 +803,13 @@ local function SkinPanel(frame, inset)
 		local i = frame[key] or (inset and name and _G[name .. key])
 		if i then Hide(i.NineSlice); Hide(i.Bg); StripRegions(i) end
 	end
-	FlatBackdrop(frame)
+	local flat = FlatBackdrop(frame)
+	-- the gems sit outside the left item column: the window reaches far enough to hold them
+	local c = cfg()
+	local ext = c.gems and ((c.gemSize or 14) + 6) or 0
+	flat:ClearAllPoints()
+	flat:SetPoint("TOPLEFT", frame, "TOPLEFT", -ext, 0)
+	flat:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
 	-- tabs along the bottom
 	for i = 1, 4 do
 		local tab = name and _G[name .. "Tab" .. i]
@@ -954,12 +1095,115 @@ local function LayoutSlots(prefix, model)
 	local main, off = _G[prefix .. "MainHandSlot"], _G[prefix .. "SecondaryHandSlot"]
 	if main and off then
 		local parent = main:GetParent()
+		local c = cfg()
+		-- compact: the weapons' text goes under them, so they sit higher by two text lines
+		local lift = (c.enabled and c.compact) and (c.nameStyle.size + c.infoStyle.size + 8) or 0
 		main:ClearAllPoints()
-		main:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 130 + ew / 2 - (wgap - 5) / 2, 16)
+		main:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 130 + ew / 2 - (wgap - 5) / 2, 16 + lift)
 		off:ClearAllPoints()
 		off:SetPoint("TOPLEFT", main, "TOPRIGHT", wgap, 0)
 	end
 	if model then model:SetSize(MODEL_W + ew, MODEL_H + eh) end
+end
+
+-- Collapse the right side (stats, titles, equipment sets) with the arrow under the trinkets.
+-- Blizzard's own Expand / Collapse are never called (that would run its panel layout as Stinkie
+-- UI): the side is moved off screen and the window made narrower; Blizzard's code is untouched.
+function CS.Collapsed()
+	local c = cfg()
+	return c.enabled and c.collapsed and true or false
+end
+
+function CS.ApplyCollapse()
+	local cf = _G.CharacterFrame
+	local ir = cf and cf.InsetRight
+	if not ir then return end
+	if CS.Collapsed() then
+		if not ir.SUIParked then
+			ir.SUIParked = { w = ir:GetWidth(), h = ir:GetHeight() }
+		end
+		ir:ClearAllPoints()
+		ir:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -5000, 5000)
+		ir:SetSize(math.max(ir.SUIParked.w or 200, 50), math.max(ir.SUIParked.h or 300, 50))
+	elseif ir.SUIParked then
+		ir.SUIParked = nil
+		ir:ClearAllPoints()
+		ir:SetPoint("TOPLEFT", cf.Inset, "TOPRIGHT", 1, 0)
+		ir:SetPoint("BOTTOMRIGHT", cf, "BOTTOMRIGHT", -4, 4)
+	end
+	if CS.collapseButton then
+		CS.collapseButton.text:SetText(CS.Collapsed() and ">" or "<")
+		CS.collapseButton:SetShown(cfg().enabled and cfg().collapseButton and true or false)
+	end
+end
+
+local function CreateCollapseButton()
+	if CS.collapseButton or not _G.PaperDollFrame then return end
+	local b = CreateFrame("Button", nil, _G.PaperDollFrame)
+	b:SetSize(22, 16)
+	b:SetFrameLevel(_G.PaperDollFrame:GetFrameLevel() + 10)
+	b.bg = b:CreateTexture(nil, "BACKGROUND")
+	b.bg:SetAllPoints()
+	b.bg:SetColorTexture(0.15, 0.13, 0.11, 0.9)
+	ns.CreateBackdrop(b, 0)
+	b.text = ns.CreateText(b, 13, "CENTER")
+	b.text:SetPoint("CENTER", 0, 1)
+	b:SetScript("OnClick", function()
+		if InCombatLockdown() then return end
+		local c = cfg()
+		c.collapsed = not c.collapsed
+		CS.ApplyCollapse()
+		CS.ApplyLayout()
+		C_Timer.After(0, function() ApplyBackground(_G.CharacterModelScene); if CS.CenterHeader then CS.CenterHeader() end end)
+	end)
+	b:SetScript("OnEnter", function(self)
+		local p = ns.BRAND.plum
+		self.bg:SetColorTexture(p[1], p[2], p[3], 1)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(CS.Collapsed() and "Show stats, titles and equipment sets" or "Hide stats, titles and equipment sets")
+		GameTooltip:Show()
+	end)
+	b:SetScript("OnLeave", function(self) self.bg:SetColorTexture(0.15, 0.13, 0.11, 0.9); GameTooltip:Hide() end)
+	CS.collapseButton = b
+end
+CS.CreateCollapseButton = CreateCollapseButton
+
+local function PlaceCollapseButton()
+	local b, t = CS.collapseButton, _G.CharacterTrinket1Slot
+	if not (b and t) then return end
+	b:ClearAllPoints()
+	b:SetPoint("TOPRIGHT", t, "BOTTOMRIGHT", 0, -4)
+end
+
+-- Name (title bar) and "Level 90 Affliction Warlock" centered over the character, not over the
+-- whole window (which is wider than Blizzard's on the left for the gems and on the right).
+function CS.CenterHeader()
+	local cf, inset = _G.CharacterFrame, _G.CharacterFrame and _G.CharacterFrame.Inset
+	local c = cfg()
+	local title = cf and cf.TitleContainer and cf.TitleContainer.TitleText
+	local on = c.enabled and c.centerHeader and _G.PaperDollFrame and _G.PaperDollFrame:IsShown()
+	if not (cf and inset) then return end
+	local ix = inset:GetCenter()
+	local level = _G.CharacterLevelText
+	if title then
+		local container = cf.TitleContainer
+		local cx = container:GetCenter()
+		title:ClearAllPoints()
+		if on and ix and cx then
+			title:SetPoint("TOP", container, "TOP", ix - cx, -5)
+			title:SetWidth(math.max(60, inset:GetWidth() - 8))
+		else
+			title:SetPoint("TOP", 0, -5); title:SetPoint("LEFT"); title:SetPoint("RIGHT")
+		end
+	end
+	if level and on and ix then
+		local fx = _G.PaperDollFrame:GetCenter()
+		local _, _, _, _, y = level:GetPoint(1)
+		if fx then
+			level:ClearAllPoints()
+			level:SetPoint("CENTER", _G.PaperDollFrame, "TOP", ix - fx, tonumber(y) or -42)
+		end
+	end
 end
 
 function CS.ApplyLayout()
@@ -968,17 +1212,21 @@ function CS.ApplyLayout()
 		local cf = _G.CharacterFrame
 		if cf then
 			cf:SetHeight(BASE_H + eh)
+			CS.ApplyCollapse()
 			-- same width Blizzard would set, plus ours (without calling Blizzard's sizing code)
 			local onPaperDoll = (cf.activeSubframe == nil) or (cf.activeSubframe == "PaperDollFrame")
 			if onPaperDoll then
 				local panelW = tonumber(PANEL_DEFAULT_WIDTH) or BASE_W
-				local base = cf.Expanded and (tonumber(CHARACTERFRAME_EXPANDED_WIDTH) or 540) or panelW
+				local base = (cf.Expanded and not CS.Collapsed()) and (tonumber(CHARACTERFRAME_EXPANDED_WIDTH) or 540) or panelW
 				cf:SetWidth(base + ew)
 				if cf.Inset then
 					cf.Inset:SetPoint("BOTTOMRIGHT", cf, "BOTTOMLEFT", panelW + (tonumber(PANEL_INSET_RIGHT_OFFSET) or -6) + ew, tonumber(PANEL_INSET_BOTTOM_OFFSET) or 4)
 				end
 			end
 			LayoutSlots("Character", _G.CharacterModelScene)
+			CreateCollapseButton()
+			PlaceCollapseButton()
+			C_Timer.After(0, CS.CenterHeader)
 		end
 		local inf = _G.InspectFrame
 		if inf and cfg().inspect then
@@ -994,10 +1242,17 @@ local function HookCharacterSize()
 	if not cf or cf.SUISizeHook or not cf.UpdateSize then return end
 	cf.SUISizeHook = true
 	hooksecurefunc(cf, "UpdateSize", function(self)
+		if _G.PaperDollFrame and _G.PaperDollFrame:IsShown() then
+			C_Timer.After(0, function() ApplyBackground(_G.CharacterModelScene) end)
+		end
 		local ew, eh = CS.Extra()
 		self:SetHeight(BASE_H + eh)
 		local onPaperDoll = (self.activeSubframe == nil) or (self.activeSubframe == "PaperDollFrame")
-		if ew > 0 and onPaperDoll then
+		if onPaperDoll and CS.Collapsed() then
+			-- collapsed: Blizzard's narrow width, plus ours
+			self:SetWidth((tonumber(PANEL_DEFAULT_WIDTH) or BASE_W) + ew)
+			CS.ApplyCollapse()
+		elseif ew > 0 and onPaperDoll then
 			self:SetWidth(self:GetWidth() + ew)
 			if self.Inset then
 				self.Inset:SetPoint("BOTTOMRIGHT", self, "BOTTOMLEFT", (tonumber(PANEL_DEFAULT_WIDTH) or BASE_W) + (tonumber(PANEL_INSET_RIGHT_OFFSET) or -6) + ew, tonumber(PANEL_INSET_BOTTOM_OFFSET) or 4)
@@ -1045,6 +1300,9 @@ end
 
 function CS:Init()
 	local c = cfg()
+	if _G.PaperDollFrame_SetLevel then
+		hooksecurefunc("PaperDollFrame_SetLevel", function() if cfg().enabled and cfg().centerHeader then CS.CenterHeader() end end)
+	end
 	if _G.PaperDollItemSlotButton_Update then
 		hooksecurefunc("PaperDollItemSlotButton_Update", function() if cfg().enabled then Queue("Character", "player") end end)
 	end
@@ -1059,8 +1317,14 @@ function CS:Init()
 		end)
 	end
 	if _G.PaperDollFrame then
+		_G.PaperDollFrame:HookScript("OnHide", function()
+			if _G.CharacterFrame and _G.CharacterFrame.SUIWide then _G.CharacterFrame.SUIWide:Hide() end
+			CS.CenterHeader() -- other tabs: Blizzard's title placement back
+		end)
 		_G.PaperDollFrame:HookScript("OnShow", function()
 			ApplyBackground(_G.CharacterModelScene)
+			-- again once the window has its final size (the dark panes follow the character area)
+			C_Timer.After(0, function() if _G.PaperDollFrame:IsShown() then ApplyBackground(_G.CharacterModelScene) end end)
 			CS.ApplySkin("Character")
 			CS.ApplyScale()
 			CS.ApplyLayout()

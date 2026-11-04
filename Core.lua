@@ -91,6 +91,11 @@ function ns.SetRoleText(fs, role)
 end
 -- WoW Forever (Classic+) runs the same 12.1.5 interface but has no arena
 ns.IS_FOREVER = type(WOW_PROJECT_ID) == "number" and type(WOW_PROJECT_CAMELOT) == "number" and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT
+-- fallback if the project constants aren't there: Forever's interface number is 1xxxx (16001)
+if not ns.IS_FOREVER and GetBuildInfo then
+	local toc = select(4, GetBuildInfo())
+	if type(toc) == "number" and toc >= 10000 and toc < 20000 then ns.IS_FOREVER = true end
+end
 ns.HAS_ARENA = not ns.IS_FOREVER
 ns.HEALER_GREEN = { 0.15, 0.95, 0.25 }
 ns.HEALER_RED = { 0.95, 0.15, 0.15 }
@@ -280,7 +285,7 @@ local function unit(t)
 	return t
 end
 
-ns.DB_VERSION = 10
+ns.DB_VERSION = 12
 ns.defaults = {
 	version = ns.DB_VERSION,
 	scale = 1,
@@ -716,20 +721,27 @@ ns.defaults = {
 		inspect = true, -- same look when inspecting others
 		background = "dark", -- blizzard | dark | custom | warband:<id>
 		customTexture = "", ownedOnly = false,
-		dim = 0.25, -- darkening over the background so text stays readable
+		dim = 0.25, -- darkening over the background in the character area
+		collapsed = false, collapseButton = true, -- arrow under the trinkets hides / shows the stats side
+		centerHeader = true, -- name and level centered over the character
+		wideBackground = true, outerDim = 0.6, -- background across the whole window, darker outside the character
 		line1 = "name", -- name | track ("Mythic 6/6") | none
 		track = true, ilvl = true, pvp = true, gems = true, gemSize = 14,
 		enchants = true, enchantNames = true, missing = true,
+		-- compact (less busy): set prefix dropped from names ("Gladiator's Amulet" -> "Amulet"),
+		-- names capped at nameChars, short track ("C1/6"), "P344" for PvP item level, enchants as a
+		-- check / red cross icon instead of their own line, weapon text under the weapons
+		compact = true, nameChars = 16, enchantIcons = true, hideShirt = true,
 		statHighlight = true, highlightColor = { 0.75, 0.80, 0.16 },
 		hideZeroStats = false, -- false: every secondary / tertiary stat shows, even at 0
 		moveSpeed = true,      -- movement speed row in the stat list
 		ilvlDecimals = true,
 		textWidth = 140, -- with the roomier layout the model area is ~320 px wide
-		flat = true, frameColor = { 0.05, 0.05, 0.06 }, frameAlpha = 0.55, tabAlpha = 0.9,
+		flat = true, frameColor = { 0.05, 0.05, 0.06 }, frameAlpha = 0.9, tabAlpha = 0.9,
 		roomy = true, extraWidth = 90, extraHeight = 70, weaponGap = 40, -- more room around the character
 		scale = 1.2, inspectScale = 1.2, resizer = true,
-		nameStyle = text(12),
-		infoStyle = text(11),
+		nameStyle = text(11),
+		infoStyle = text(10),
 	},
 	-- Objectives (quest / objective tracker)
 	objectives = {
@@ -740,6 +752,21 @@ ns.defaults = {
 		hideBlizzardBg = true,
 		flat = true, -- flat headers, progress bars and quest item buttons (no gradients)
 		hideArena = true, hideBG = true, hideRaid = true, hideMPlus = false, hideDungeon = false,
+	},
+	-- Tooltip: size, position, combat hiding, health bar, target line, guild ranks
+	tooltip = {
+		enabled = true,
+		scale = 1,
+		anchor = "mouse", -- mouse | fixed | blizzard
+		offsetX = 128, offsetY = 25, -- from the mouse
+		point = { "BOTTOMRIGHT", -40, 120 }, fixedPoint = "BOTTOMRIGHT", -- the fixed spot (drag it when unlocked)
+		combat = "show", -- show | units (hide unit tooltips in combat) | all
+		combatShift = true, -- hold Shift to see them anyway
+		healthBar = true,
+		target = true, -- "Target: <name>" (class colored), YOU in red
+		rankOwn = true, rankOther = true, -- guild rank after the guild name
+		classNames = true, -- player names in class color
+		ids = false, -- spell and item IDs
 	},
 	-- Buff frame: Blizzard's buff / debuff icons, flat look and auto hide (layout stays in Edit Mode)
 	buffs = {
@@ -873,6 +900,19 @@ local function Migrate(db)
 		-- Queue display: four equal columns need a little more width
 		local qi = db.queueInfo
 		if qi and (qi.width == 300 or qi.width == 360) then qi.width = 440 end
+	end
+	if v < 11 then
+		-- Character Sheet: smaller text (feedback: too busy) if still on the old sizes
+		local ch = db.character
+		if ch then
+			if ch.nameStyle and ch.nameStyle.size == 12 then ch.nameStyle.size = 11 end
+			if ch.infoStyle and ch.infoStyle.size == 11 then ch.infoStyle.size = 10 end
+		end
+	end
+	if v < 12 then
+		-- Character Sheet: window opacity 90% (0.30-0.35 had 55%)
+		local ch = db.character
+		if ch and ch.frameAlpha == 0.55 then ch.frameAlpha = 0.9 end
 	end
 	db.version = ns.DB_VERSION
 end
