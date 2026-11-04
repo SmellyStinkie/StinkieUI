@@ -1,5 +1,19 @@
 # Stinkie UI changelog
 
+## 0.34.1
+- Flag Cap Indicator: each flag now sits under the score of the team carrying it (a Horde player with the Alliance flag shows under the Horde bar), and keeps that side when it's the only flag out. Before, bars filled from the left, so a lone flag, for example after the other carrier died, showed under the wrong team, and the Alliance side showed a flag even when the Alliance didn't have one. Option to swap if your score shows Horde on the left.
+- Flag Cap Indicator: when the map shows a flag with art that doesn't name its team (after a drop and re-pickup), it's matched to the flag last seen nearest that spot instead of being treated as a new flag.
+
+## 0.34.0
+- Nameplates: your target is now found by its nameplate frame instead of asking the game "is this unit my target", which Blitz and rated PvP answer with a hidden (secret) value. That's why friendly targets in Blitz never got the full plate. Friendly and enemy targets now get the target treatment everywhere the game shows a nameplate for them.
+- Flag Cap Indicator:
+  - Plain flag icon in the team color only (no more map flag art with its base), in the box and under the score.
+  - Shows whenever someone has a flag, and only then: a dropped flag or a flag at home isn't shown. A known carrier whose flag the map isn't showing still gets a bar ("HAS FLAG", no distance).
+  - Fixed: it waited until both flags had been picked up before turning on, so a single carried flag never showed. On Warsong Gulch and Twin Peaks it's on from the start.
+  - "Sit under the score" is now locked under the score bar at exactly its width (two flags side by side split it). Only the gap below it is adjustable; the X offset and the DROPPED color are gone.
+- Important units in rated PvP: the game hides unit names and NPC IDs there (confirmed in Blizzard's API documentation), so the name / ID list can't match and nothing can recolor or resize those plates. New fallback that works with hidden names: a big glowing icon on units carrying a listed aura on themselves (default 8178, Grounding Totem Effect; add more spell IDs on the Plate Auras & Units page).
+- /stinkie plates now also shows whether your target's name and NPC ID are hidden, whether it's a minion, whether it counts as important, and whether its plate was found as your target.
+
 ## 0.33.0
 - Fixed: "Auras cannot be accessed when secret while tainted by StinkieUI" (Edit Mode, scenario / Maw buffs) and gaps in the quest tracker after finishing a quest. Cause: the Objectives module ran Blizzard's tracker update itself and hid the tracker with Hide(), which made Blizzard's own tracker code run as Stinkie UI. It no longer calls the tracker's update code; hiding is now transparency only (it also works in combat now). New text sizes show on the tracker's next update.
 - The "MovementSpeed_OnUpdate ... secret number" error in the character window came from 0.31's stat-list edit and was already fixed in 0.32.0.

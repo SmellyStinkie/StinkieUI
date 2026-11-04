@@ -104,6 +104,52 @@ function L.Step(flag, now, x, y, w, h, carrierKnown)
 	return ev
 end
 
+-- Which bar each flag goes in: under the score of the team CARRYING it. The Alliance flag is
+-- carried by a Horde player, so it sits under the Horde bar (right), and the Horde flag under the
+-- Alliance bar (left); swap if your score shows Horde on the left. Each side keeps its spot even
+-- when only one flag is out (it used to fill from the left, so a lone flag showed under the wrong
+-- team). One under the other: filled from the top, Alliance team's carrier first.
+local CARRIED_BY = { Alliance = "Horde", Horde = "Alliance" }
+function L.Slots(shown, layout, swap)
+	local slots = {}
+	local left, right = "Alliance", "Horde"
+	if swap then left, right = right, left end
+	local rest = {}
+	for _, e in ipairs(shown) do
+		local team = CARRIED_BY[e.faction or ""]
+		if layout == "SIDE" and team == left and not slots[1] then slots[1] = e
+		elseif layout == "SIDE" and team == right and not slots[2] then slots[2] = e
+		else rest[#rest + 1] = e end
+	end
+	if layout ~= "SIDE" then
+		table.sort(rest, function(a, b)
+			local ta, tb = CARRIED_BY[a.faction or ""], CARRIED_BY[b.faction or ""]
+			local ra = (ta == left and 1) or (ta == right and 2) or 3
+			local rb = (tb == left and 1) or (tb == right and 2) or 3
+			return ra < rb
+		end)
+	end
+	-- anything without a known team takes a free bar
+	for _, e in ipairs(rest) do
+		if not slots[1] then slots[1] = e elseif not slots[2] then slots[2] = e end
+	end
+	return slots
+end
+
+-- the team of the tracked flag last seen closest to (x, y), not already taken this poll
+function L.NearestFaction(flags, x, y, used)
+	local best, bestD
+	for _, faction in ipairs({ "Alliance", "Horde" }) do
+		local f = flags[faction]
+		local fx, fy = f and (f.x or f.lastX), f and (f.y or f.lastY)
+		if fx and not (used and used[faction]) then
+			local d = (fx - x) ^ 2 + (fy - y) ^ 2
+			if not bestD or d < bestD then best, bestD = faction, d end
+		end
+	end
+	return best
+end
+
 ---------------------------------------------------------------------------
 -- Faction of a flag texture
 ---------------------------------------------------------------------------
@@ -235,15 +281,16 @@ local function CreateBanner(parent)
 	return b
 end
 
-local function LayoutBanner(b)
+local function LayoutBanner(b, width)
 	local c = cfg()
-	b:SetSize(c.width, c.height)
+	width = width or c.width
+	b:SetSize(width, c.height)
 	b.bg:SetColorTexture(0.04, 0.04, 0.05, c.bgAlpha)
 	local h = c.height
 	b.icon:SetSize(h - 2, h - 2)
 	b.icon:ClearAllPoints()
 	b.icon:SetPoint("LEFT", 2, 0)
-	local chipW = math.max(60, math.floor(c.width * 0.34))
+	local chipW = math.max(60, math.floor(width * 0.34))
 	b.chip:SetSize(chipW, h)
 	b.chip:ClearAllPoints()
 	b.chip:SetPoint("RIGHT")
@@ -260,14 +307,10 @@ end
 -- info = { texture, faction, carrier = { name, class }, dist, status, eta }
 local function FillBanner(b, info)
 	local c = cfg()
-	if info.texture then
-		b.icon:SetTexture(info.texture)
-		b.icon:SetVertexColor(1, 1, 1, 1)
-	else
-		b.icon:SetTexture(ns.MEDIA.flag)
-		local col = TEAM_COLOR[info.faction or ""] or { 0.8, 0.8, 0.8 }
-		b.icon:SetVertexColor(col[1], col[2], col[3], 1)
-	end
+	-- always our plain flag in the team color (the map's own flag art includes its base)
+	b.icon:SetTexture(ns.MEDIA.flag)
+	local col = TEAM_COLOR[info.faction or ""] or { 0.8, 0.8, 0.8 }
+	b.icon:SetVertexColor(col[1], col[2], col[3], 1)
 	local name = ""
 	if c.names and info.carrier and info.carrier.name then
 		name = info.carrier.name
@@ -290,7 +333,10 @@ local function FillBanner(b, info)
 		if c.eta and info.eta and info.status == "CARRIED" then distText = distText .. string.format("  ~%ds", math.floor(info.eta + 0.5)) end
 	end
 	local statusText, color
-	if info.status == "ONCAP" then
+	if info.status == "HASFLAG" then
+		-- carried, but the game isn't showing where (no distance possible)
+		statusText, color = "HAS FLAG", c.notOnCapColor
+	elseif info.status == "ONCAP" then
 		statusText, color = "ON CAP", c.onCapColor
 	elseif info.status == "DROPPED" then
 		statusText, color = "DROPPED", c.droppedColor
@@ -311,19 +357,38 @@ local function FillBanner(b, info)
 	b:Show()
 end
 
+-- the score bar to sit under: the widget with the two team bars, else the whole score frame
+-- (or its mover outside a battleground)
+local function ScoreBars()
+	local score = _G.UIWidgetTopCenterContainerFrame
+	if FC.inPvP and score and score:IsShown() then
+		if type(score.widgetFrames) == "table" then
+			for _, w in pairs(score.widgetFrames) do
+				if w.LeftBar and w.RightBar and w:IsShown() then return w.LeftBar, w.RightBar end
+			end
+		end
+		return score, score
+	end
+	local pin = _G.StinkieUI_bgScoreAnchor
+	if pin then return pin, pin end
+	return UIParent, UIParent
+end
+
 local function AnchorHolder()
 	local h, c = FC.holder, cfg()
 	h:SetScale((c.scale or 1) * ns.db.scale)
 	h:ClearAllPoints()
 	if c.attach then
-		local score = _G.UIWidgetTopCenterContainerFrame
-		local pin = _G.StinkieUI_bgScoreAnchor
-		local inBG = FC.inPvP
-		local target = (inBG and score and score:IsShown()) and score or pin or score or UIParent
-		h:SetPoint("TOP", target, "BOTTOM", c.attachX / h:GetScale(), c.attachY / h:GetScale())
+		-- locked under the score bar, exactly as wide as it
+		local left, right = ScoreBars()
+		local y = (c.attachY or -4) / h:GetScale()
+		h:SetPoint("TOPLEFT", left, "BOTTOMLEFT", 0, y)
+		h:SetPoint("TOPRIGHT", right, "BOTTOMRIGHT", 0, y)
+		FC.anchoredTo = left
 		h.SUIActive = false
 	else
 		ns:ApplyPoint(h, c.point)
+		FC.anchoredTo = nil
 		h.SUIActive = c.enabled and true or false
 	end
 end
@@ -331,9 +396,17 @@ end
 function FC:Layout()
 	local c = cfg()
 	local h = FC.holder
+	AnchorHolder()
+	local total = c.width * ((c.layout == "SIDE") and 2 or 1) + ((c.layout == "SIDE") and c.spacing or 0)
+	if c.attach then
+		local w = h:GetWidth()
+		if w and w > 20 then total = w end
+	end
+	local bw = (c.layout == "SIDE") and math.floor((total - c.spacing) / 2) or total
+	FC.layoutWidth = total
 	for i = 1, 2 do
 		banners[i] = banners[i] or CreateBanner(h)
-		LayoutBanner(banners[i])
+		LayoutBanner(banners[i], bw)
 		banners[i]:ClearAllPoints()
 		if i == 1 then
 			banners[i]:SetPoint("TOPLEFT")
@@ -343,12 +416,17 @@ function FC:Layout()
 			banners[i]:SetPoint("TOP", banners[1], "BOTTOM", 0, -c.spacing)
 		end
 	end
-	if c.layout == "SIDE" then
-		h:SetSize(c.width * 2 + c.spacing, c.height)
-	else
-		h:SetSize(c.width, c.height * 2 + c.spacing)
-	end
-	AnchorHolder()
+	local height = (c.layout == "SIDE") and c.height or (c.height * 2 + c.spacing)
+	if c.attach then h:SetHeight(height) else h:SetSize(total, height) end
+end
+
+-- the score bar changed size or got replaced: lay out again
+function FC.CheckAnchor()
+	local c = cfg()
+	if not c.attach then return end
+	local left = ScoreBars()
+	local w = FC.holder:GetWidth()
+	if left ~= FC.anchoredTo or (w and FC.layoutWidth and math.abs(w - FC.layoutWidth) > 1) then FC:Layout() end
 end
 
 local PREVIEW = {
@@ -357,7 +435,8 @@ local PREVIEW = {
 }
 
 function FC:ShowPreview()
-	for i = 1, 2 do FillBanner(banners[i], PREVIEW[i]) end
+	local slots = L.Slots(PREVIEW, cfg().layout, cfg().swapSides)
+	for i = 1, 2 do if slots[i] then FillBanner(banners[i], slots[i]) end end
 	FC.holder:Show()
 end
 
@@ -371,15 +450,17 @@ local accum, scanAccum, flashT = 0, 0, 0
 -- a two-flag map: at least two flag slots, and either a known capture-the-flag map or flag
 -- textures that match the Alliance / Horde flags (orbs and single neutral flags don't count)
 local function FlagMap()
-	local n = GetNumBattlefieldFlagPositions and GetNumBattlefieldFlagPositions() or 0
-	if n < 2 then return false end
-	-- only Warsong Gulch and Twin Peaks: never Kotmogu orbs, Eye of the Storm or other maps
+	-- only Warsong Gulch and Twin Peaks: never Kotmogu orbs, Eye of the Storm or other maps.
+	-- A known map counts at once, even with no flag out yet (it used to wait for both flags to be
+	-- picked up, so a single carried flag never showed).
 	local name, _, _, _, _, _, _, instanceID = GetInstanceInfo()
 	if readable(instanceID) then
 		if FC.CTF_INSTANCES[instanceID] then return true end
 		local n2 = readable(name) and tostring(name):lower() or ""
 		return (n2:find("warsong", 1, true) or n2:find("twin peaks", 1, true)) and true or false
 	end
+	local n = GetNumBattlefieldFlagPositions and GetNumBattlefieldFlagPositions() or 0
+	if n < 2 then return false end
 	local m = C_Map.GetBestMapForUnit("player")
 	if not m then return false end
 	local found = 0
@@ -407,11 +488,17 @@ function FC:Poll()
 	end
 	local n = GetNumBattlefieldFlagPositions() or 0
 	local bases = Bases(mapID)
-	local shown = {}
+	local shown, seenFaction, usedFaction = {}, {}, {}
 	for i = 1, math.min(n, 4) do
 		local x, y, tex = C_PvP.GetBattlefieldFlagPosition(i, mapID)
 		if not readable(x) then x, y = nil, nil end
 		local faction = readable(tex) and FC.FactionForTexture(tex) or nil
+		if not faction and x then
+			-- some flag states (dropped after a carrier dies, picked up again) use other art that
+			-- doesn't name a team: it's whichever flag was last seen nearest to this spot
+			faction = L.NearestFaction(flags, x, y, usedFaction)
+		end
+		if faction then usedFaction[faction] = true end
 		local key = faction or ("flag" .. i)
 		local f = flags[key]
 		if not f then f = L.NewFlag(key); flags[key] = f end
@@ -437,12 +524,24 @@ function FC:Poll()
 			local status = L.Status(dist, c.radius, f.carried)
 			local eta = (status == "CARRIED" and dist and f.speed > 2) and (dist - c.radius) / f.speed or nil
 			if eta and eta < 0 then eta = nil end
-			table.insert(shown, { texture = f.texture, faction = faction, carrier = carrier, dist = dist, status = status, eta = eta })
+			-- only while someone has it: a dropped flag isn't shown
+			if status ~= "DROPPED" then
+				table.insert(shown, { faction = faction, carrier = carrier, dist = dist, status = status, eta = eta })
+				if faction then seenFaction[faction] = true end
+			end
 		end
 	end
+	-- a carrier we know of whose flag the map isn't showing: still shown, without distance
+	for _, faction in ipairs({ "Alliance", "Horde" }) do
+		if carriers[faction] and not seenFaction[faction] then
+			table.insert(shown, { faction = faction, carrier = carriers[faction], status = "HASFLAG" })
+		end
+	end
+	FC.CheckAnchor()
 	if ns.unlocked or FC.testMode then return end
+	local slots = L.Slots(shown, c.layout, c.swapSides)
 	for i = 1, 2 do
-		if shown[i] then FillBanner(banners[i], shown[i]) else banners[i]:Hide() end
+		if slots[i] then FillBanner(banners[i], slots[i]) else banners[i]:Hide() end
 	end
 	FC.holder:SetShown(#shown > 0)
 end
@@ -491,7 +590,7 @@ function FC:UpdateActive()
 	if not want then
 		FC.holder:SetShown((FC.testMode or ns.unlocked) and c.enabled and true or false)
 	end
-	AnchorHolder()
+	if banners[1] then FC:Layout() else AnchorHolder() end
 end
 
 function FC:SetTestMode(on)
@@ -517,8 +616,8 @@ function FC:Init()
 	-- the score display moves when Blizzard lays it out; follow it
 	local score = _G.UIWidgetTopCenterContainerFrame
 	if score then
-		score:HookScript("OnShow", function() if cfg().attach then AnchorHolder() end end)
-		score:HookScript("OnHide", function() if cfg().attach then AnchorHolder() end end)
+		score:HookScript("OnShow", function() if cfg().attach then FC:Layout() end end)
+		score:HookScript("OnHide", function() if cfg().attach then FC:Layout() end end)
 	end
 	table.insert(ns.lockCallbacks, function() FC:Refresh() end)
 	FC:UpdateActive()

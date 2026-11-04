@@ -14,6 +14,17 @@ local SMOOTH = Enum.StatusBarInterpolation.ExponentialEaseOut
 NP.CARRY_AURAS = { [23333] = true, [23335] = true, [156618] = true, [156621] = true, [34976] = true,
 	[121164] = true, [121175] = true, [121176] = true, [121177] = true }
 
+-- spell IDs of auras that important units carry on themselves (for when their name is hidden)
+function NP.ApplyImportantAuras(f)
+	if not f.ImpAura then return end
+	local ids = {}
+	for _, v in ipairs(ns.db.nameplates.important.auraIDs or {}) do
+		local n = tonumber(v)
+		if n then ids[n] = true end
+	end
+	ns.SetAuraGroupCandidates(f.ImpAura, 1, { includeSpellIDs = ids })
+end
+
 -- Important enemy units (totems, Psyfiend, ...), matched by NPC ID or English name.
 -- Both are hidden from addons when Blizzard restricts unit identity, so matching can miss there.
 local importantIDs, importantNames = {}, {}
@@ -288,8 +299,31 @@ local function UpdateClassification(f)
 	end
 end
 
+-- Which plate is the target's. In Blitz and rated PvP "is this unit my target" comes back
+-- secret, so friendlies never got the target look. The target's nameplate frame itself is a
+-- plain object: comparing frames needs no secret.
+function NP.TargetPlate()
+	if not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then return nil end
+	local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, "target")
+	if ok and plate and not issecret(plate) then return plate end
+	return nil
+end
+
+function NP.IsTargetPlate(f)
+	local plate = NP.TargetPlate()
+	if plate then return plate == f.nameplate end
+	local ok, is = pcall(UnitIsUnit, f.unit, "target")
+	if ok and not issecret(is) then return is and true or false end
+	return nil -- unknown
+end
+
 local function UpdateTarget(f)
 	if not f.unit then return end
+	local is = NP.IsTargetPlate(f)
+	if is ~= nil then
+		f.Highlight:SetAlpha(is and 1 or 0)
+		return
+	end
 	f.Highlight:SetAlphaFromBoolean(UnitIsUnit(f.unit, "target"), 1, 0)
 end
 
@@ -353,6 +387,7 @@ end
 
 local function CreatePlateFrame(nameplate)
 	local f = CreateFrame("Frame", nil, nameplate)
+	f.nameplate = nameplate
 	f:SetAllPoints()
 	f:SetFrameLevel(nameplate:GetFrameLevel() + 1)
 
@@ -478,6 +513,14 @@ local function CreatePlateFrame(nameplate)
 		{ filter = BIG.off, max = A.bigOffMax or 1 },
 	}, bigOpts())
 
+	-- important units where rated PvP hides their name and NPC ID: their own aura (Grounding
+	-- Totem has one) still shows through Blizzard's container, which matches spell IDs for us
+	f.ImpAura = ns.CreateAuraContainer(f, {
+		{ filter = "HELPFUL", max = 1 },
+	}, { size = ns.db.nameplates.important.auraSize or 34, spacing = 0, anchor = "CENTER", growthX = "RIGHT", growthY = "DOWN", disableMouse = true })
+	NP.ApplyImportantAuras(f)
+	ns.SetAuraUnit(f.ImpAura, nil)
+
 	-- friendly flag / orb carriers: the game gives no carrier classification for teammates, so
 	-- their carry aura is shown instead (Blizzard's aura container matches the spell IDs)
 	f.FlagAura = ns.CreateAuraContainer(f, {
@@ -523,8 +566,7 @@ end
 -- a friendly player you target gets the full (enemy-size) plate and the target border
 local function FriendTarget(f)
 	if not (f.friendly and f.unit and ns.db.nameplates.friendlyTargetFull) then return false end
-	local ok, is = pcall(UnitIsUnit, f.unit, "target")
-	return ok and not issecret(is) and is and true or false
+	return NP.IsTargetPlate(f) and true or false
 end
 
 local function LayoutPlate(f)
@@ -674,6 +716,11 @@ local function LayoutPlate(f)
 		f.Carrier:SetPoint("BOTTOM", f.HealthFrame, "TOP", cx, (nameInBar and 2 or (fontSize + 4)) + cy)
 	end
 
+	if f.ImpAura then
+		f.ImpAura:ClearAllPoints()
+		f.ImpAura:SetPoint("BOTTOM", f.HealthFrame, "TOP", 0, (nameInBar and 2 or (fontSize + 4)))
+		ns.RestyleAuraButtons(f.ImpAura, { glow = "static", glowColor = cfg.important.color, glowThickness = 2 }, cfg.important.auraSize or 34)
+	end
 	if f.FlagAura then
 		f.FlagAura:ClearAllPoints()
 		f.FlagAura:SetPoint("CENTER", f.Carrier, "CENTER", 0, 0)
@@ -834,6 +881,9 @@ local function OnPlateAdded(unit)
 	local flagWatch = f.friendly and itype == "pvp" and ns.db.nameplates.carrierIcon and isPlayer
 	ns.SetAuraUnit(f.FlagAura, flagWatch and unit or nil)
 	f.FlagAura:SetShown(flagWatch and true or false)
+	local impWatch = not f.friendly and not isPlayer and ns.db.nameplates.important.enabled and ns.db.nameplates.important.auraMarker
+	ns.SetAuraUnit(f.ImpAura, impWatch and unit or nil)
+	f.ImpAura:SetShown(impWatch and true or false)
 	ns.SetAuraUnit(f.Auras, not f.friendly and unit or nil)
 	f.Auras:SetShown(not f.friendly)
 	local big = BigWanted(f)
@@ -877,6 +927,12 @@ function NP.DebugTarget()
 	if not f then ns:Print("No Stinkie nameplate for your target.") return end
 	show("plate unit", f.unit)
 	show("treated as friendly", f.friendly)
+	show("found as target plate", NP.IsTargetPlate(f))
+	show("full friendly target plate", f.friendTarget)
+	show("name (secret = hidden by the game)", UnitName("target"))
+	show("NPC ID (secret = hidden by the game)", UnitCreatureID and UnitCreatureID("target"))
+	show("minion (pet / totem / guardian)", UnitIsMinion and UnitIsMinion("target"))
+	show("important unit", f.important)
 	show("UnitCanAttack now", UnitCanAttack("player", "target"))
 	local c = f.Auras
 	local ok, u = pcall(c.GetUnit, c)
@@ -903,6 +959,7 @@ local function OnPlateRemoved(unit)
 	ns.SetAuraUnit(f.BigCC, nil)
 	ns.SetAuraUnit(f.BigBuffs, nil)
 	ns.SetAuraUnit(f.FlagAura, nil)
+	ns.SetAuraUnit(f.ImpAura, nil)
 	f.unit = nil
 	f:Hide()
 end
@@ -1090,9 +1147,16 @@ function NP:Refresh()
 	NP.auraVersion = NP.auraVersion + 1
 	for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
 		local f = plate.SUIFrame
+		if f then NP.ApplyImportantAuras(f) end
 		if f and f.unit then
 			OnPlateAdded(f.unit)
 		end
+	end
+end
+
+function NP.RefreshImportantAuras()
+	for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+		if plate.SUIFrame then NP.ApplyImportantAuras(plate.SUIFrame) end
 	end
 end
 

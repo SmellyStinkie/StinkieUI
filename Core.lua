@@ -426,6 +426,9 @@ ns.defaults = {
 			color = { 1.00, 0.40, 0.80 },
 			clickPad = 14,
 			widthScale = 1.5, heightScale = 1.5, border = true, -- size vs a normal enemy plate
+			-- where the game hides names and NPC IDs (rated PvP): a big glowing icon for units that
+			-- carry one of these auras on themselves. 8178 = Grounding Totem Effect
+			auraMarker = true, auraSize = 34, auraIDs = { "8178" },
 			units = {
 				"Grounding Totem", "Tremor Totem", "Spirit Link Totem", "Capacitor Totem",
 				"Healing Tide Totem", "Earthgrab Totem", "Static Field Totem", "Counterstrike Totem",
@@ -673,6 +676,7 @@ ns.defaults = {
 		scale = 1,
 		width = 240, height = 22, spacing = 2,
 		layout = "STACK", -- STACK (one under the other) | SIDE (side by side)
+		swapSides = false, -- side by side: each flag under the carrying team's score (Alliance left; true = Horde left)
 		names = true, classColors = true, realms = false,
 		distance = true, onlyYardsWhenNotOnCap = false, eta = true,
 		radius = 8, -- yards from the cap spot that count as on cap
