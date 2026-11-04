@@ -9,4 +9,6 @@ ignore:
   - .github
   - .gitignore
   - "*.py"
+  - dev
+  - CLAUDE.md
   - Media/__pycache__
