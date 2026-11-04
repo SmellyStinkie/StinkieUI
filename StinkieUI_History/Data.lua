@@ -163,12 +163,34 @@ function D.Summarize(m, index)
 	return s
 end
 
+-- How far back the window loads: the last N months (Stinkie UI option, default 12), or all of
+-- it once "Load all" is clicked (for this session). Older matches stay saved, just not decoded,
+-- which keeps the window's memory down with big imported histories.
+function D.LoadSince()
+	if D.loadAll then return nil end
+	local SH = StinkieUI_Shared
+	local months = SH and SH.db and SH.db.matchHistory and SH.db.matchHistory.loadMonths or 12
+	if not months or months <= 0 then return nil end
+	return time() - months * 30 * 86400
+end
+
+-- a saved line's time without decoding it ("v<version>;<time>;...")
+function D.LineTime(line)
+	return tonumber(line:match("^v%d+;(%d+)") or "") or 0
+end
+
 function D.BuildSummaries(onProgress)
 	local a = D.Archive()
 	local out = {}
+	local since = D.LoadSince()
+	D.skipped = 0
 	for i, line in ipairs(a.records) do
-		local m = Codec.Decode(line, D.Resolve)
-		if m then out[#out + 1] = D.Summarize(m, i) end
+		if since and D.LineTime(line) < since then
+			D.skipped = D.skipped + 1
+		else
+			local m = Codec.Decode(line, D.Resolve)
+			if m then out[#out + 1] = D.Summarize(m, i) end
+		end
 		if onProgress and i % 500 == 0 then onProgress(i, #a.records) end
 	end
 	table.sort(out, function(x, y) return x.t > y.t end)

@@ -294,7 +294,6 @@ local PRESET = {
 		},
 		gcd = {
 			direction = "LEFT",
-			enabled = true,
 			point = { "BOTTOM", -380, 0 },
 			spacing = 0,
 		},

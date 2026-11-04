@@ -459,13 +459,13 @@ function AA:Init()
 	end
 	ev:SetScript("OnEvent", function() AA:Refresh() end)
 	local elapsed = 0
-	ev:SetScript("OnUpdate", function(_, dt)
+	ev:SetScript("OnUpdate", ns.Timed("PvP Assist", function(_, dt)
 		elapsed = elapsed + dt
 		if elapsed < 0.5 then return end
 		elapsed = 0
 		if IsInRaid() and not AA.testMode then GateFarHealers() end
 		if #AA.kicks > 0 then ExpireKicks() end
-	end)
+	end))
 
 	table.insert(ns.lockCallbacks, function(unlocked)
 		if unlocked then

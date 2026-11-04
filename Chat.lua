@@ -883,7 +883,7 @@ function CH:Init()
 	ns:On("FRIENDLIST_UPDATE", ScanFriends)
 	ns:On("PLAYER_TARGET_CHANGED", function() NoteUnit("target") end)
 	ns:On("UPDATE_MOUSEOVER_UNIT", function() NoteUnit("mouseover") end)
-	CH.ticker = C_Timer.NewTicker(0.1, Tick)
+	CH.ticker = C_Timer.NewTicker(0.2, ns.Timed("Chat tabs", Tick)) -- tab fade / flash / mouseover; 5x a second is plenty
 end
 
 function CH:Refresh()

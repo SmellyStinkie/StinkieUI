@@ -660,7 +660,7 @@ function A:Init()
 	end)
 	-- dim enemies you can't see (stealth), keep dots fresh
 	local elapsed = 0
-	driver:SetScript("OnUpdate", function(_, dt)
+	driver:SetScript("OnUpdate", ns.Timed("Arena frames", function(_, dt)
 		elapsed = elapsed + dt
 		if elapsed < 0.2 then return end
 		elapsed = 0
@@ -672,7 +672,7 @@ function A:Init()
 				UpdateDots(f)
 			end
 		end
-	end)
+	end))
 
 	table.insert(ns.lockCallbacks, function(unlocked)
 		if unlocked then

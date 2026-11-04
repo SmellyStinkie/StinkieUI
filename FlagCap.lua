@@ -606,7 +606,7 @@ function FC:Init()
 		function() return cfg().point end,
 		function(p) cfg().point = p end)
 	FC.ticker = CreateFrame("Frame")
-	FC.ticker:SetScript("OnUpdate", OnUpdate)
+	FC.ticker:SetScript("OnUpdate", ns.Timed("Flag Cap", OnUpdate))
 	FC.ticker:Hide()
 	FC:Layout()
 	ns:On("PLAYER_ENTERING_WORLD", function() FC:UpdateActive() end)

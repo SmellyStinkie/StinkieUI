@@ -189,6 +189,12 @@ end
 
 local function UpdateFade()
 	local cfg = ns.db.actionBars
+	-- no bar set to mouseover and none left faded: nothing to do
+	if not next(cfg.mouseover) and not AB.anyFaded then return end
+	local anyMouseover = false
+	for _, v in pairs(cfg.mouseover) do if v then anyMouseover = true break end end
+	if not anyMouseover and not AB.anyFaded then return end
+	AB.anyFaded = anyMouseover
 	local editing = EditModeManagerFrame and EditModeManagerFrame.IsEditModeActive and EditModeManagerFrame:IsEditModeActive()
 	for _, def in ipairs(AB.BARS) do
 		local bar = GetBar(def[1])
@@ -231,7 +237,7 @@ function AB:Init()
 	end
 	ns:On("PLAYER_ENTERING_WORLD", function() C_Timer.After(0, function() ns:RunOOC(SkinAll) end) end)
 	ns:On("UPDATE_BINDINGS", function() C_Timer.After(0, function() ns:RunOOC(SkinAll) end) end)
-	AB.ticker = C_Timer.NewTicker(0.1, UpdateFade)
+	AB.ticker = C_Timer.NewTicker(0.1, ns.Timed("Action bar fade", UpdateFade))
 	AB.KeepVehicleExit()
 end
 

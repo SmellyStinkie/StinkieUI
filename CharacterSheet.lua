@@ -174,9 +174,39 @@ local function Overlay(button, side)
 	e[4]:SetPoint("TOPRIGHT"); e[4]:SetPoint("BOTTOMRIGHT"); e[4]:SetWidth(2)
 	hl:Hide()
 	o.highlight = hl
+	-- durability: a thin vertical line on the text side of the icon, green -> yellow -> red
+	local dura = button:CreateTexture(nil, "OVERLAY", nil, 6)
+	dura:SetWidth(2)
+	if side == "RIGHT" then
+		dura:SetPoint("TOPLEFT", button, "TOPRIGHT", 1, 0); dura:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 1, 0)
+	else
+		dura:SetPoint("TOPRIGHT", button, "TOPLEFT", -1, 0); dura:SetPoint("BOTTOMRIGHT", button, "BOTTOMLEFT", -1, 0)
+	end
+	dura:Hide()
+	o.dura = dura
 	button.SUISheet = o
 	return o
 end
+
+-- green when fully repaired, yellow at half, red when broken
+function CS.DurabilityColor(frac)
+	frac = math.max(0, math.min(1, frac))
+	if frac >= 0.5 then return 1 - (frac - 0.5) * 2 * 0.8, 0.85, 0.15 end
+	return 1, 0.85 * frac * 2, 0.15
+end
+
+local function UpdateDurability(o, unit, slot)
+	local c = cfg()
+	if not o.dura then return end
+	if not (c.enabled and c.durability and unit == "player" and GetInventoryItemDurability) then o.dura:Hide() return end
+	local cur, max = GetInventoryItemDurability(slot)
+	if not (readable(cur) and readable(max) and max and max > 0) then o.dura:Hide() return end
+	local r, g, b = CS.DurabilityColor(cur / max)
+	o.dura:SetColorTexture(r, g, b, 1)
+	o.dura:SetWidth(c.durabilityWidth or 2)
+	o.dura:Show()
+end
+CS.UpdateDurability = UpdateDurability
 
 -- weapons: with the compact layout their text sits under the icons (main hand right-aligned to
 -- its icon, off hand left-aligned), clear of the bottom of the side columns
@@ -361,6 +391,7 @@ function CS.UpdateButton(button, unit, slot, side)
 		fs:Show()
 	end
 	o:SetShown(c.enabled and true or false)
+	UpdateDurability(o, unit, slot)
 	if c.enabled and c.flat and button.SUIEdge and CS.ColorSlotBorder then CS.ColorSlotBorder(button, info and info.quality) end
 end
 
@@ -1339,6 +1370,7 @@ function CS:Init()
 		if _G.PaperDollFrame and _G.PaperDollFrame:IsShown() then Queue("Character", "player") end
 	end
 	ns:On("PLAYER_EQUIPMENT_CHANGED", RefreshOpen)
+	ns:On("UPDATE_INVENTORY_DURABILITY", RefreshOpen)
 	ns:On("PLAYER_AVG_ITEM_LEVEL_UPDATE", RefreshOpen)
 	ns:On("ZONE_CHANGED_NEW_AREA", RefreshOpen)
 	ns:On("PVP_MATCH_STATE_CHANGED", RefreshOpen)

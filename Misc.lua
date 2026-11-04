@@ -110,9 +110,12 @@ function MISC.AddCast(spellID, interrupted)
 	Place(entry, sx, sy)
 	table.insert(icons, 1, entry)
 	while #icons > c.count do Release(table.remove(icons)) end
+	if MISC.Animate then holder:SetScript("OnUpdate", MISC.Animate) end
 end
 
-local function Animate(_, elapsed)
+local function Animate(self, elapsed)
+	-- nothing on screen: stop running every frame until the next cast
+	if #icons == 0 then self:SetScript("OnUpdate", nil) return end
 	local c = gcfg()
 	local now = GetTime()
 	local k = math.min(1, (elapsed or 0.016) * 12)
@@ -188,7 +191,7 @@ local function InitGCD()
 	holder = CreateFrame("Frame", "StinkieUI_GCDHistory", UIParent)
 	holder:SetFrameStrata("MEDIUM")
 	LayoutHolder()
-	holder:SetScript("OnUpdate", Animate)
+	MISC.Animate = ns.Timed("GCD History", Animate)
 	ns:RegisterMover("gcdHistory", holder, "GCD History",
 		function() return gcfg().point end,
 		function(p) gcfg().point = p end)

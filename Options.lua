@@ -106,6 +106,7 @@ end
 -- Shared popup list for dropdowns.
 local popup
 local function ShowPopup(owner, items, current, onPick)
+	if popup and popup:IsShown() and popup.owner == owner then popup:Hide() return end
 	if not popup then
 		popup = CreateFrame("Frame", nil, UIParent)
 		popup:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -118,6 +119,15 @@ local function ShowPopup(owner, items, current, onPick)
 		popup:SetScript("OnMouseWheel", function(self, delta)
 			self.offset = math.max(0, math.min(#self.items - #self.buttons, self.offset - delta))
 			self:Render()
+		end)
+		-- a click anywhere else closes the list (a click on its own button toggles it below), and
+		-- so does the window it opened from closing
+		popup:SetScript("OnEvent", function(self)
+			if self:IsShown() and not self:IsMouseOver() and not (self.owner and self.owner:IsMouseOver()) then self:Hide() end
+		end)
+		pcall(popup.RegisterEvent, popup, "GLOBAL_MOUSE_DOWN")
+		popup:SetScript("OnUpdate", function(self)
+			if self.owner and not self.owner:IsVisible() then self:Hide() end
 		end)
 		function popup:Render()
 			for i, b in ipairs(self.buttons) do
@@ -149,7 +159,7 @@ local function ShowPopup(owner, items, current, onPick)
 		b:SetPoint("TOPLEFT", 2, -2 - (i - 1) * 22)
 		if i > visible then b:Hide() end
 	end
-	popup.items, popup.current, popup.onPick, popup.offset = items, current, onPick, 0
+	popup.items, popup.current, popup.onPick, popup.offset, popup.owner = items, current, onPick, 0, owner
 	popup:SetSize(owner:GetWidth(), visible * 22 + 4)
 	popup:ClearAllPoints()
 	popup:SetPoint("TOPLEFT", owner, "BOTTOMLEFT", 0, -2)
@@ -252,6 +262,7 @@ function PageMixin:Slider(text, min, max, step, get, set, reload)
 	eb:SetPoint("LEFT", s, "RIGHT", 10, 0)
 
 	local function fmt(v)
+		if step < 0.01 then return string.format("%.3f", v) end
 		if step < 1 then return string.format("%.2f", v) end
 		return tostring(math.floor(v + 0.5))
 	end
@@ -689,6 +700,7 @@ local function BuildPartyPage(page)
 	page:Slider("Trinket size (0 = frame height)", 0, 80, 1, Getter(cfg, "trinketSize"), Setter(cfg, "trinketSize"))
 	page:Note("Glow options for these icons are on the PvP Assist page.", 22)
 	page:Check("Hide in battlegrounds and Blitz", Getter(cfg, "hideInBattlegrounds"), Setter(cfg, "hideInBattlegrounds"))
+	page:Check("Hide in raid groups", Getter(cfg, "hideInRaid"), Setter(cfg, "hideInRaid"))
 	page:Note("Big and external defensives show while they're active.", 22)
 	page:Position(nil, function() return "party" end)
 
@@ -1383,6 +1395,8 @@ local function BuildMatchHistoryPage(page)
 	page:Button("Import Rated Tracker history", function() ns.MatchRecorder.Import() end, 240)
 	page:Column(2)
 	page:Header("Memory")
+	page:Slider("Window loads the last ... months (0 = all)", 0, 60, 1, Getter(cfg, "loadMonths"), Setter(cfg, "loadMonths"))
+	page:Note("Older matches stay saved; the window's Load all button brings them in for that session. Fewer loaded matches = less memory while the window is open.", 50)
 	page:Note("The history window is its own addon (StinkieUI_History) and only loads when you open it. Until then a new match costs a few hundred bytes. After you close the window its decoded data is released; the archive itself stays loaded until your next /reload.", 90)
 	page:Note("Matches are stored as compact text with names, maps and loadouts kept once each: about 0.5 KB per arena match and 1-1.5 KB per Blitz match.", 50)
 	page:Header("Match Stats")
@@ -1461,6 +1475,8 @@ local function BuildCharacterPage(page)
 	page:Check("Item level", Getter(cfg, "ilvl"), Setter(cfg, "ilvl"))
 	page:Check("Upgrade track on the item level line (with names)", Getter(cfg, "track"), Setter(cfg, "track"))
 	page:Check("PvP item level (only on gear that scales up in PvP)", Getter(cfg, "pvp"), Setter(cfg, "pvp"))
+	page:Check("Durability line beside each item (green, yellow, red)", Getter(cfg, "durability"), Setter(cfg, "durability"))
+	page:Slider("Durability line width", 1, 6, 1, Getter(cfg, "durabilityWidth"), Setter(cfg, "durabilityWidth"))
 	page:Check("Gems beside each icon, on the outside (empty sockets too)", Getter(cfg, "gems"), Setter(cfg, "gems"))
 	page:Slider("Gem icon size", 8, 28, 1, Getter(cfg, "gemSize"), Setter(cfg, "gemSize"))
 	page:Check("Enchants", Getter(cfg, "enchants"), Setter(cfg, "enchants"))
@@ -1513,6 +1529,52 @@ local function BuildObjectivesPage(page)
 	page:Check("Mythic+", Getter(cfg, "hideMPlus"), Setter(cfg, "hideMPlus"))
 	page:Check("Other dungeons", Getter(cfg, "hideDungeon"), Setter(cfg, "hideDungeon"))
 	page:Note("Hidden means invisible (it stays where it is). New text sizes show on the tracker's next update or a /reload.", 36)
+end
+
+local function BuildDamageTextPage(page)
+	local function cfg() return ns.db.damageText end
+	local function db() return ns.db end
+	local DT = ns.DamageText
+	page:Column(1)
+	page:Header("Damage Numbers")
+	page:Note("The damage and healing numbers that float over targets in the world.", 22)
+	page:Check("Stinkie UI font", Getter(db, "combatTextFont"), Setter(db, "combatTextFont"), true)
+	page:Note("The game reads this font while the world loads: log out fully and back in (a /reload isn't enough).", 36)
+	page:Check("Change size and position", Getter(cfg, "enabled"), Setter(cfg, "enabled"))
+	local function Opt(key, label, min, max, step, note)
+		if DT.Available(key) then
+			page:Slider(label, min, max, step, Getter(cfg, key), Setter(cfg, key))
+		else
+			page:Note(label .. ": not in this game version.", 22)
+		end
+	end
+	Opt("screenY", "Height above the target (0 = default 0.015)", 0, 0.2, 0.005)
+	if not DT.Available("screenY") then Opt("height", "Height above the target (0 = game default)", 0, 10, 0.25) end
+	Opt("size", "Size (0 = game default)", 0, 3, 0.05)
+	page:Header("Critical hits")
+	Opt("critScreenY", "Crit height above the target (0 = default 0.0275)", 0, 0.2, 0.005)
+	Opt("critSize", "Crit pop size (0 = game default)", 0, 5, 0.1)
+	page:Note("Crits pop up bigger than normal hits, then shrink back. Pop size sets how big that pop gets; Size above still scales everything.", 36)
+	Opt("spread", "Sideways scatter (0 = game default)", 0, 3, 0.05)
+	Opt("gravity", "Fall speed (0 = game default)", 0, 5, 0.1)
+	Opt("directional", "Sideways flight (0 = default, low = straight up)", 0, 5, 0.1)
+	page:Note("These use the game's own settings, so they also change what other addons see. Height is measured from the target's nameplate, as a share of your screen's height (0.05 = 5% of the screen). /stinkie dmg shows which settings this game version has and their values.", 62)
+end
+
+local function BuildSkinsPage(page)
+	local function cfg() return ns.db.skins end
+	page:Column(1)
+	page:Header("Window Skins")
+	page:Note("Blizzard's other windows in the Character Sheet's flat look: no frame art or portrait, a flat background with a 1px border, flat tabs. Each window is restyled once when it first opens, so it costs nothing while you play.", 62)
+	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"), true)
+	page:Slider("Background opacity", 0, 1, 0.05, Getter(cfg, "alpha"), Setter(cfg, "alpha"))
+	page:Note("Background color is the Character Sheet's window color.", 22)
+	page:Column(2)
+	page:Header("Windows")
+	for _, def in ipairs(ns.Skins.WINDOWS) do
+		page:Check(def.label, Getter(cfg, def.key), Setter(cfg, def.key), true)
+	end
+	page:Note("Turning a window off fully restores Blizzard's look after a /reload. Bags, talents and spellbook, and the map / quest log are left alone: Blizzard protects them, and restyling them risks errors in combat.", 62)
 end
 
 local function BuildTooltipPage(page)
@@ -1887,8 +1949,7 @@ local function BuildGeneralPage(page)
 	end)
 	page:Check("Use it for Blizzard's UI too", Getter(db, "globalFont"), Setter(db, "globalFont"))
 	page:Check("Names above characters (yours too)", Getter(db, "worldNameFont"), Setter(db, "worldNameFont"), true)
-	page:Check("Floating combat text", Getter(db, "combatTextFont"), Setter(db, "combatTextFont"), true)
-	page:Note("Blizzard UI: tooltips, buff timers, spec names, character sheet, damage meter, zone text, settings. Names above characters and combat text need a full logout, not just a reload.", 62)
+	page:Note("Blizzard UI: tooltips, buff timers, spec names, character sheet, damage meter, zone text, settings. Names above characters need a full logout, not just a reload. Damage numbers: Miscellaneous > Damage Numbers.", 62)
 	page:Slider("Scale", 0.5, 2, 0.05, Getter(db, "scale"), Setter(db, "scale"))
 	page:Check("Class-colored health", Getter(db, "classColorHealth"), Setter(db, "classColorHealth"))
 	page:Color("Health color (when not class colored)", function() return ns.db.colors.health end, function(c) ns.db.colors.health = c end)
@@ -2184,12 +2245,14 @@ local pages = {
 		{ "Objectives", BuildObjectivesPage },
 		{ "Buff Frame", BuildBuffsPage },
 		{ "Tooltip", BuildTooltipPage },
+		{ "Window Skins", BuildSkinsPage },
+		{ "Damage Numbers", BuildDamageTextPage },
 		{ "Window Mover", BuildWindowMoverPage },
 	} },
 }
 
 local HEADER_H, WIN_H = 92, 700
-local NAV_STEP, NAV_CHILD_STEP = 21, 19 -- search box + 20 entries + the largest open group (7) fit the 588px column
+local NAV_STEP, NAV_CHILD_STEP = 20, 18 -- search box + 20 entries + the largest open group (8) fit the 588px column
 
 local function CreateWindow()
 	local w = CreateFrame("Frame", "StinkieUIOptions", UIParent)
@@ -2341,7 +2404,7 @@ local function CreateWindow()
 				local leaf = #leaves
 				local c = { leaf = leaf }
 				c.button = FlatButton(nav, cdef[1], 130, function() t.lastLeaf = leaf; SelectPage(leaf) end)
-				c.button:SetHeight(18)
+				c.button:SetHeight(17)
 				c.button.text:ClearAllPoints()
 				c.button.text:SetPoint("LEFT", 10, 0)
 				ns.SetFont(c.button.text, 12)
@@ -2353,7 +2416,7 @@ local function CreateWindow()
 			t.leaf = #leaves
 			t.button = FlatButton(nav, def[1], 142, function() SelectPage(t.leaf) end)
 		end
-		t.button:SetHeight(20)
+		t.button:SetHeight(19)
 		t.button.text:ClearAllPoints()
 		t.button.text:SetPoint("LEFT", 10, 0)
 		table.insert(top, t)

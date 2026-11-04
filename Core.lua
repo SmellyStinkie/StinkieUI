@@ -354,6 +354,7 @@ ns.defaults = {
 		castbar = { enabled = false, height = 10, textStyle = text(10) },
 		trinket = true, trinketSize = 26,
 		hideInBattlegrounds = true,
+		hideInRaid = true, -- hidden while you're in a raid group
 		point = { "LEFT", 330, 120 },
 	},
 	minimap = {
@@ -626,7 +627,7 @@ ns.defaults = {
 		ringThickness = "thin", -- thin | thick
 		ringColor = { 0.61, 0.36, 1.00 },
 		ringAlpha = 0.8,
-		ringCombatOnly = false,
+		ringCombatOnly = true, -- only in combat (it follows the mouse every frame while shown)
 	},
 	bgWidgets = {
 		enabled = true,
@@ -714,6 +715,7 @@ ns.defaults = {
 		skirmish = false, battleground = false, brawl = false, unrated = false, -- unrated games aren't saved by default
 		talents = true, -- save your talent loadout string with each match
 		announce = true, -- one chat line after each match ("Saved: 3v3 Nagrand Arena, win, +14")
+		loadMonths = 12, -- the window loads this many months back (0 = everything); "Load all" for more
 	},
 	-- Character Sheet: additions to Blizzard's character and inspect frames
 	character = {
@@ -722,6 +724,7 @@ ns.defaults = {
 		background = "dark", -- blizzard | dark | custom | warband:<id>
 		customTexture = "", ownedOnly = false,
 		dim = 0.25, -- darkening over the background in the character area
+		durability = true, durabilityWidth = 2, -- thin line beside each item: green (repaired) -> yellow -> red
 		collapsed = false, collapseButton = true, -- arrow under the trinkets hides / shows the stats side
 		centerHeader = true, -- name and level centered over the character
 		wideBackground = true, outerDim = 0.6, -- background across the whole window, darker outside the character
@@ -752,6 +755,15 @@ ns.defaults = {
 		hideBlizzardBg = true,
 		flat = true, -- flat headers, progress bars and quest item buttons (no gradients)
 		hideArena = true, hideBG = true, hideRaid = true, hideMPlus = false, hideDungeon = false,
+	},
+	-- Damage Numbers: floating combat text over targets (0 = the game's default for each)
+	damageText = { enabled = true, size = 0, height = 0, screenY = 0, critScreenY = 0, critSize = 0, spread = 0, gravity = 0, directional = 0 },
+	-- Window Skins: the Character Sheet's flat look on other Blizzard windows (safe set only)
+	skins = {
+		enabled = true,
+		alpha = 0.9, -- window background opacity (color = the Character Sheet's)
+		friends = true, groupFinder = true, adventure = true, collections = true, achievements = true,
+		guild = true, professions = true, housing = true, gameMenu = true,
 	},
 	-- Tooltip: size, position, combat hiding, health bar, target line, guild ranks
 	tooltip = {
@@ -1089,12 +1101,72 @@ function ns:On(event, fn)
 	table.insert(handlers[event], fn)
 end
 
+---------------------------------------------------------------------------
+-- Profiler (/stinkie cpu): off unless asked for; when off each timed spot costs one test.
+---------------------------------------------------------------------------
+ns.profile = { on = false, ms = {}, calls = {} }
+local profile = ns.profile
+local function Account(key, start)
+	local dt = debugprofilestop() - start
+	profile.ms[key] = (profile.ms[key] or 0) + dt
+	profile.calls[key] = (profile.calls[key] or 0) + 1
+end
+ns.ProfileAccount = Account
+
+-- wraps a function so its time counts under key while profiling
+function ns.Timed(key, fn)
+	return function(...)
+		if not profile.on then return fn(...) end
+		local start = debugprofilestop()
+		local a, b, c, d = fn(...)
+		Account(key, start)
+		return a, b, c, d
+	end
+end
+
 eventFrame:SetScript("OnEvent", function(_, event, ...)
 	local list = handlers[event]
 	if list then
+		if profile.on then
+			local start = debugprofilestop()
+			for i = 1, #list do list[i](event, ...) end
+			Account("events: " .. event, start)
+			return
+		end
 		for i = 1, #list do list[i](event, ...) end
 	end
 end)
+
+function ns.StartProfile(seconds)
+	seconds = seconds or 30
+	wipe(profile.ms); wipe(profile.calls)
+	profile.on = true
+	profile.started = GetTime()
+	ns:Print(string.format("Measuring CPU for %d seconds. Play normally (or do the thing that feels slow).", seconds))
+	C_Timer.After(seconds, function() ns.StopProfile() end)
+end
+
+function ns.StopProfile()
+	if not profile.on then return end
+	profile.on = false
+	local elapsed = math.max(0.001, GetTime() - (profile.started or GetTime()))
+	local list, total = {}, 0
+	for key, ms in pairs(profile.ms) do
+		list[#list + 1] = { key = key, ms = ms, calls = profile.calls[key] or 0 }
+		total = total + ms
+	end
+	table.sort(list, function(a, b) return a.ms > b.ms end)
+	ns:Print(string.format("CPU over %.0f s: %.1f ms per second measured in total (%.2f%% of one core).", elapsed, total / elapsed, total / elapsed / 10))
+	for i = 1, math.min(12, #list) do
+		local e = list[i]
+		ns:Print(string.format("  %5.2f ms/s  %6d calls  %s", e.ms / elapsed, e.calls, e.key))
+	end
+	local P, M = C_AddOnProfiler, Enum and Enum.AddOnProfilerMetric
+	if P and P.GetAddOnMetric and M and M.RecentAverageTime then
+		local ok, v = pcall(P.GetAddOnMetric, "StinkieUI", M.RecentAverageTime)
+		if ok and type(v) == "number" then ns:Print(string.format("Game's own figure for Stinkie UI (recent average): %.3f ms per frame.", v)) end
+	end
+end
 
 -- Run protected work now, or as soon as combat ends.
 local combatQueue = {}
@@ -1479,6 +1551,7 @@ end
 
 SLASH_STINKIEUI1 = "/stinkie"
 SLASH_STINKIEUI2 = "/sui"
+SLASH_STINKIEUI3 = "/st"
 SlashCmdList.STINKIEUI = function(msg)
 	msg = strlower(strtrim(msg or ""))
 	if msg == "unlock" or msg == "move" then
@@ -1487,6 +1560,10 @@ SlashCmdList.STINKIEUI = function(msg)
 		ns:SetLocked(true)
 	elseif msg == "fontcheck" then
 		ns:FontCheck()
+	elseif msg == "dmg" then
+		if ns.DamageText then ns.DamageText.Print() end
+	elseif msg == "cpu" then
+		if ns.profile.on then ns.StopProfile() else ns.StartProfile(30) end
 	elseif msg == "plates" then
 		if ns.Nameplates and ns.Nameplates.PrintStacking then ns.Nameplates.PrintStacking() end
 	elseif msg == "auras" then
@@ -1497,7 +1574,9 @@ SlashCmdList.STINKIEUI = function(msg)
 		if ns.FlagCap then ns.FlagCap.ResetLearned() end
 	elseif msg == "timers" then
 		if ns.BGTimers then ns.BGTimers.Debug() end
-	elseif msg == "history" or msg == "mh" then
+	elseif msg == "score" then
+		if ns.MatchRecorder and ns.MatchRecorder.DebugScore then ns.MatchRecorder.DebugScore() end
+	elseif msg == "history" or msg == "mh" or msg == "m" then
 		if ns.MatchRecorder then ns.MatchRecorder.Open() end
 	elseif msg == "reset" then
 		ns:ResetProfile()

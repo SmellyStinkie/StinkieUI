@@ -210,7 +210,7 @@ function UF.CreateFrame(unit, name, noUnitWatch)
 
 	f:SetScript("OnEnter", OnEnter)
 	f:SetScript("OnLeave", OnLeave)
-	f:SetScript("OnEvent", OnEvent)
+	f:SetScript("OnEvent", ns.Timed("Unit frames", OnEvent))
 	f:HookScript("OnShow", SafeUpdateAll)
 
 	if f.compound then

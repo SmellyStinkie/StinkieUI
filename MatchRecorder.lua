@@ -26,11 +26,12 @@ R.Codec = C
 C.VERSION = 1
 
 -- New fields go at the end so older lines keep decoding (missing trailing fields read as nil).
+-- ilvl is no longer recorded (0.38.0); its slot stays so saved lines keep their layout.
 -- queue: seconds in queue; srounds: Solo Shuffle rounds "won.duration.ally:ally.firstDeath/..."
 -- (won 1/0/x, players by index); src: where the line came from ("RT" = Rated Tracker import).
 C.TOP = { "t", "char", "bracket", "map", "mapID", "dur", "result", "rating", "ratingAfter", "mmr", "mmrAfter",
 	"teamMMR", "enemyMMR", "spec", "hero", "loadout", "pvpTalents", "ilvl", "rounds", "season", "me", "team", "winner",
-	"queue", "srounds", "src" }
+	"queue", "srounds", "src", "scoreA", "scoreH" }
 C.TOP_STRING = { char = true, bracket = true, map = true, loadout = true, pvpTalents = true, result = true, srounds = true, src = true }
 C.NO_INTERN = { srounds = true, pvpTalents = true } -- unique per match: kept inline
 C.PLAYER = { "name", "class", "spec", "race", "team", "role", "dmg", "heal", "kb", "deaths", "hk", "rating", "rchg", "mmr", "mmrchg", "stats" }
@@ -94,9 +95,12 @@ function C.Decode(line, resolve)
 	resolve = resolve or function(s) return s end
 	local parts = split(line, ";")
 	if parts[1] ~= "v1" then return nil end
+	-- the player list is always the last part: lines saved before a field was added have fewer
+	-- top fields, so their missing ones read as nil
+	local last = #parts
 	local m = {}
 	for i, k in ipairs(C.TOP) do
-		local v = parts[i + 1]
+		local v = (i + 1 < last) and parts[i + 1] or nil
 		if v == nil or v == "" then
 			m[k] = nil
 		elseif C.TOP_STRING[k] then
@@ -106,7 +110,7 @@ function C.Decode(line, resolve)
 		end
 	end
 	m.players = {}
-	local plist = parts[#C.TOP + 2] or ""
+	local plist = (last >= 2) and parts[last] or ""
 	if plist ~= "" then
 		for _, pl in ipairs(split(plist, "^")) do
 			local fields = split(pl, ",")
@@ -223,6 +227,60 @@ local function MyPvpTalents()
 	return table.concat(out, "+")
 end
 
+-- Final battleground score from the score bar at the top of the screen: Alliance (left), Horde
+-- (right). Resource maps use the two-bar widget; flag maps show a count per side ("2/3").
+-- Returns nil when the score bar isn't there or its numbers are hidden.
+local function Num(text)
+	if not readable(text) then return nil end
+	local n = tostring(text):match("(%d+)%s*/%s*%d+") or tostring(text):match("^%s*(%d+)%s*$")
+	return n and tonumber(n) or nil
+end
+
+function R.ReadScore()
+	local W = C_UIWidgetManager
+	local T = Enum.UIWidgetVisualizationType
+	if not (W and T and W.GetTopCenterWidgetSetID and W.GetAllWidgetsBySetID) then return nil end
+	local setID = W.GetTopCenterWidgetSetID()
+	if not setID then return nil end
+	local widgets = {}
+	for _, w in ipairs(W.GetAllWidgetsBySetID(setID) or {}) do widgets[#widgets + 1] = w end
+	table.sort(widgets, function(a, b) return (a.orderIndex or 0) < (b.orderIndex or 0) end)
+	local singles = {}
+	for _, w in ipairs(widgets) do
+		if w.widgetType == T.DoubleStatusBar and W.GetDoubleStatusBarWidgetVisualizationInfo then
+			local i = W.GetDoubleStatusBarWidgetVisualizationInfo(w.widgetID)
+			if i and readable(i.leftBarValue) and readable(i.rightBarValue) then return i.leftBarValue, i.rightBarValue end
+		elseif T.DoubleIconAndText and w.widgetType == T.DoubleIconAndText and W.GetDoubleIconAndTextWidgetVisualizationInfo then
+			local i = W.GetDoubleIconAndTextWidgetVisualizationInfo(w.widgetID)
+			local a, h = i and Num(i.leftText), i and Num(i.rightText)
+			if a and h then return a, h end
+		elseif w.widgetType == T.IconAndText and W.GetIconAndTextWidgetVisualizationInfo then
+			local i = W.GetIconAndTextWidgetVisualizationInfo(w.widgetID)
+			local n = i and readable(i.shownState) and i.shownState ~= 0 and Num(i.text)
+			if n then singles[#singles + 1] = n end
+		end
+	end
+	if #singles == 2 then return singles[1], singles[2] end
+	return nil
+end
+
+-- /stinkie score: what the score bar holds right now (for checking a map the reader gets wrong)
+function R.DebugScore()
+	local W = C_UIWidgetManager
+	local setID = W and W.GetTopCenterWidgetSetID and W.GetTopCenterWidgetSetID()
+	if not setID then ns:Print("No score bar here.") return end
+	for _, w in ipairs(W.GetAllWidgetsBySetID(setID) or {}) do
+		local text = ""
+		pcall(function()
+			local i = W.GetIconAndTextWidgetVisualizationInfo(w.widgetID)
+			if i and readable(i.text) then text = i.text end
+		end)
+		ns:Print(string.format("widget %s type %s order %s %s", tostring(w.widgetID), tostring(w.widgetType), tostring(w.orderIndex), text))
+	end
+	local a, h = R.ReadScore()
+	ns:Print("Score read: " .. (a and (a .. " - " .. h) or "none"))
+end
+
 -- Reads the scoreboard. Returns the match table, or nil + reason if it isn't readable yet.
 function R.Read(statNames)
 	local bracket = R.Bracket()
@@ -293,7 +351,6 @@ function R.Read(statNames)
 	local myMMRIndex, enemyMMRIndex = myTeam, myTeam and (myTeam + 1) % 2
 	if isShuffle then myMMRIndex, enemyMMRIndex = 0, 1 end
 	local instName, _, _, _, _, _, _, instanceID = GetInstanceInfo()
-	local _, equipped = GetAverageItemLevel()
 	local mySpec
 	pcall(function()
 		local getSpec = (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization) or GetSpecialization
@@ -318,7 +375,6 @@ function R.Read(statNames)
 		hero = hero,
 		loadout = MyLoadout(),
 		pvpTalents = MyPvpTalents(),
-		ilvl = equipped and math.floor(equipped + 0.5) or nil,
 		rounds = rounds,
 		season = GetCurrentArenaSeason and GetCurrentArenaSeason() or nil,
 		me = me,
@@ -326,6 +382,10 @@ function R.Read(statNames)
 		winner = winner,
 		players = players,
 	}
+	if bracket ~= "arena" and bracket ~= "skirmish" and bracket ~= "2v2" and bracket ~= "3v3" and not isShuffle then
+		local ok, a, h = pcall(R.ReadScore)
+		if ok and a then m.scoreA, m.scoreH = a, h end
+	end
 	return m
 end
 

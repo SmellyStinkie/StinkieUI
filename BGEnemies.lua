@@ -1047,7 +1047,7 @@ function BG:Init()
 	-- periodic: refresh scoreboard, drop stale target/focus/mouseover bindings, range, carriers.
 	-- Range is also pushed by UNIT_IN_RANGE_UPDATE; this 0.1 s pass catches anything it misses.
 	local rangeElapsed, elapsed, scoreElapsed = 0, 0, 0
-	f:SetScript("OnUpdate", function(_, dt)
+	f:SetScript("OnUpdate", ns.Timed("Battleground frames", function(_, dt)
 		if not BG.active then return end
 		rangeElapsed, elapsed, scoreElapsed = rangeElapsed + dt, elapsed + dt, scoreElapsed + dt
 		if scoreElapsed > 5 then
@@ -1077,7 +1077,7 @@ function BG:Init()
 			side:UpdateCarriers()
 			side:UpdateTargetHighlight()
 		end)
-	end)
+	end))
 
 	table.insert(ns.lockCallbacks, function(unlocked)
 		if unlocked then

@@ -284,13 +284,16 @@ function MM:Init()
 		MM:UpdateVisibility()
 		if event == "PLAYER_ENTERING_WORLD" then C_Timer.After(2, function() MM:Refresh() end) end
 	end)
+	-- button fade polling runs only in mouseover mode (its own frame, hidden otherwise)
 	local elapsed = 0
-	ev:SetScript("OnUpdate", function(_, dt)
+	MM.poll = CreateFrame("Frame")
+	MM.poll:SetScript("OnUpdate", ns.Timed("Minimap buttons", function(_, dt)
 		elapsed = elapsed + dt
 		if elapsed < 0.2 then return end
 		elapsed = 0
-		if cfg().buttons == "mouseover" then MM:UpdateButtons() end
-	end)
+		MM:UpdateButtons()
+	end))
+	MM.poll:SetShown(cfg().buttons == "mouseover")
 	table.insert(ns.lockCallbacks, function() MM:UpdateVisibility() end)
 	MM:Refresh()
 end
@@ -298,6 +301,7 @@ end
 function MM:Refresh()
 	if not MM.active then return end
 	local c = cfg()
+	if MM.poll then MM.poll:SetShown(c.buttons == "mouseover") end
 	if c.coords ~= nil and C_CVar and C_CVar.SetCVar then
 		pcall(C_CVar.SetCVar, "minimapShowPlayerCoords", c.coords and "1" or "0")
 	end

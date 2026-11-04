@@ -90,6 +90,12 @@ local function Signed(n)
 	return "0"
 end
 
+-- MMR the way the lists show it: 0 or missing means the game gave none
+local function MMRText(v)
+	if v == nil or v == 0 then return "N/A" end
+	return tostring(v)
+end
+
 local function ResultText(s)
 	if s.rounds and (s.bracket == "shuffle" or s.bracket == "shuffle-u") then
 		local col = s.rounds > 3 and "55ff55" or s.rounds == 3 and "dddddd" or "ff5555"
@@ -316,7 +322,7 @@ function H.RenderMatches()
 			else
 				c[5]:SetText("")
 			end
-			c[6]:SetText(s.mmrAfter or s.mmr or "")
+			c[6]:SetText(MMRText(s.mmrAfter or s.mmr))
 			c[7]:SetText(Clock(s.dur))
 			c[8]:SetText(Clock(s.queue))
 			c[9]:SetText(SpecIcon(s.spec, 16))
@@ -347,7 +353,7 @@ function H.RenderMatches()
 		p.track:Hide()
 		p.scrollBar:Hide()
 	end
-	win.count:SetText(string.format("%d matches  ·  %d saved  ·  %.0f KB", total, #D.Archive().records, D.SizeBytes() / 1024))
+	H.UpdateCount()
 end
 
 ---------------------------------------------------------------------------
@@ -396,8 +402,12 @@ function H.ShowDetail(summary)
 	p.title:SetText(string.format("%s  ·  %s  ·  %s", BRACKET_LABEL[m.bracket] or m.bracket, m.map or "?", date("%A %B %d, %H:%M", m.t)))
 	local parts = { ResultText(summary), "Length " .. Clock(m.dur) }
 	if m.rating and m.ratingAfter then parts[#parts + 1] = string.format("Rating %d > %d (%s)", m.rating, m.ratingAfter, Signed(m.ratingAfter - m.rating)) end
-	if m.mmr then parts[#parts + 1] = "MMR " .. m.mmr .. (m.mmrAfter and (" > " .. m.mmrAfter) or "") end
-	if m.teamMMR or m.enemyMMR then parts[#parts + 1] = string.format("Team MMR %s vs %s", tostring(m.teamMMR or "?"), tostring(m.enemyMMR or "?")) end
+	if m.scoreA and m.scoreH then
+		parts[#parts + 1] = string.format("Final score |cff4a9eff Alliance %d|r - |cffe0443a%d Horde|r", m.scoreA, m.scoreH)
+	end
+	if m.mmr and m.mmr ~= 0 then parts[#parts + 1] = "MMR " .. m.mmr .. ((m.mmrAfter and m.mmrAfter ~= 0) and (" > " .. m.mmrAfter) or "")
+	elseif m.mmr == 0 then parts[#parts + 1] = "MMR N/A" end
+	if m.teamMMR or m.enemyMMR then parts[#parts + 1] = string.format("Team MMR %s vs %s", MMRText(m.teamMMR), MMRText(m.enemyMMR)) end
 	p.line1:SetText(table.concat(parts, "    "))
 	local NR = "|cff888888not recorded|r"
 	local build = { SpecIcon(m.spec, 16) .. " " .. SpecName(m.spec) }
@@ -411,7 +421,6 @@ function H.ShowDetail(summary)
 		end
 		build[#build + 1] = "PvP talents: " .. table.concat(names, ", ")
 	end
-	build[#build + 1] = "ilvl " .. (m.ilvl or NR)
 	if m.queue then build[#build + 1] = "Queue " .. Clock(m.queue) end
 	build[#build + 1] = m.char or ""
 	p.line2:SetText(table.concat(build, "    "))
@@ -493,7 +502,7 @@ function H.ShowDetail(summary)
 			if pl._i == m.me then nameText = "|cff" .. SUI.ACCENT_HEX .. ">|r " .. nameText end
 			local parsed = SUI.MatchRecorder.Codec.ParseStats(pl.stats)
 			local values = { nameText, SpecIcon(pl.spec, 14) .. " " .. SpecName(pl.spec), Short(pl.dmg), Short(pl.heal), pl.kb or "", pl.deaths or "",
-				(pl.rating and pl.rating > 0) and pl.rating or "", (pl.rchg and pl.rchg ~= 0) and Signed(pl.rchg) or "", (pl.mmr and pl.mmr > 0) and pl.mmr or "" }
+				(pl.rating and pl.rating > 0) and pl.rating or "", (pl.rchg and pl.rchg ~= 0) and Signed(pl.rchg) or "", (pl.mmr == 0) and "N/A" or pl.mmr or "" }
 			for ci = #DETAIL_COLS + 1, #cols do values[ci] = parsed[cols[ci].stat] or "" end
 			local cx = 6
 			for ci, col in ipairs(cols) do
@@ -523,7 +532,7 @@ local GROUP_ITEMS = {
 	{ "length", "Match length" }, { "hour", "Time of day" }, { "weekday", "Day of week" },
 	{ "bracket", "Bracket" }, { "char", "Character" }, { "season", "Season" },
 }
-local STAT_COLS = { { "", 250 }, { "Games", 52 }, { "Win %", 56 }, { "95% range", 90 }, { "W-L", 70 }, { "Net rating", 76 }, { "Per game", 62 },
+local STAT_COLS = { { "", 250 }, { "Games", 52 }, { "Win %", 56 }, { "95% range", 90 }, { "W-L", 70 }, { "Rating/game", 76 },
 	{ "Avg damage", 78 }, { "Avg healing", 78 }, { "Avg length", 70 }, { "Avg queue", 70 } }
 local STAT_ROWS = 15
 
@@ -633,7 +642,6 @@ local SORT_VALUE = {
 	function(r) return r.winRate or -1 end,
 	function(r) return r.lo or -1 end,
 	function(r) return r.w - r.l end,
-	function(r) return r.rated > 0 and r.net or -math.huge end,
 	function(r) return r.avgNet or -math.huge end,
 	function(r) return r.avgDmg or -1 end,
 	function(r) return r.avgHeal or -1 end,
@@ -779,12 +787,11 @@ function H.RenderStats()
 			c[3]:SetText(Pct(g.winRate))
 			c[4]:SetText(g.lo and (Pct(g.lo) .. " - " .. Pct(g.hi)) or "")
 			c[5]:SetText(g.w .. "-" .. g.l)
-			c[6]:SetText(g.rated > 0 and Signed(g.net) or "")
-			c[7]:SetText(g.avgNet and Signed(g.avgNet) or "")
-			c[8]:SetText(Short(g.avgDmg and math.floor(g.avgDmg)))
-			c[9]:SetText(Short(g.avgHeal and math.floor(g.avgHeal)))
-			c[10]:SetText(Clock(g.avgDur and math.floor(g.avgDur)))
-			c[11]:SetText(Clock(g.avgQueue and math.floor(g.avgQueue)))
+			c[6]:SetText(g.avgNet and Signed(g.avgNet) or "")
+			c[7]:SetText(Short(g.avgDmg and math.floor(g.avgDmg)))
+			c[8]:SetText(Short(g.avgHeal and math.floor(g.avgHeal)))
+			c[9]:SetText(Clock(g.avgDur and math.floor(g.avgDur)))
+			c[10]:SetText(Clock(g.avgQueue and math.floor(g.avgQueue)))
 			local wr = g.winRate or 0
 			r.bar:SetWidth(math.max(1, 52 * wr))
 			local good = wr >= 0.5
@@ -794,7 +801,7 @@ function H.RenderStats()
 			r:Hide()
 		end
 	end
-	win.count:SetText(string.format("%d matches  ·  %d saved  ·  %.0f KB", #filtered, #D.Archive().records, D.SizeBytes() / 1024))
+	H.UpdateCount()
 end
 
 ---------------------------------------------------------------------------
@@ -900,8 +907,16 @@ local function CreateWindow()
 	close:SetPoint("TOPRIGHT", -10, -10)
 	-- no delete buttons (an accidental click can't lose history); importing Rated Tracker data is
 	-- on the Stinkie UI options page (Match History > History & Import)
+	w.loadAll = FlatButton(band, "Load all", 80, function()
+		D.loadAll = true
+		D.summaries = nil
+		D.BuildSummaries()
+		Refresh()
+	end)
+	w.loadAll:SetPoint("RIGHT", close, "LEFT", -8, 0)
+	w.loadAll:Hide()
 	w.count = Text(band, 12, "RIGHT", { 0.78, 0.66, 0.70 })
-	w.count:SetPoint("RIGHT", close, "LEFT", -12, 0)
+	w.count:SetPoint("RIGHT", w.loadAll, "LEFT", -10, 0)
 
 	-- filters
 	local bar = CreateFrame("Frame", nil, w)
@@ -944,7 +959,10 @@ local function CreateWindow()
 	w.detail = BuildDetail(body)
 	w.stats = BuildStats(body)
 	w:SetScript("OnHide", function()
-		-- drop the decoded summaries so the history costs nothing while closed
+		-- drop the decoded summaries so the history costs nothing while closed; the next
+		-- opening is back to recent matches only
+		D.loadAll = nil
+		filtered = {}
 		D.Release()
 	end)
 	w:SetScript("OnShow", function()
@@ -964,6 +982,15 @@ function H.Toggle(tab)
 	if not D.summaries then D.BuildSummaries() end
 	win:Show()
 	Refresh()
+end
+
+function H.UpdateCount()
+	if not win then return end
+	local skipped = D.skipped or 0
+	local text = string.format("%d matches  ·  %d saved  ·  %.0f KB", #filtered, #D.Archive().records, D.SizeBytes() / 1024)
+	if skipped > 0 then text = text .. string.format("  ·  %d older not loaded", skipped) end
+	win.count:SetText(text)
+	win.loadAll:SetShown(skipped > 0)
 end
 
 -- Rated Tracker import with progress in chat; refreshes the window when done

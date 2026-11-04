@@ -237,7 +237,7 @@ function ns.CreateCastbar(parent, name)
 	end
 
 	bar:SetScript("OnEvent", OnEvent)
-	bar:SetScript("OnUpdate", OnUpdate)
+	bar:SetScript("OnUpdate", ns.Timed("Castbars", OnUpdate))
 	bar:Hide()
 	return bar
 end

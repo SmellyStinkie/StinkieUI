@@ -366,7 +366,7 @@ function T:Init()
 		function() return cfg().point end,
 		function(p) cfg().point = p end)
 	T.ticker = CreateFrame("Frame")
-	T.ticker:SetScript("OnUpdate", OnUpdate)
+	T.ticker:SetScript("OnUpdate", ns.Timed("BG Timers", OnUpdate))
 	T.ticker:Hide()
 	ns:On("PLAYER_ENTERING_WORLD", function() T:UpdateActive() end)
 	ns:On("ZONE_CHANGED_NEW_AREA", function() T:UpdateActive() end)

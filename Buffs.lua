@@ -121,12 +121,12 @@ function B:Init()
 	B.poll = CreateFrame("Frame")
 	B.poll:Hide()
 	local acc = 0
-	B.poll:SetScript("OnUpdate", function(_, dt)
+	B.poll:SetScript("OnUpdate", ns.Timed("Buff frame", function(_, dt)
 		acc = acc + dt
 		if acc < 0.15 then return end
 		acc = 0
 		B.UpdateVisibility()
-	end)
+	end))
 	local buffs, debuffs = Frames()
 	for _, f in ipairs({ buffs, debuffs }) do
 		if f and f.UpdateAuraButtons then

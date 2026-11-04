@@ -351,13 +351,24 @@ end
 ---------------------------------------------------------------------------
 -- Hidden in battlegrounds / Blitz (the battleground frames cover your team there)
 ---------------------------------------------------------------------------
+-- Hidden in battlegrounds / Blitz (option) and in raid groups (option). The raid rule is a
+-- state driver, so joining or leaving a raid switches it even in combat.
 function Party:UpdateVisibility()
 	local holder = Party.holder
 	if not holder then return end
 	ns:RunOOC(function()
+		local cfg = ns.db.party
 		local _, t = IsInInstance()
-		local hide = ns.db.party.hideInBattlegrounds and t == "pvp" and not ns.unlocked and not Party.testMode
-		holder:SetShown(not hide)
+		local preview = ns.unlocked or Party.testMode
+		local hideBG = cfg.hideInBattlegrounds and t == "pvp" and not preview
+		UnregisterStateDriver(holder, "visibility")
+		if hideBG then
+			holder:Hide()
+		elseif cfg.hideInRaid and not preview then
+			RegisterStateDriver(holder, "visibility", "[group:raid] hide; show")
+		else
+			holder:Show()
+		end
 	end)
 end
 
@@ -411,7 +422,7 @@ function Party:Init()
 				if f.unit == unit or unit == nil then UpdateTrinketCooldown(f) end
 			end
 		else
-			if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then Party:UpdateVisibility() end
+			if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" or event == "GROUP_ROSTER_UPDATE" then Party:UpdateVisibility() end
 			RequestTrinkets()
 		end
 	end)

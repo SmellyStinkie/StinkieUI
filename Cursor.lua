@@ -18,11 +18,15 @@ local function OnUpdate(self)
 	local cfg = ns.db.cursor
 	local hidden = (IsMouselooking and IsMouselooking()) or (cfg.ringCombatOnly and not InCombatLockdown())
 	if hidden then
-		self.tex:Hide()
+		if self.tex:IsShown() then self.tex:Hide() end
+		self.lastX = nil
 		return
 	end
 	self.tex:Show()
 	local x, y = GetCursorPosition()
+	-- only re-place the ring when the mouse actually moved
+	if x == self.lastX and y == self.lastY then return end
+	self.lastX, self.lastY = x, y
 	local scale = self:GetEffectiveScale()
 	self.tex:ClearAllPoints()
 	self.tex:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
@@ -47,7 +51,7 @@ function CU:Apply()
 		f:SetFrameLevel(9999)
 		f:EnableMouse(false)
 		f.tex = f:CreateTexture(nil, "OVERLAY")
-		f:SetScript("OnUpdate", OnUpdate)
+		f:SetScript("OnUpdate", ns.Timed("Cursor ring", OnUpdate))
 		CU.frame = f
 	end
 	local c = cfg.ringColor

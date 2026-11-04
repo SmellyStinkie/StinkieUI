@@ -105,7 +105,7 @@ function R:Init()
 		end
 		if not (InspectFrame and InspectFrame:IsShown()) then ClearInspectPlayer() end
 	end)
-	C_Timer.NewTicker(1.5, Next)
+	C_Timer.NewTicker(1.5, ns.Timed("Healer inspects", Next))
 end
 
 ns:RegisterModule("Roles", R)

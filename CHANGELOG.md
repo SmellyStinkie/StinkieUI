@@ -1,5 +1,26 @@
 # Stinkie UI changelog
 
+## 0.38.0
+- Performance:
+  - Cursor ring: only moves when the mouse moves (it was re-placed every frame), and shows only in combat by default.
+  - GCD History: stops running when no icons are on screen (it ran every frame), and is off by default for new profiles.
+  - Action bar fade: does nothing when no bar is set to mouseover. Chat tab fading / flashing runs 5 times a second instead of 10. Minimap button fading only runs in mouseover mode.
+  - New `/stinkie cpu`: measures Stinkie UI for 30 seconds and prints which parts use the most (events, nameplates, unit frames, castbars, timers), plus the game's own figure.
+  - Your existing settings don't change; turn the cursor ring to combat-only (Cursor page) and GCD History off (GCD History & Decor page) to get the savings there.
+- Match History loads the last 12 months by default (setting: 0-60 months, 0 = everything). Older matches stay saved; a Load all button in the window brings them in for that session. With a big Rated Tracker import this keeps the window's memory down.
+- New Window Skins page (Miscellaneous): the flat look on Friends / Social, Group Finder and PvP, Adventure Guide, Warband Collections, Achievements, Guild and Communities, Professions, Housing Dashboard, and the Game Menu background. Each window is restyled once when it first opens. Bags, talents / spellbook and the map are left alone.
+  - Title bars: a slightly darker band with a thin accent line, and the window name in the Stinkie UI font centered on the window (Blizzard left room for the portrait, so titles sat off center). Achievements: a centered two-line title bar (the name, with your points and shield under it) instead of the old banner; on the Statistics tab it says Statistics. Game Menu: flat header.
+- Party frames hide while you're in a raid group (option, on by default).
+- New Damage Numbers page (Miscellaneous): the Stinkie UI font for the damage and healing numbers over targets (moved here from General; needs a relog), plus height above the target, size, sideways scatter, fall speed and sideways flight, through the game's own settings. Options the game version doesn't have say so; /stinkie dmg lists them.
+- Character Sheet: a thin durability line beside each item with durability: green when repaired, yellow at half, red when broken (width option).
+- Damage Numbers: drives Midnight's renamed settings (the "_v2" ones, e.g. WorldTextScale_v2). Height now uses the setting that measures from the target's nameplate (WorldTextScreenY_v2, default 0.015 of the screen height); the old world-height setting didn't visibly move the numbers and is put back to its default. New Critical hits section: crit height and crit pop size. /stinkie dmg also lists every world-text setting the game has, with its value.
+- Dropdowns (Match History, Match Stats and the options) close when you click anywhere else, or click the dropdown again.
+- `/st` opens Stinkie UI too (same as `/stinkie`); `/st m` and `/st mh` open Match History.
+- Match History: battleground and Blitz matches save the final score (Alliance - Horde, read from the score bar when the match ends) and show it on the match's page. Matches recorded before this have no score. `/stinkie score` prints what the score bar holds, for maps it reads wrong.
+- Match History: MMR shows N/A when the game gave none (0 or missing), in the list, on the match's page and in the player table.
+- Match Stats: the Net rating column is gone; the per-game column is now called Rating/game.
+- Match History no longer records your item level, and the match page no longer shows it.
+
 ## 0.37.2
 - Removes the leftover PvPDR.lua (unused since 0.32; it was still shipping in the zip). No changes in game.
 

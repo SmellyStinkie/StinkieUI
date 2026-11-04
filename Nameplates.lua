@@ -531,7 +531,7 @@ local function CreatePlateFrame(nameplate)
 	ns.SetAuraGroupCandidates(f.FlagAura, 2, { includeSpellIDs = NP.CARRY_AURAS })
 	ns.SetAuraUnit(f.FlagAura, nil)
 
-	f:SetScript("OnEvent", OnEvent)
+	f:SetScript("OnEvent", ns.Timed("Nameplates (plate updates)", OnEvent))
 	nameplate.SUIFrame = f
 	return f
 end
@@ -1101,7 +1101,7 @@ function NP:Init()
 	driver:RegisterEvent("ARENA_OPPONENT_UPDATE")
 	driver:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
 	driver:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
-	driver:SetScript("OnEvent", function(_, event, unit)
+	driver:SetScript("OnEvent", ns.Timed("Nameplates (add / remove / target)", function(_, event, unit)
 		if event == "NAME_PLATE_UNIT_ADDED" then
 			OnPlateAdded(unit)
 		elseif event == "NAME_PLATE_UNIT_REMOVED" then
@@ -1123,7 +1123,7 @@ function NP:Init()
 				if plate.SUIFrame and plate.SUIFrame.unit then UpdateRole(plate.SUIFrame); UpdateSpecIcon(plate.SUIFrame) end
 			end
 		end
-	end)
+	end))
 	NP.driver = driver
 	-- 0.12 and older kept a "manage" switch and had guardians on; move to the new defaults once
 	local ut = ns.db.nameplates.unitTypes
