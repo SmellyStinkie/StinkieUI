@@ -287,6 +287,8 @@ D.GROUP_BY = {
 	teammate = function(s) return #s.allies > 0 and s.allies or nil end,
 	opponent = function(s) return #s.enemies > 0 and s.enemies or nil end,
 	faction = function(s) return s.side end,
+	-- each battleground map split by the side you fought on ("Warsong Gulch - Horde")
+	mapFaction = function(s) return s.side and ((s.map or "?") .. " - " .. s.side) or nil end,
 	allyComp = function(s)
 		local specs = {}
 		for i, v in ipairs(s.allySpecs) do specs[i] = v end

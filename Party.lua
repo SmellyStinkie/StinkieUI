@@ -45,9 +45,20 @@ local function PostUpdate(f)
 		ns.SetAuraUnit(container, on and f.unit or nil)
 		container:SetShown(on and true or false)
 	end
-	watch(f.CCIcons, cfg.ccIcon)
-	watch(f.DefIcons, cfg.defensiveIcon)
-	watch(f.DispelIcons, cfg.dispelIcons)
+	-- a party member far away (another zone, out of sight) only syncs some of their auras and
+	-- the filters stop working on them, so odd buffs like Enlisted showed up: no icons then
+	local near = Party.Visible(f)
+	f.SUINear = near
+	watch(f.CCIcons, cfg.ccIcon and near)
+	watch(f.DefIcons, cfg.defensiveIcon and near)
+	watch(f.DispelIcons, cfg.dispelIcons and near)
+end
+
+function Party.Visible(f)
+	if f.preview or not f.unit or f.unit == "player" then return true end
+	local ok, v = pcall(UnitIsVisible, f.unit)
+	if not ok or issecret(v) then return true end
+	return v and true or false
 end
 
 function Party.UpdateTargetHighlight(f)
@@ -55,6 +66,8 @@ function Party.UpdateTargetHighlight(f)
 end
 
 local function UpdateRange(f)
+	-- came into or went out of sight: switch the aura icons on / off
+	if not f.preview and f.unit and f.SUINear ~= nil and Party.Visible(f) ~= f.SUINear then PostUpdate(f) end
 	if f.preview or f.unit == "player" or not ns.db.party.rangeFade then
 		f:SetAlpha(1)
 		return
@@ -93,8 +106,18 @@ local function LayoutHighlight(f)
 	e[4]:ClearAllPoints(); e[4]:SetPoint("TOPRIGHT"); e[4]:SetPoint("BOTTOMRIGHT"); e[4]:SetWidth(px)
 end
 
+-- party1-4 show while that unit exists; your own frame only while you're in a group
+-- (a state driver, since "player" always exists)
+function Party.Watch(f)
+	if f.unit == "player" then RegisterStateDriver(f, "visibility", "[group] show; hide") else RegisterUnitWatch(f) end
+end
+function Party.Unwatch(f)
+	if f.unit == "player" then UnregisterStateDriver(f, "visibility") else UnregisterUnitWatch(f) end
+end
+
 local function CreatePartyFrame(unit, index)
-	local f = UF.CreateFrame(unit, "StinkieUI_Party" .. index)
+	local f = UF.CreateFrame(unit, "StinkieUI_Party" .. index, true)
+	Party.Watch(f)
 	f.forceClassColor = true
 	f.PostUpdate = PostUpdate
 	f.OnEventExtra = OnEventExtra
@@ -609,7 +632,7 @@ function Party:SetTestMode(on, preset)
 	Party.testPreset = on and (preset or "party") or nil
 	for i, f in ipairs(Party.frames) do
 		if on then
-			UnregisterUnitWatch(f)
+			Party.Unwatch(f)
 			f.preview = true
 			f:Show()
 			local ok, err = pcall(Party.FillPreview, f, i)
@@ -620,7 +643,7 @@ function Party:SetTestMode(on, preset)
 			if f.SUIPreview then for _, p in pairs(f.SUIPreview) do p:Hide() end end
 			f.Trinket.cd:Clear()
 			f.Trinket:Hide()
-			RegisterUnitWatch(f)
+			Party.Watch(f)
 			UF.SafeUpdateAll(f)
 		end
 	end

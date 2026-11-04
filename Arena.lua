@@ -72,7 +72,9 @@ local function SplitPower(f, showPower)
 	f.Health:SetHeight(showPower and (c.height - c.powerHeight - px) or c.height)
 end
 
+local UpdateStatus
 local function PostUpdate(f)
+	if UpdateStatus then UpdateStatus(f) end
 	local show = ShouldShowPower(f)
 	SplitPower(f, show)
 	if show then UF.UpdatePower(f, true) end
@@ -275,7 +277,35 @@ end
 ---------------------------------------------------------------------------
 -- Frames
 ---------------------------------------------------------------------------
+-- big DEAD / FEIGN across the frame. Feign Death sets its own unit flag, which the game also
+-- sends for enemies; where it doesn't, a feigning hunter just reads DEAD.
+function ns.ArenaStatus(unit)
+	local ok, feign = pcall(UnitIsFeignDeath, unit)
+	if ok and not issecret(feign) and feign then return "FEIGN" end
+	local ok2, dead = pcall(UnitIsDeadOrGhost, unit)
+	if ok2 and not issecret(dead) and dead then return "DEAD" end
+	return nil
+end
+
+UpdateStatus = function(f)
+	if not f.Status then return end
+	local c = cfg()
+	local st
+	if f.preview then st = f.previewStatus else st = (c.deadText ~= false) and f.unit and ns.ArenaStatus(f.unit) or nil end
+	if st then
+		f.Status:SetText(st == "FEIGN" and "|cffffd23cFEIGN|r" or "|cffff4040DEAD|r")
+		f.Status:Show()
+		f.HealthText:SetAlpha(0)
+		f.Health:SetAlpha(st == "DEAD" and 0.35 or 1)
+	else
+		f.Status:Hide()
+		f.HealthText:SetAlpha(1)
+		f.Health:SetAlpha(1)
+	end
+end
+
 local function OnEventExtra(f, event)
+	if event == "UNIT_HEALTH" or event == "UNIT_FLAGS" or event == "UNIT_CONNECTION" or event == "UNIT_AURA" then UpdateStatus(f) end
 	if event == "ARENA_OPPONENT_UPDATE" or event == "ARENA_PREP_OPPONENT_SPECIALIZATIONS" then
 		UpdateSpec(f)
 		-- a new opponent in this slot (next game / next Solo Shuffle round): refresh the name too
@@ -322,6 +352,9 @@ local function CreateArenaFrame(i, holder)
 	f:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
 
 	CreateHighlight(f)
+	f.Status = f.TextLayer:CreateFontString(nil, "OVERLAY")
+	f.Status:SetPoint("CENTER", f.Health, "CENTER", 0, 0)
+	f.Status:Hide()
 
 	-- spec icon (left)
 	local spec = CreateFrame("Frame", nil, f)
@@ -395,6 +428,7 @@ local function LayoutArenaFrame(f)
 	f.Name:SetPoint("RIGHT", f, "RIGHT", -40, 0)
 	f.HealthText:ClearAllPoints()
 	f.HealthText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -4, -3)
+	ns.SetFont(f.Status, math.max(12, math.floor(c.height * (c.deadSize or 0.6))), "OUTLINE")
 
 	-- target border: thickness in pixels, drawn just outside the frame so it never covers the bars
 	local e = f.Highlight.edges
@@ -488,7 +522,7 @@ end
 local previewData = {
 	{ name = "Stinkie", class = "WARLOCK", icon = [[Interface\Icons\ClassIcon_Warlock]], hp = 0.82, dots = 1, healer = false },
 	{ name = "Pinkie", class = "PRIEST", icon = [[Interface\Icons\ClassIcon_Priest]], hp = 0.55, dots = 0, healer = true },
-	{ name = "Minkie", class = "MAGE", icon = [[Interface\Icons\ClassIcon_Mage]], hp = 0.31, dots = 2, healer = false },
+	{ name = "Minkie", class = "HUNTER", icon = [[Interface\Icons\ClassIcon_Hunter]], hp = 0.31, dots = 2, healer = false, status = "FEIGN" },
 }
 local previewDR = { [[Interface\Icons\Ability_Rogue_KidneyShot]], [[Interface\Icons\Spell_Shadow_Possession]], [[Interface\Icons\Spell_Nature_Polymorph]] }
 
@@ -497,6 +531,7 @@ local function ShowPreview(f, on)
 	f.preview = on or nil
 	f.previewHealer = d.healer
 	f.previewDots = d.dots
+	f.previewStatus = on and d.status or nil
 	f.Trinket.preview:SetShown(on and cfg().trinket)
 	for k = 1, #previewDR do
 		local p = f.DRPreview[k]
@@ -537,6 +572,7 @@ local function ShowPreview(f, on)
 	f.Power:SetMinMaxValues(0, 1)
 	f.Power:SetValue(0.7)
 	f.Power:SetStatusBarColor(0, 0.44, 0.87)
+	UpdateStatus(f)
 	f.Absorb:SetValue(0)
 	f.OverAbsorb:SetAlpha(0)
 	UpdateDots(f)

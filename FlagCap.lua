@@ -373,8 +373,13 @@ local accum, scanAccum, flashT = 0, 0, 0
 local function FlagMap()
 	local n = GetNumBattlefieldFlagPositions and GetNumBattlefieldFlagPositions() or 0
 	if n < 2 then return false end
-	local instanceID = select(8, GetInstanceInfo())
-	if readable(instanceID) and FC.CTF_INSTANCES[instanceID] then return true end
+	-- only Warsong Gulch and Twin Peaks: never Kotmogu orbs, Eye of the Storm or other maps
+	local name, _, _, _, _, _, _, instanceID = GetInstanceInfo()
+	if readable(instanceID) then
+		if FC.CTF_INSTANCES[instanceID] then return true end
+		local n2 = readable(name) and tostring(name):lower() or ""
+		return (n2:find("warsong", 1, true) or n2:find("twin peaks", 1, true)) and true or false
+	end
 	local m = C_Map.GetBestMapForUnit("player")
 	if not m then return false end
 	local found = 0

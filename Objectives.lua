@@ -1,7 +1,10 @@
 -- StinkieUI: Objectives (Blizzard's quest / objective tracker). Font, text sizes, scale, a flat
 -- look (no gradients), a background with opacity, and hiding it in arenas, battlegrounds, raids or Mythic+.
--- Position and height stay in Edit Mode. The tracker is protected in combat, so size and
--- visibility changes wait for combat to end.
+-- Position and height stay in Edit Mode. Scale changes wait for combat to end.
+-- Taint rules (0.33): never call the tracker's own update code (Update / UpdateAll) and never
+-- Hide() it from here. Doing either ran Blizzard's tracker as Stinkie UI, which broke its layout
+-- (gaps after finishing a quest) and threw "Auras cannot be accessed when secret while tainted"
+-- through the scenario / Maw buff check and Edit Mode. Hiding is transparency only.
 local _, ns = ...
 
 local OB = {}
@@ -147,13 +150,27 @@ end
 ---------------------------------------------------------------------------
 -- Scale and visibility (out of combat only)
 ---------------------------------------------------------------------------
-local applying = false
+-- hidden = fully transparent (still there for the mouse); Blizzard keeps running it untouched,
+-- so its layout stays right
+function OB.ApplyAlpha()
+	local t = Tracker()
+	if not t then return end
+	local hide = OB.WantHidden()
+	if hide then
+		t:SetAlpha(0)
+		OB.hidden = true
+	elseif OB.hidden then
+		t:SetAlpha(1)
+		OB.hidden = false
+	end
+end
+
 function OB.ApplyFrame()
 	local t = Tracker()
 	if not t then return end
+	OB.ApplyAlpha()
 	ns:RunOOC(function()
 		local c = cfg()
-		applying = true
 		if c.enabled then
 			t:SetScale(c.scale)
 			OB.scaled = true
@@ -161,14 +178,6 @@ function OB.ApplyFrame()
 			t:SetScale(1)
 			OB.scaled = false
 		end
-		if OB.WantHidden() then
-			t:Hide()
-			OB.hidden = true
-		elseif OB.hidden then
-			OB.hidden = false
-			if t.Update then pcall(t.Update, t) end -- Blizzard shows it again when it has content
-		end
-		applying = false
 	end)
 end
 
@@ -189,7 +198,7 @@ function OB:Init()
 	end
 	-- the tracker shows itself whenever it has content; hide it again where it should be hidden
 	t:HookScript("OnShow", function()
-		if not applying and OB.WantHidden() then ns:RunOOC(function() if OB.WantHidden() then t:Hide() end end) end
+		OB.ApplyAlpha()
 		OB.ApplyBackground()
 	end)
 	if t.NineSlice then
@@ -217,9 +226,7 @@ function OB:Refresh()
 	OB.ApplyBackground()
 	pcall(OB.ApplyFlat)
 	OB.ApplyFrame()
-	if _G.ObjectiveTrackerManager and _G.ObjectiveTrackerManager.UpdateAll then
-		ns:RunOOC(function() pcall(_G.ObjectiveTrackerManager.UpdateAll, _G.ObjectiveTrackerManager) end)
-	end
+	-- new text sizes show on the tracker's next update (any quest change, zone or /reload)
 end
 
 ns:RegisterModule("Objectives", OB)

@@ -3,7 +3,7 @@
 ## Notes: Browsable match history and match stats for Stinkie UI. Loads only when you open it (/mh).
 ## Author: Stinkie (twitch.tv/smellystinkie)
 ## X-License: MIT
-## Version: 0.32.0
+## Version: 0.33.0
 ## Dependencies: StinkieUI
 ## LoadOnDemand: 1
 ## IconTexture: Interface\AddOns\StinkieUI\Media\logo_icon

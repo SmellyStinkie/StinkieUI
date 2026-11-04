@@ -232,6 +232,18 @@ function AB:Init()
 	ns:On("PLAYER_ENTERING_WORLD", function() C_Timer.After(0, function() ns:RunOOC(SkinAll) end) end)
 	ns:On("UPDATE_BINDINGS", function() C_Timer.After(0, function() ns:RunOOC(SkinAll) end) end)
 	AB.ticker = C_Timer.NewTicker(0.1, UpdateFade)
+	AB.KeepVehicleExit()
+end
+
+-- The vehicle / taxi exit button lives on Action Bar 1, so fading that bar used to hide it.
+-- It ignores the bar's fade and shows whenever Blizzard shows it.
+function AB.KeepVehicleExit()
+	local b = _G.MainMenuBarVehicleLeaveButton or (_G.MainActionBar and _G.MainActionBar.VehicleLeaveButton)
+	if not (b and b.SetIgnoreParentAlpha) then return end
+	ns:RunOOC(function()
+		b:SetIgnoreParentAlpha(true)
+		b:SetAlpha(1)
+	end)
 end
 
 function AB:Refresh()

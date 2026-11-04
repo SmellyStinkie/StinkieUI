@@ -280,7 +280,7 @@ local function unit(t)
 	return t
 end
 
-ns.DB_VERSION = 9
+ns.DB_VERSION = 10
 ns.defaults = {
 	version = ns.DB_VERSION,
 	scale = 1,
@@ -425,6 +425,7 @@ ns.defaults = {
 			enabled = true,
 			color = { 1.00, 0.40, 0.80 },
 			clickPad = 14,
+			widthScale = 1.5, heightScale = 1.5, border = true, -- size vs a normal enemy plate
 			units = {
 				"Grounding Totem", "Tremor Totem", "Spirit Link Totem", "Capacitor Totem",
 				"Healing Tide Totem", "Earthgrab Totem", "Static Field Totem", "Counterstrike Totem",
@@ -436,6 +437,7 @@ ns.defaults = {
 		clickPadX = 10, clickPadY = 6,
 		friendlyWidth = 60, friendlyHeight = 3,
 		friendlyClickThrough = true,
+		friendlyTargetFull = true, -- your friendly target gets the full-size plate and target border
 		-- how plates push each other apart. enemies / friendly are seeded from the game's setting.
 		-- boxHeight 0 = auto (bar + castbar + 24). spacing / speed / topInset 0 = game default.
 		stacking = { boxHeight = 0, spacing = 0, speed = 0, topInset = 0 },
@@ -486,6 +488,7 @@ ns.defaults = {
 		trinket = true, trinketSize = 34,
 		dr = true, drSize = 26, drSide = "RIGHT", drOnlyMine = false,
 		drCategories = { Stun = true, Incapacitate = true, Disorient = true, Silence = true, Root = true, Disarm = true, Taunt = false, AoEKnockback = false },
+		deadText = true, deadSize = 0.6, -- big DEAD / FEIGN across the frame (size = share of frame height)
 		targetBorder = 3, targetColor = { 1, 1, 1, 1 }, -- border around the frame you have targeted (pixels)
 		targetDots = true, dotSize = 7,
 		dotColor = { 0.20, 1.00, 0.20 }, dotClassColor = false, -- bright green squares by default
@@ -622,6 +625,8 @@ ns.defaults = {
 		moveScore = true, scorePoint = { "TOP", 0, -15 }, scoreScale = 1,
 		moveCapture = true, capturePoint = { "TOP", 0, -70 }, captureScale = 1,
 		moveGhost = true, ghostPoint = { "TOP", 0, -130 }, ghostScale = 1, -- "Return to Graveyard" button
+		-- arenas and Solo Shuffle: Blizzard's top-center info (round 3 of 6, match timer)
+		moveArena = true, arenaPoint = { "TOP", 0, -15 }, arenaScale = 1.15, arenaText = true, arenaTextSize = 16,
 		texture = "flat", -- blizzard | flat | any LibSharedMedia statusbar
 		hideRaidFrames = true, -- Blizzard raid frames off in Blitz / battlegrounds up to 15 players
 		leftColor = { 0.25, 0.55, 1.00 },  -- Alliance side of the score bar
@@ -757,7 +762,7 @@ ns.defaults = {
 		enabled = true,
 		estimate = true, mmr = true, mmrChange = true, rating = false,
 		specIcon = true, header = true, hideInPvP = true, -- queued spec icon per row, "Queued as" line
-		width = 360, height = 22, spacing = 2, scale = 1,
+		width = 440, height = 22, spacing = 2, scale = 1,
 		background = true, bgColor = { 0.04, 0.04, 0.05 }, bgAlpha = 0.65, border = true,
 		textStyle = text(14),
 		labelStyle = { size = 14, outline = "OUTLINE", color = { 0.75, 0.80, 0.16 }, classColor = false },
@@ -859,6 +864,11 @@ local function Migrate(db)
 		if aa then
 			for k in pairs(aa) do if k == "dr" or (k:match("^dr%u")) then aa[k] = nil end end
 		end
+	end
+	if v < 10 then
+		-- Queue display: four equal columns need a little more width
+		local qi = db.queueInfo
+		if qi and (qi.width == 300 or qi.width == 360) then qi.width = 440 end
 	end
 	db.version = ns.DB_VERSION
 end

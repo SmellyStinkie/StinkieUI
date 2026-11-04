@@ -867,6 +867,7 @@ local function BuildNameplatePage(page)
 	page:Slider("Width", 10, 200, 1, Getter(cfg, "friendlyWidth"), Setter(cfg, "friendlyWidth"))
 	page:Slider("Health height", 1, 20, 1, Getter(cfg, "friendlyHeight"), Setter(cfg, "friendlyHeight"))
 	page:Check("Click-through", Getter(cfg, "friendlyClickThrough"), Setter(cfg, "friendlyClickThrough"))
+	page:Check("Your target gets the full plate and target border", Getter(cfg, "friendlyTargetFull"), Setter(cfg, "friendlyTargetFull"))
 	page:Check("Name on the health bar", Getter(cfg, "friendlyNameInBar"), Setter(cfg, "friendlyNameInBar"))
 	page:Header("Names (all nameplates)")
 	page:Slider("Max name length (0 = full)", 0, 40, 1, Getter(cfg, "nameMaxChars"), Setter(cfg, "nameMaxChars"))
@@ -941,11 +942,14 @@ local function BuildPlateAurasPage(page)
 	page:Header("Important units")
 	page:Check("Highlight important units", Getter(imp, "enabled"), Setter(imp, "enabled"))
 	page:Color("Color", Getter(imp, "color"), Setter(imp, "color"))
+	page:Slider("Width (x normal plate)", 0.5, 3, 0.05, Getter(imp, "widthScale"), Setter(imp, "widthScale"))
+	page:Slider("Height (x normal plate)", 0.5, 4, 0.05, Getter(imp, "heightScale"), Setter(imp, "heightScale"))
+	page:Check("Border in the same color", Getter(imp, "border"), Setter(imp, "border"))
 	page:Slider("Extra click area", 0, 40, 1, Getter(imp, "clickPad"), Setter(imp, "clickPad"))
 	page:TextList("Units", 140, function() return table.concat(imp().units, "\n") end,
 		function(t) imp().units = SplitLines(t) end,
-		"English unit names or NPC IDs, one per line. Important plates are drawn on top, full width.")
-	page:Note("Some PvP instances hide unit names from addons, so pink coloring may not apply there.", 36)
+		"English unit names or NPC IDs, one per line. Important plates are drawn on top, at the size above.")
+	page:Note("Rated PvP can hide unit names and NPC IDs from addons; a plate is checked again when its name arrives, but where the game keeps both hidden it can't be matched.", 50)
 end
 
 local function BuildActionBarPage(page)
@@ -1156,6 +1160,8 @@ local function BuildArenaPage(page)
 	page:Slider("Healer cross size", 6, 100, 1, Getter(cfg, "healerSize"), Setter(cfg, "healerSize"))
 	page:Dropdown("Healer cross corner", { { "TOPLEFT", "Top left" }, { "TOPRIGHT", "Top right" }, { "BOTTOMLEFT", "Bottom left" }, { "BOTTOMRIGHT", "Bottom right" } },
 		Getter(cfg, "healerAnchor"), Setter(cfg, "healerAnchor"))
+	page:Check("Big DEAD / FEIGN text", Getter(cfg, "deadText"), Setter(cfg, "deadText"))
+	page:Slider("DEAD text size (share of frame height)", 0.3, 1, 0.05, Getter(cfg, "deadSize"), Setter(cfg, "deadSize"))
 	page:Slider("My target: border thickness", 1, 8, 1, Getter(cfg, "targetBorder"), Setter(cfg, "targetBorder"))
 	page:Color("My target: border color", Getter(cfg, "targetColor"), Setter(cfg, "targetColor"))
 	page:Check("Teammates targeting (one square each)", Getter(cfg, "targetDots"), Setter(cfg, "targetDots"))
@@ -1270,6 +1276,13 @@ local function BuildBGScorePage(page)
 	page:Check("Move it", Getter(cfg, "moveGhost"), Setter(cfg, "moveGhost"))
 	page:Slider("Size", 0.5, 2, 0.05, Getter(cfg, "ghostScale"), Setter(cfg, "ghostScale"))
 	page:Position("Position", function() return "bgGhost" end)
+	page:Header("Arena / Solo Shuffle info")
+	page:Note("Blizzard's top-center info in arenas: round (3 of 6), match timer and the like.", 36)
+	page:Check("Move it", Getter(cfg, "moveArena"), Setter(cfg, "moveArena"))
+	page:Slider("Size", 0.5, 2.5, 0.05, Getter(cfg, "arenaScale"), Setter(cfg, "arenaScale"))
+	page:Check("Stinkie UI font", Getter(cfg, "arenaText"), Setter(cfg, "arenaText"))
+	page:Slider("Text size", 8, 32, 1, Getter(cfg, "arenaTextSize"), Setter(cfg, "arenaTextSize"))
+	page:Position("Position", function() return "arenaInfo" end)
 	page:Note("Unlock frames (/stinkie unlock) to drag the boxes. They're easiest to place inside a battleground, where the real widgets show.", 48)
 
 	page:Column(2)
@@ -1384,7 +1397,7 @@ local function BuildQueueInfoPage(page)
 	page:Check("Spec icon (the spec you're queued as)", Getter(cfg, "specIcon"), Setter(cfg, "specIcon"))
 	page:Check("\"Queued as\" line on top", Getter(cfg, "header"), Setter(cfg, "header"))
 	page:Check("Hide while in an arena or battleground", Getter(cfg, "hideInPvP"), Setter(cfg, "hideInPvP"))
-	page:Note("The game only shows MMR at the end of a match, so this is your MMR after your last match in that bracket on this character (recorded or imported), and how much that match changed it. Solo Shuffle and Blitz use the spec you queued as. Until there is a match it says 'MMR unknown, play a game'.", 76)
+	page:Note("The game only shows MMR at the end of a match, so this is your MMR after your last match in that bracket on this character (recorded or imported), and how much that match changed it. Solo Shuffle and Blitz use the spec you queued as. It says 'MMR unknown' until you play a match there (per spec for Shuffle and Blitz), and N/A where the game gives no MMR (unrated queues, or a bracket whose matches came without one).", 76)
 	page:Header("Size")
 	page:Slider("Size", 0.5, 2.5, 0.05, Getter(cfg, "scale"), Setter(cfg, "scale"))
 	page:Slider("Width", 150, 600, 1, Getter(cfg, "width"), Setter(cfg, "width"))
@@ -1484,7 +1497,7 @@ local function BuildObjectivesPage(page)
 	page:Check("Raids", Getter(cfg, "hideRaid"), Setter(cfg, "hideRaid"))
 	page:Check("Mythic+", Getter(cfg, "hideMPlus"), Setter(cfg, "hideMPlus"))
 	page:Check("Other dungeons", Getter(cfg, "hideDungeon"), Setter(cfg, "hideDungeon"))
-	page:Note("Changes wait until you're out of combat (Blizzard protects the tracker in combat).", 36)
+	page:Note("Hidden means invisible (it stays where it is). New text sizes show on the tracker's next update or a /reload.", 36)
 end
 
 local function BuildBuffsPage(page)
@@ -2131,7 +2144,7 @@ local pages = {
 }
 
 local HEADER_H, WIN_H = 92, 700
-local NAV_STEP, NAV_CHILD_STEP = 22, 20 -- 20 entries + the largest open group (7) fit the 588px column
+local NAV_STEP, NAV_CHILD_STEP = 21, 19 -- search box + 20 entries + the largest open group (7) fit the 588px column
 
 local function CreateWindow()
 	local w = CreateFrame("Frame", "StinkieUIOptions", UIParent)
@@ -2235,8 +2248,10 @@ local function CreateWindow()
 		Layout()
 	end
 	function Layout()
-		local y = -4
+		local y = -30 -- under the search box
+		local searching = O.searchActive
 		for _, t in ipairs(top) do
+			t.button:SetShown(not searching)
 			t.button:ClearAllPoints()
 			t.button:SetPoint("TOPLEFT", 4, y)
 			y = y - NAV_STEP
@@ -2244,7 +2259,7 @@ local function CreateWindow()
 				local open = (openGroup == t)
 				local selected = false
 				for _, c in ipairs(t.children) do
-					c.button:SetShown(open)
+					c.button:SetShown(open and not searching)
 					if open then
 						c.button:ClearAllPoints()
 						c.button:SetPoint("TOPLEFT", 16, y + 1)
@@ -2277,11 +2292,11 @@ local function CreateWindow()
 			t.button.arrow = Label(t.button, "+", 13, { 0.6, 0.6, 0.65 })
 			t.button.arrow:SetPoint("RIGHT", -8, 0)
 			for _, cdef in ipairs(def.children) do
-				leaves[#leaves + 1] = { build = cdef[2], group = t }
+				leaves[#leaves + 1] = { build = cdef[2], group = t, name = def[1] .. " > " .. cdef[1] }
 				local leaf = #leaves
 				local c = { leaf = leaf }
 				c.button = FlatButton(nav, cdef[1], 130, function() t.lastLeaf = leaf; SelectPage(leaf) end)
-				c.button:SetHeight(19)
+				c.button:SetHeight(18)
 				c.button.text:ClearAllPoints()
 				c.button.text:SetPoint("LEFT", 10, 0)
 				ns.SetFont(c.button.text, 12)
@@ -2289,15 +2304,120 @@ local function CreateWindow()
 				table.insert(t.children, c)
 			end
 		else
-			leaves[#leaves + 1] = { build = def[2] }
+			leaves[#leaves + 1] = { build = def[2], name = def[1] }
 			t.leaf = #leaves
 			t.button = FlatButton(nav, def[1], 142, function() SelectPage(t.leaf) end)
 		end
-		t.button:SetHeight(21)
+		t.button:SetHeight(20)
 		t.button.text:ClearAllPoints()
 		t.button.text:SetPoint("LEFT", 10, 0)
 		table.insert(top, t)
 	end
+	-- search: every option label on every page; results replace the menu while typing
+	local search = EditBox(nav, 142)
+	search:SetPoint("TOPLEFT", 4, -4)
+	search:SetJustifyH("LEFT")
+	local hint = Label(search, "Search options", 12, { 0.5, 0.5, 0.5 })
+	hint:SetPoint("LEFT", 6, 0)
+	local results = {}
+	local function Texts(frame, out, depth)
+		for _, r in ipairs({ frame:GetRegions() }) do
+			if r:IsObjectType("FontString") and r:IsShown() then
+				local t = r:GetText()
+				if type(t) == "string" and t ~= "" then out[#out + 1] = { text = t, region = r } end
+			end
+		end
+		if depth < 3 then for _, ch in ipairs({ frame:GetChildren() }) do Texts(ch, out, depth + 1) end end
+	end
+	local function Index()
+		if O.searchIndex then return O.searchIndex end
+		local idx = {}
+		for i, leaf in ipairs(leaves) do
+			if not built[i] then
+				local page = NewPage(scroll)
+				leaf.build(page)
+				built[i] = page
+			end
+			local list = {}
+			Texts(built[i], list, 0)
+			for _, e in ipairs(list) do
+				-- strip color codes so "|cff..x|r" style labels match plain text
+				local plain = e.text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T.-|t", "")
+				idx[#idx + 1] = { leaf = i, text = plain, lower = plain:lower(), region = e.region }
+			end
+			idx[#idx + 1] = { leaf = i, text = leaf.name, lower = leaf.name:lower(), page = true }
+		end
+		O.searchIndex = idx
+		return idx
+	end
+	local function GoTo(hit)
+		SelectPage(hit.leaf)
+		local page = built[hit.leaf]
+		if hit.region and page:GetTop() and hit.region:GetTop() then
+			local y = page:GetTop() - hit.region:GetTop() - 40
+			local max = math.max(0, page:GetHeight() - scroll:GetHeight())
+			scroll:SetVerticalScroll(math.max(0, math.min(max, y)))
+		end
+	end
+	local function ShowResults(q)
+		local hits, seen = {}, {}
+		if q ~= "" then
+			for _, e in ipairs(Index()) do
+				if #hits >= 26 then break end
+				local key = e.leaf .. ":" .. e.lower
+				if e.lower:find(q, 1, true) and not seen[key] then
+					seen[key] = true
+					hits[#hits + 1] = e
+				end
+			end
+		end
+		for i = 1, math.max(#hits, #results) do
+			local b = results[i]
+			if not b and hits[i] then
+				b = FlatButton(nav, "", 142, function(self) if self.hit then GoTo(self.hit) end end)
+				b:SetHeight(20)
+				b.text:ClearAllPoints()
+				b.text:SetPoint("LEFT", 6, 0)
+				b.text:SetPoint("RIGHT", -4, 0)
+				b.text:SetJustifyH("LEFT")
+				b.text:SetWordWrap(false)
+				ns.SetFont(b.text, 11)
+				results[i] = b
+			end
+			if b then
+				local h = hits[i]
+				b.hit = h
+				if h then
+					local where = leaves[h.leaf].name:match("([^>]+)$"):gsub("^%s+", "")
+					b.text:SetText(h.page and ("|cff" .. ns.ACCENT_HEX .. h.text .. "|r") or (h.text .. "  |cff8a8a8a" .. where .. "|r"))
+					b:ClearAllPoints()
+					b:SetPoint("TOPLEFT", 4, -30 - (i - 1) * 21)
+					b:Show()
+				else
+					b:Hide()
+				end
+			end
+		end
+		if O.searchEmpty == nil then
+			O.searchEmpty = Label(nav, "No match", 12, { 0.6, 0.6, 0.6 })
+			O.searchEmpty:SetPoint("TOPLEFT", 10, -34)
+		end
+		O.searchEmpty:SetShown(q ~= "" and #hits == 0)
+	end
+	search:SetScript("OnMouseDown", function(self) self:SetFocus() end)
+	search:SetScript("OnEnterPressed", function(self)
+		self:ClearFocus()
+		if results[1] and results[1]:IsShown() and results[1].hit then GoTo(results[1].hit) end
+	end)
+	search:SetScript("OnTextChanged", function(self)
+		local q = strtrim(self:GetText() or ""):lower()
+		hint:SetShown(q == "")
+		O.searchActive = q ~= ""
+		ShowResults(q)
+		Layout()
+	end)
+	O.search = search
+
 	scroll:SetSize(820 - 150 - 44, WIN_H - HEADER_H - 20)
 	SelectPage(1)
 	w:Hide()

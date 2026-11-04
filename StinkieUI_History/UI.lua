@@ -101,7 +101,8 @@ local function ResultText(s)
 	return "-"
 end
 
-local function GroupLabel(by, key)
+local GroupLabel
+function GroupLabel(by, key)
 	if by == "comp" or by == "allyComp" then return CompIcons(key, 18) end
 	if by == "enemySpec" or by == "mySpec" then return SpecIcon(key, 16) .. " " .. SpecName(key) end
 	if by == "hero" then return HeroName(key) end
@@ -113,6 +114,10 @@ local function GroupLabel(by, key)
 	if by == "faction" then
 		if key == "Horde" then return "|cffe04040" .. (FACTION_HORDE or "Horde") .. "|r" end
 		if key == "Alliance" then return "|cff4080ff" .. (FACTION_ALLIANCE or "Alliance") .. "|r" end
+	end
+	if by == "mapFaction" then
+		local map, side = tostring(key):match("^(.*) %- (%a+)$")
+		if map then return map .. "  " .. GroupLabel("faction", side) end
 	end
 	return tostring(key)
 end
@@ -339,11 +344,7 @@ local function BuildDetail(parent)
 	p.loadout = FlatButton(p, "Copy talent loadout", 160, function()
 		if p.match and p.match.loadout then W.ShowTextPopup("Talent loadout", p.match.loadout) end
 	end)
-	p.loadout:SetPoint("TOPRIGHT", -120, 0)
-	p.delete = FlatButton(p, "Delete match", 110, function()
-		if p.summary then StaticPopup_Show("STINKIEUI_MH_DELETE_ONE", nil, nil, p.summary.i) end
-	end)
-	p.delete:SetPoint("TOPRIGHT", 0, 0)
+	p.loadout:SetPoint("TOPRIGHT", 0, 0)
 	p.cells = {}
 	p.statHeaders = {}
 	p.rows = {}
@@ -485,36 +486,12 @@ function H.ShowDetail(summary)
 	end
 end
 
-StaticPopupDialogs["STINKIEUI_MH_DELETE_ONE"] = {
-	text = "Delete this match from your history?",
-	button1 = YES, button2 = NO,
-	OnAccept = function(_, index)
-		D.Delete(index)
-		D.BuildSummaries()
-		win.detail:Hide()
-		win.matches:Show()
-		Refresh()
-	end,
-	timeout = 0, whileDead = true, hideOnEscape = true,
-}
-
-StaticPopupDialogs["STINKIEUI_MH_DELETE_ALL"] = {
-	text = "Delete your WHOLE match history? This can't be undone.",
-	button1 = YES, button2 = NO,
-	OnAccept = function()
-		D.DeleteAll()
-		D.BuildSummaries()
-		Refresh()
-	end,
-	timeout = 0, whileDead = true, hideOnEscape = true,
-}
-
 ---------------------------------------------------------------------------
 -- Match Stats tab
 ---------------------------------------------------------------------------
 local GROUP_ITEMS = {
 	{ "map", "Map" }, { "comp", "Enemy comp" }, { "enemySpec", "Enemy spec" }, { "allyComp", "My team comp" },
-	{ "teammate", "Teammate" }, { "opponent", "Opponent" }, { "faction", "Faction (battlegrounds)" }, { "mySpec", "My spec" }, { "hero", "My hero talents" }, { "mmrBand", "MMR range (enemy)" },
+	{ "teammate", "Teammate" }, { "opponent", "Opponent" }, { "faction", "Faction (battlegrounds)" }, { "mapFaction", "Map + faction (battlegrounds)" }, { "mySpec", "My spec" }, { "hero", "My hero talents" }, { "mmrBand", "MMR range (enemy)" },
 	{ "length", "Match length" }, { "hour", "Time of day" }, { "weekday", "Day of week" },
 	{ "bracket", "Bracket" }, { "char", "Character" }, { "season", "Season" },
 }
@@ -751,6 +728,17 @@ function H.RenderStats()
 
 	local rows = {}
 	for _, r in ipairs(D.Group(filtered, view.groupBy)) do if r.games >= view.minGames then rows[#rows + 1] = r end end
+	-- the search box also narrows the groups: searching a player while grouped by teammate or
+	-- opponent shows that player's row, not everyone who shared a match with them
+	local q = filters.search and filters.search ~= "" and filters.search:lower()
+	if q then
+		local hits = {}
+		for _, r in ipairs(rows) do
+			local label = tostring(GroupLabel(view.groupBy, r.key)):gsub("|T.-|t", ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):lower()
+			if label:find(q, 1, true) or tostring(r.key):lower():find(q, 1, true) then hits[#hits + 1] = r end
+		end
+		if #hits > 0 then rows = hits end
+	end
 	H.SortRows(rows)
 	H.PaintHeaders()
 	p.rowCount = #rows
@@ -882,10 +870,9 @@ local function CreateWindow()
 	w.tabStats:SetPoint("LEFT", w.tabMatches, "RIGHT", 6, 0)
 	local close = FlatButton(band, "x", 22, function() w:Hide() end)
 	close:SetPoint("TOPRIGHT", -10, -10)
-	local wipeBtn = FlatButton(band, "Delete all", 90, function() StaticPopup_Show("STINKIEUI_MH_DELETE_ALL") end)
-	wipeBtn:SetPoint("RIGHT", close, "LEFT", -8, 0)
+	-- no delete buttons: history is only ever added to (an accidental click can't lose it)
 	local importBtn = FlatButton(band, "Import Rated Tracker", 160, function() H.StartImport() end)
-	importBtn:SetPoint("RIGHT", wipeBtn, "LEFT", -8, 0)
+	importBtn:SetPoint("RIGHT", close, "LEFT", -8, 0)
 	w.count = Text(band, 12, "RIGHT", { 0.78, 0.66, 0.70 })
 	w.count:SetPoint("RIGHT", importBtn, "LEFT", -12, 0)
 
@@ -912,7 +899,9 @@ local function CreateWindow()
 	search:SetJustifyH("LEFT")
 	local hint = Text(search, 12, "LEFT", { 0.5, 0.5, 0.5 })
 	hint:SetPoint("LEFT", 6, 0)
-	hint:SetText("Search map or player")
+	hint:SetText("Search map, player, group")
+	search:SetScript("OnMouseDown", function(self) self:SetFocus() end)
+	search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 	search:SetScript("OnTextChanged", function(self)
 		filters.search = self:GetText()
 		hint:SetShown(filters.search == "")

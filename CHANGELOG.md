@@ -1,5 +1,23 @@
 # Stinkie UI changelog
 
+## 0.33.0
+- Fixed: "Auras cannot be accessed when secret while tainted by StinkieUI" (Edit Mode, scenario / Maw buffs) and gaps in the quest tracker after finishing a quest. Cause: the Objectives module ran Blizzard's tracker update itself and hid the tracker with Hide(), which made Blizzard's own tracker code run as Stinkie UI. It no longer calls the tracker's update code; hiding is now transparency only (it also works in combat now). New text sizes show on the tracker's next update.
+- The "MovementSpeed_OnUpdate ... secret number" error in the character window came from 0.31's stat-list edit and was already fixed in 0.32.0.
+- Nameplates: the healer cross never shows on classes that have no healing spec (hunters, mages, rogues, warlocks, warriors, death knights, demon hunters), whatever a role source says.
+- Nameplates: important units (Grounding Totem, Psyfiend, ...) are bigger (width and height sliders, up to 3x / 4x a normal plate) with a border in the important color, and a plate is checked again when its name arrives (fresh totems often get their name a moment later, so they were missed).
+- Nameplates: a friendly player you target gets the full-size plate and the target border (option).
+- Nameplates: friendly flag carriers in battlegrounds and Blitz show the flag (their carry aura) where enemy carriers show the carrier icon.
+- Battleground frames: teammates show their flag / orb carry aura. Temple of Kotmogu: one orb with the stack count on it, instead of an orb next to an orb debuff.
+- Flag Cap Indicator: only in Warsong Gulch and Twin Peaks (no more NOT ON CAP in Temple of Kotmogu).
+- Queue Time & MMR: four equal columns (bracket, time, estimate, MMR). N/A for unrated queues and for a bracket whose saved match came without an MMR; "MMR unknown" until you play a match there. Default width 440.
+- Match History: rated matches wait up to ~8 seconds for the game to fill in rating and MMR changes before saving, so wins and losses no longer save as +0. An MMR of 0 from the game is saved as "no MMR".
+- Match History: the search box also narrows Match Stats groups (search a player while grouped by teammate or opponent to get that player's row). New grouping: Map + faction (battlegrounds). Delete match and Delete all are removed.
+- Options: a search box at the top of the menu finds any page or option and jumps to it.
+- Arena frames: big DEAD across a dead enemy's frame, and FEIGN for Feign Death when the game reports it (size option).
+- Arena / Solo Shuffle info (round 3 of 6, timer): its own position and size, and the Stinkie UI font and text size (BG Score page).
+- Party frames: your own frame only shows while you're in a group. Party members out of sight (another zone, far away) no longer show odd buffs like Enlisted; their icons come back when they're near.
+- Action bars: the vehicle / taxi exit button stays visible when Action Bar 1 is faded.
+
 ## 0.32.0
 - Fixed: in Solo Shuffle and Blitz the character window broke (no stats, titles or equipment sets, gear couldn't be changed). Almost certainly caused by Stinkie UI editing Blizzard's stat list to show stats at 0: that tainted it, and in rated PvP the game's hidden stat values then made Blizzard's own code fail. Stinkie UI no longer touches that list; stats at 0 and movement speed are now its own rows under Blizzard's list, and are skipped in rated PvP where the numbers are hidden.
 - Match History: queue time for every new match, counting only the time you spent waiting outside other matches (a Blitz queue that runs on while you play a Shuffle doesn't count that Shuffle). New Queue column in the match list, Avg queue in Match Stats, and the average in the summary. Imported Rated Tracker matches keep their queue times.

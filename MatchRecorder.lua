@@ -245,7 +245,10 @@ function R.Read(statNames)
 				name = full, class = classID, spec = SpecID(classID, s.talentSpec), race = s.raceName,
 				team = s.faction, role = readable(s.roleAssigned) and s.roleAssigned or nil,
 				dmg = s.damageDone, heal = s.healingDone, kb = s.killingBlows, deaths = s.deaths, hk = s.honorableKills,
-				rating = s.rating, rchg = s.ratingChange, mmr = s.prematchMMR, mmrchg = s.mmrChange,
+				rating = s.rating, rchg = s.ratingChange,
+				-- 0 MMR means the game didn't give one (not trackable), not an MMR of 0
+				mmr = (readable(s.prematchMMR) and s.prematchMMR ~= 0) and s.prematchMMR or nil,
+				mmrchg = readable(s.mmrChange) and s.mmrChange or nil,
 				stats = StatsString(s.stats, statNames),
 			}
 			players[#players + 1] = p
@@ -389,6 +392,15 @@ function R.Save(m)
 	end
 end
 
+R.RATED = { ["2v2"] = true, ["3v3"] = true, shuffle = true, blitz = true, rbg = true }
+
+-- the scoreboard has this match's rating or MMR change (a real 0 for both is rare)
+function R.HasChanges(m)
+	local me = m.players and m.players[m.me]
+	if not me then return true end
+	return (me.rchg ~= nil and me.rchg ~= 0) or (me.mmrchg ~= nil and me.mmrchg ~= 0)
+end
+
 local state = { done = false, tries = 0 }
 
 local function TryRecord()
@@ -396,6 +408,13 @@ local function TryRecord()
 	state.tries = state.tries + 1
 	local box = Inbox()
 	local ok, m, why = pcall(R.Read, box.statNames)
+	-- rated: the game fills in rating and MMR changes a moment after the scoreboard appears.
+	-- Saved too early, a win or loss looked like +0. Wait for them (up to ~8 s), then save anyway.
+	if ok and m and R.RATED[m.bracket] and state.tries < 8 and not R.HasChanges(m) then
+		RequestBattlefieldScoreData()
+		C_Timer.After(1, TryRecord)
+		return
+	end
 	if ok and m then
 		state.done, state.pending = true, false
 		local key = R.BRACKET_SETTING[m.bracket]

@@ -13,6 +13,12 @@ local function InBattleground()
 	return t == "pvp"
 end
 
+local function InArena()
+	local _, t = IsInInstance()
+	return t == "arena"
+end
+W.InArena = InArena
+
 ---------------------------------------------------------------------------
 -- Pinning a Blizzard frame to one of our movers
 ---------------------------------------------------------------------------
@@ -26,7 +32,7 @@ local function Pin(p)
 	end
 	p.busy = true
 	p.frame:ClearAllPoints()
-	p.frame:SetPoint("TOP", p.anchor, "TOP", 0, 0)
+	p.frame:SetPoint("TOP", p.use or p.anchor, "TOP", 0, 0)
 	p.busy = false
 end
 
@@ -85,16 +91,33 @@ local function SkinBar(bar, color)
 	bar.SUIBg:Show()
 end
 
+-- every text in a widget (and its child frames, one level down) in the Stinkie UI font
+local function RestyleText(frame, size, depth)
+	if not frame or not frame.GetRegions then return end
+	for _, r in ipairs({ frame:GetRegions() }) do
+		if r:IsObjectType("FontString") then ns.SetFont(r, size, "OUTLINE") end
+	end
+	if (depth or 0) < 2 and frame.GetChildren then
+		for _, child in ipairs({ frame:GetChildren() }) do RestyleText(child, size, (depth or 0) + 1) end
+	end
+end
+
 function W:SkinScore()
-	if not (cfg().enabled and InBattleground()) then return end
+	local c = cfg()
+	if not c.enabled then return end
+	local inBG, inArena = InBattleground(), InArena()
+	if not (inBG or inArena) then return end
 	local container = _G.UIWidgetTopCenterContainerFrame
 	if not (container and type(container.widgetFrames) == "table") then return end
-	local c = cfg()
 	for _, widget in pairs(container.widgetFrames) do
 		if widget.LeftBar and widget.RightBar then
 			SkinBar(widget.LeftBar, c.leftColor)
 			SkinBar(widget.RightBar, c.rightColor)
+		elseif widget.Bar and inArena then
+			SkinBar(widget.Bar, ns.ACCENT)
 		end
+		-- arena and Solo Shuffle: match timer, "Round 3 of 6" and the rest in our font and size
+		if inArena and c.arenaText then pcall(RestyleText, widget, c.arenaTextSize or 16, 0) end
 	end
 end
 
@@ -184,7 +207,9 @@ end
 -- Module
 ---------------------------------------------------------------------------
 local PIN_KEYS = {
-	bgScore = { move = "moveScore", scale = "scoreScale", point = "scorePoint", bgOnly = true },
+	bgScore = { move = "moveScore", scale = "scoreScale", point = "scorePoint", bgOnly = true,
+		-- the same Blizzard frame holds the arena / Solo Shuffle info (round, timer): own spot and size
+		arena = { move = "moveArena", scale = "arenaScale" } },
 	bgCapture = { move = "moveCapture", scale = "captureScale", point = "capturePoint", bgOnly = true },
 	bgGhost = { move = "moveGhost", scale = "ghostScale", point = "ghostPoint" }, -- "Return to Graveyard"
 }
@@ -195,14 +220,21 @@ function W:Apply()
 	for key, p in pairs(pins) do
 		Attach(p)
 		local k = PIN_KEYS[key]
-		local want = c.enabled and c[k.move] and (inBG or not k.bgOnly)
+		local arena = k.arena and c.enabled and c[k.arena.move] and InArena()
+		local want = c.enabled and c[k.move] and (inBG or not k.bgOnly) or arena
 		ns:ApplyPoint(p.anchor, c[k.point])
 		p.anchor:SetScale(ns.db.scale)
 		p.anchor.SUIActive = c.enabled and true or false
+		if W.arenaAnchor then
+			ns:ApplyPoint(W.arenaAnchor, c.arenaPoint)
+			W.arenaAnchor:SetScale(ns.db.scale)
+			W.arenaAnchor.SUIActive = c.enabled and true or false
+		end
+		p.use = arena and W.arenaAnchor or nil
 		if p.frame then
 			if want then
 				p.active = true
-				p.frame:SetScale(c[k.scale] or 1)
+				p.frame:SetScale((arena and c[k.arena.scale]) or c[k.scale] or 1)
 				Pin(p)
 			elseif p.active then
 				-- hand it back: Blizzard re-anchors it on its next layout
@@ -266,6 +298,12 @@ function W:Init()
 	MakePin("bgScore", "Battleground Score", "UIWidgetTopCenterContainerFrame", "scorePoint")
 	MakePin("bgCapture", "Capture / Cart Progress", "UIWidgetBelowMinimapContainerFrame", "capturePoint")
 	MakePin("bgGhost", "Return to Graveyard", "GhostFrame", "ghostPoint")
+	-- arena / Solo Shuffle info (round, timer): same Blizzard frame as the battleground score
+	W.arenaAnchor = CreateFrame("Frame", "StinkieUI_arenaInfoAnchor", UIParent)
+	W.arenaAnchor:SetSize(220, 40)
+	ns:RegisterMover("arenaInfo", W.arenaAnchor, "Arena / Shuffle Info",
+		function() return cfg().arenaPoint end,
+		function(pt) cfg().arenaPoint = pt end)
 	local container = _G.UIWidgetTopCenterContainerFrame
 	if container then
 		if container.UpdateWidgetLayout then hooksecurefunc(container, "UpdateWidgetLayout", function() W:SkinScore() end) end

@@ -27,6 +27,8 @@ local function readable(v) return not issecret(v) and v ~= nil end -- secret che
 
 -- flag carrier debuffs (Focused / Brutal Assault) and Temple of Kotmogu orbs
 BG.OBJECTIVE_AURAS = { [46392] = true, [46393] = true, [121164] = true, [121175] = true, [121176] = true, [121177] = true }
+BG.ALLY_AURAS = { [23333] = true, [23335] = true, [156618] = true, [156621] = true, [34976] = true }
+for id in pairs(BG.OBJECTIVE_AURAS) do BG.ALLY_AURAS[id] = true end
 
 local ROLE_RANK = { HEALER = 1, TANK = 2, DAMAGER = 3 }
 -- scoreboard roleAssigned flags
@@ -444,7 +446,8 @@ function Side:CreateRow(i)
 		{ filter = "HELPFUL", max = 1 },
 	}, { size = c.stackSize, spacing = 2, anchor = "TOPRIGHT", growthX = "LEFT", growthY = "DOWN", disableMouse = true })
 	ns.SetAuraGroupCandidates(row.Stacks, 1, { includeSpellIDs = BG.OBJECTIVE_AURAS })
-	ns.SetAuraGroupCandidates(row.Stacks, 2, { includeSpellIDs = BG.OBJECTIVE_AURAS })
+	-- teammates: also the flag / orb carry aura itself, since the game gives no carrier icon for them
+	ns.SetAuraGroupCandidates(row.Stacks, 2, { includeSpellIDs = self.enemy and BG.OBJECTIVE_AURAS or BG.ALLY_AURAS })
 	ns.SetAuraUnit(row.Stacks, nil)
 
 	row:Hide()
@@ -528,6 +531,19 @@ function Side:LayoutRow(row)
 		ns.SetAuraGrowth(row.Stacks, "TOPRIGHT", "LEFT", "DOWN")
 	end
 	row.Stacks:SetShown(c.stacks)
+	-- Temple of Kotmogu: the orb icon and the orb debuff icon look like two orbs. There the
+	-- debuff (with its stack count) sits right on top of the orb, same size: one orb, plus stacks.
+	-- Where the debuff can't be read (enemies out of sight) the plain orb still shows.
+	if c.stacks and BG.IsKotmogu() then
+		row.Stacks:ClearAllPoints()
+		row.Stacks:SetPoint("CENTER", row.Carrier, "CENTER", 0, 0)
+		row.Stacks:SetFrameLevel(row.Carrier:GetFrameLevel() + 3)
+		ns.RestyleAuraButtons(row.Stacks, nil, cs)
+		row.SUIOrbStacks = true
+	elseif row.SUIOrbStacks then
+		ns.RestyleAuraButtons(row.Stacks, nil, c.stackSize)
+		row.SUIOrbStacks = nil
+	end
 
 	-- right click: focus (default), target, or nothing. Callers run this out of combat.
 	row:SetAttribute("type2", (c.rightClick or "focus") ~= "none" and "macro" or nil)
@@ -841,12 +857,24 @@ local function EachSide(fn)
 	for _, side in ipairs(BG.sides) do fn(side) end
 end
 
+BG.KOTMOGU = 998 -- Temple of Kotmogu instance ID
+function BG.IsKotmogu()
+	local _, _, _, _, _, _, _, id = GetInstanceInfo()
+	return id == BG.KOTMOGU
+end
+
 function BG:UpdateActive()
 	local was = BG.active
 	BG.active = InBattleground() and not BG.testMode
 	if BG.active and not was then
 		wipe(specMemory)
 		RequestBattlefieldScoreData()
+	end
+	-- the Kotmogu orb layout depends on the map: lay the rows out again when it changes
+	local kot = BG.IsKotmogu()
+	if kot ~= BG.wasKotmogu then
+		BG.wasKotmogu = kot
+		ns:RunOOC(function() EachSide(function(side) side:Layout() end) end)
 	end
 	if BG.testMode then return end
 	EachSide(function(side)

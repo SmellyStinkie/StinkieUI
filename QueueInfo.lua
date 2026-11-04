@@ -205,9 +205,8 @@ local function CreateRow(i)
 	r.icon = r:CreateTexture(nil, "ARTWORK")
 	r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	r.label = ns.CreateText(r, 14, "LEFT")
-	r.time = ns.CreateText(r, 14, "LEFT")
-	r.extra = ns.CreateText(r, 14, "RIGHT")
-	r.extra:SetPoint("RIGHT", -6, 0)
+	r.cells = {}
+	for k = 1, 4 do r.cells[k] = ns.CreateText(r, 14, "LEFT") end -- time, estimate, MMR, rating
 	rows[i] = r
 	return r
 end
@@ -255,11 +254,42 @@ function Q:Layout()
 		r.label:ClearAllPoints()
 		if icon > 0 then r.label:SetPoint("LEFT", r.icon, "RIGHT", 4, 0) else r.label:SetPoint("LEFT", 6, 0) end
 		ns.ApplyText(r.label, c.labelStyle)
-		ns.ApplyText(r.time, c.textStyle)
-		ns.ApplyText(r.extra, c.textStyle)
-		r.time:ClearAllPoints()
-		r.time:SetPoint("LEFT", r, "LEFT", math.floor(c.width * 0.36) + icon, 0)
+		-- equal columns: bracket | time in queue | estimate | MMR (| rating)
+		local cols = Q.Columns(c)
+		local w = c.width / (#cols + 1)
+		r.label:SetWidth(math.max(10, w - 8 - (icon > 0 and icon + 4 or 0)))
+		r.label:SetWordWrap(false)
+		for k, fs in ipairs(r.cells) do
+			ns.ApplyText(fs, c.textStyle)
+			fs:ClearAllPoints()
+			fs:SetPoint("LEFT", r, "LEFT", math.floor(w * k) + 4, 0)
+			fs:SetWidth(math.max(10, w - 6))
+			fs:SetWordWrap(false)
+			fs:SetShown(k <= #cols)
+		end
 	end
+end
+
+-- which value columns are on, in order
+function Q.Columns(c)
+	local cols = { "time" }
+	if c.estimate then cols[#cols + 1] = "est" end
+	if c.mmr then cols[#cols + 1] = "mmr" end
+	if c.rating then cols[#cols + 1] = "cr" end
+	return cols
+end
+
+-- brackets with MMR / rating; the rest show N/A
+Q.RATED = { ["2v2"] = true, ["3v3"] = true, shuffle = true, blitz = true, rbg = true }
+
+function Q.MMRText(q, last)
+	if not (q.bracket and Q.RATED[q.bracket]) then return "|cffaaaaaaMMR N/A|r" end
+	if last and last.mmr then
+		return "MMR " .. tostring(last.mmr) .. ((cfg().mmrChange and Q.DeltaText(last.delta)) or "")
+	end
+	-- a saved match there but the game gave no MMR for it: not trackable
+	if last then return "|cffaaaaaaMMR N/A|r" end
+	return "|cffaaaaaaMMR unknown|r" -- no match in this bracket / spec yet
 end
 
 local function Render(list)
@@ -280,27 +310,20 @@ local function Render(list)
 		r.icon:SetTexture(icon)
 		r.icon:SetShown(c.specIcon and icon ~= nil)
 		r.label:SetText(q.label)
+		local values = {}
 		if q.status == "confirm" then
-			r.time:SetText("|cff55ff55Ready!|r")
+			values.time = "|cff55ff55Ready!|r"
 		elseif q.suspended then
-			r.time:SetText("paused")
+			values.time = "paused"
 		else
-			r.time:SetText(Clock(q.waited))
+			values.time = Clock(q.waited)
 		end
-		local extra = {}
-		if c.estimate then extra[#extra + 1] = "est " .. (q.estimate and Clock(q.estimate) or "-") end
-		if (c.mmr or c.rating) and q.bracket then
-			local last = q.mmrData or Q.LastMMR(q.bracket, q.spec)
-			if c.mmr then
-				if last and last.mmr then
-					extra[#extra + 1] = "MMR " .. tostring(last.mmr) .. ((c.mmrChange and Q.DeltaText(last.delta)) or "")
-				else
-					extra[#extra + 1] = "|cffaaaaaaMMR unknown, play a game|r"
-				end
-			end
-			if c.rating then extra[#extra + 1] = "CR " .. ((last and last.rating) and tostring(last.rating) or "-") end
-		end
-		r.extra:SetText(table.concat(extra, "   "))
+		values.est = "est " .. (q.estimate and Clock(q.estimate) or "-")
+		local last = q.mmrData or (q.bracket and Q.RATED[q.bracket] and Q.LastMMR(q.bracket, q.spec)) or nil
+		values.mmr = Q.MMRText(q, last)
+		values.cr = (q.bracket and Q.RATED[q.bracket]) and ("CR " .. ((last and last.rating) and tostring(last.rating) or "-")) or "|cffaaaaaaCR N/A|r"
+		local cols = Q.Columns(c)
+		for k, fs in ipairs(r.cells) do fs:SetText(cols[k] and values[cols[k]] or "") end
 		r:Show()
 	end
 	for i = #list + 1, #rows do rows[i]:Hide() end
@@ -313,7 +336,7 @@ end
 local PREVIEW = {
 	{ label = "Blitz", waited = 192, estimate = 160, status = "queued", bracket = "blitz", spec = 265, mmrData = { mmr = 2773, rating = 2677, delta = 74 } },
 	{ label = "Solo Shuffle", waited = 75, estimate = 420, status = "queued", bracket = "shuffle", spec = 265, mmrData = { mmr = 2795, rating = 2817, delta = -22 } },
-	{ label = "3v3", waited = 40, estimate = 300, status = "queued", bracket = "3v3", spec = 265, mmrData = {} },
+	{ label = "3v3", waited = 40, estimate = 300, status = "queued", bracket = "3v3", spec = 265 },
 }
 
 function Q:Update()

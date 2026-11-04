@@ -5,8 +5,14 @@ local _, ns = ...
 local NP = {}
 ns.Nameplates = NP
 local issecret = ns.issecret
+local function readable(v) return v ~= nil and not issecret(v) end
 
 local SMOOTH = Enum.StatusBarInterpolation.ExponentialEaseOut
+
+-- Auras a flag / orb carrier has: WSG / Twin Peaks flags (old and current IDs), Eye of the Storm
+-- flag, Temple of Kotmogu orbs
+NP.CARRY_AURAS = { [23333] = true, [23335] = true, [156618] = true, [156621] = true, [34976] = true,
+	[121164] = true, [121175] = true, [121176] = true, [121177] = true }
 
 -- Important enemy units (totems, Psyfiend, ...), matched by NPC ID or English name.
 -- Both are hidden from addons when Blizzard restricts unit identity, so matching can miss there.
@@ -173,11 +179,22 @@ local function UpdateSecretRole(f, color)
 	return used
 end
 
+-- only these classes have a healing spec: anyone else never gets a cross, whatever a role source
+-- claims (a scoreboard row matched to the wrong player, a stale inspect, Blizzard's role helper)
+local HEALER_CLASSES = { PRIEST = true, PALADIN = true, DRUID = true, SHAMAN = true, MONK = true, EVOKER = true }
+ns.HEALER_CLASSES = HEALER_CLASSES
+
+function ns.CanHeal(unit)
+	local ok, _, token = pcall(UnitClass, unit)
+	if not ok or not readable(token) or token == nil then return true end -- unknown: let the role sources decide
+	return HEALER_CLASSES[token] and true or false
+end
+
 local function UpdateRole(f)
 	local cfg = ns.db.nameplates
 	local wanted = f.friendly and cfg.healerIcon or (not f.friendly and cfg.enemyHealerIcon)
 	f.SecretRoles:Hide()
-	if not wanted or not f.unit then
+	if not wanted or not f.unit or not ns.CanHeal(f.unit) then
 		f.Healer:Hide()
 		return
 	end
@@ -299,6 +316,7 @@ local function OnEvent(f, event, unit)
 	if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
 		UpdateHealth(f)
 	elseif event == "UNIT_NAME_UPDATE" or event == "UNIT_LEVEL" then
+		if event == "UNIT_NAME_UPDATE" and NP.RecheckImportant then NP.RecheckImportant(f) end
 		UpdateName(f)
 	elseif event == "UNIT_FACTION" or event == "UNIT_FLAGS" then
 		-- hostility can change while a plate stays up (Solo Shuffle reshuffles teams each round,
@@ -460,6 +478,16 @@ local function CreatePlateFrame(nameplate)
 		{ filter = BIG.off, max = A.bigOffMax or 1 },
 	}, bigOpts())
 
+	-- friendly flag / orb carriers: the game gives no carrier classification for teammates, so
+	-- their carry aura is shown instead (Blizzard's aura container matches the spell IDs)
+	f.FlagAura = ns.CreateAuraContainer(f, {
+		{ filter = "HELPFUL", max = 1 },
+		{ filter = "HARMFUL", max = 1 },
+	}, { size = ns.db.nameplates.carrierSize or 40, spacing = 0, anchor = "CENTER", growthX = "RIGHT", growthY = "DOWN", disableMouse = true })
+	ns.SetAuraGroupCandidates(f.FlagAura, 1, { includeSpellIDs = NP.CARRY_AURAS })
+	ns.SetAuraGroupCandidates(f.FlagAura, 2, { includeSpellIDs = NP.CARRY_AURAS })
+	ns.SetAuraUnit(f.FlagAura, nil)
+
 	f:SetScript("OnEvent", OnEvent)
 	nameplate.SUIFrame = f
 	return f
@@ -489,17 +517,30 @@ local function LayoutHighlight(f, px)
 	hl.Right:SetPoint("LEFT", hl, "RIGHT", 3, 0)
 	hl.Left:SetShown(hc.arrows)
 	hl.Right:SetShown(hc.arrows)
-	hl:SetShown(not f.friendly)
+	hl:SetShown(not f.friendly or f.friendTarget and true or false)
+end
+
+-- a friendly player you target gets the full (enemy-size) plate and the target border
+local function FriendTarget(f)
+	if not (f.friendly and f.unit and ns.db.nameplates.friendlyTargetFull) then return false end
+	local ok, is = pcall(UnitIsUnit, f.unit, "target")
+	return ok and not issecret(is) and is and true or false
 end
 
 local function LayoutPlate(f)
 	local cfg = ns.db.nameplates
 	local px = ns.Pixel(f)
-	local friendly = f.friendly
+	f.friendTarget = FriendTarget(f)
+	local friendly = f.friendly and not f.friendTarget
 	local w = friendly and cfg.friendlyWidth or cfg.width
 	local h = friendly and cfg.friendlyHeight or cfg.height
 	if not friendly and f.minion and not f.important then
 		w = math.floor(w * (cfg.minionScale or 1) + 0.5)
+	end
+	-- important units (Grounding, Psyfiend, ...): bigger than a normal plate
+	if not friendly and f.important then
+		w = math.floor(w * (cfg.important.widthScale or 1.5) + 0.5)
+		h = math.floor(h * (cfg.important.heightScale or 1.5) + 0.5)
 	end
 
 	f.HealthFrame:ClearAllPoints()
@@ -508,6 +549,13 @@ local function LayoutPlate(f)
 	f.HealthFrame:SetSize(w, h)
 	ns.LayoutHealthLayers(f, w, h)
 	ns.UpdateBackdrop(f.HealthFrame)
+	-- pink 1px edge on important units so they stand out even when the bar is nearly empty
+	if not friendly and f.important and cfg.important.border then
+		local c = cfg.important.color
+		ns.SetBorderColor(f.HealthFrame, c[1], c[2], c[3], 1)
+	else
+		ns.SetBorderColor(f.HealthFrame, 0, 0, 0, 1)
+	end
 	LayoutHighlight(f, px)
 
 	local nameStyle = friendly and cfg.friendlyNameStyle or cfg.nameStyle
@@ -626,6 +674,12 @@ local function LayoutPlate(f)
 		f.Carrier:SetPoint("BOTTOM", f.HealthFrame, "TOP", cx, (nameInBar and 2 or (fontSize + 4)) + cy)
 	end
 
+	if f.FlagAura then
+		f.FlagAura:ClearAllPoints()
+		f.FlagAura:SetPoint("CENTER", f.Carrier, "CENTER", 0, 0)
+		ns.RestyleAuraButtons(f.FlagAura, nil, cs)
+	end
+
 	local es = cfg.eliteSize or 14
 	f.Elite:SetSize(es, es)
 	f.Elite:ClearAllPoints()
@@ -737,6 +791,17 @@ end
 
 local plateUpdates = { UpdateColor, UpdateHealth, UpdateName, UpdateClassification, UpdateRole, UpdateSpecIcon, UpdateTarget }
 
+-- re-test "important" (the name or NPC ID may only now be readable) and re-lay the plate if it changed
+function NP.RecheckImportant(f)
+	if not f.unit or f.friendly then return end
+	local imp = IsImportant(f.unit) and true or false
+	if imp == (f.important and true or false) then return end
+	f.important = imp
+	LayoutPlate(f)
+	UpdateColor(f)
+	ApplyHitTest(f)
+end
+
 local function OnPlateAdded(unit)
 	local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
 	if not nameplate then return end -- forbidden plates are left to Blizzard
@@ -763,6 +828,12 @@ local function OnPlateAdded(unit)
 	for _, e in ipairs(plateEvents) do f:RegisterUnitEvent(e, unit) end
 
 	f.Castbar:SetUnit(not f.friendly and unit or nil)
+	local _, itype = IsInInstance()
+	local isPlayer = UnitIsPlayer(unit)
+	if issecret(isPlayer) then isPlayer = true end -- unknown: watch anyway, the aura filter decides
+	local flagWatch = f.friendly and itype == "pvp" and ns.db.nameplates.carrierIcon and isPlayer
+	ns.SetAuraUnit(f.FlagAura, flagWatch and unit or nil)
+	f.FlagAura:SetShown(flagWatch and true or false)
 	ns.SetAuraUnit(f.Auras, not f.friendly and unit or nil)
 	f.Auras:SetShown(not f.friendly)
 	local big = BigWanted(f)
@@ -781,6 +852,10 @@ local function OnPlateAdded(unit)
 	ApplyHitTest(f)
 	-- Blizzard sets its own hit area while the plate is being set up; ours goes on after it
 	C_Timer.After(0, function() if f.unit == unit then ApplyHitTest(f) end end)
+	-- a fresh totem's name often arrives a moment after its plate: check again
+	if not f.friendly and not f.important then
+		C_Timer.After(0.3, function() if f.unit == unit then NP.RecheckImportant(f) end end)
+	end
 	local uf = nameplate.UnitFrame
 	if uf and uf.UpdateHitTestArea and not f.hitHooked then
 		f.hitHooked = true
@@ -827,6 +902,7 @@ local function OnPlateRemoved(unit)
 	ns.SetAuraUnit(f.Auras, nil)
 	ns.SetAuraUnit(f.BigCC, nil)
 	ns.SetAuraUnit(f.BigBuffs, nil)
+	ns.SetAuraUnit(f.FlagAura, nil)
 	f.unit = nil
 	f:Hide()
 end
@@ -975,7 +1051,15 @@ function NP:Init()
 			OnPlateRemoved(unit)
 		elseif event == "PLAYER_TARGET_CHANGED" then
 			for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
-				if plate.SUIFrame and plate.SUIFrame.unit then UpdateTarget(plate.SUIFrame) end
+				local f = plate.SUIFrame
+				if f and f.unit then
+					if f.friendly and FriendTarget(f) ~= (f.friendTarget and true or false) then
+						LayoutPlate(f)
+						UpdateName(f)
+						UpdateColor(f)
+					end
+					UpdateTarget(f)
+				end
 			end
 		else
 			for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
