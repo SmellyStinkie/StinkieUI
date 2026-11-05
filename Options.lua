@@ -830,7 +830,7 @@ local function BuildMinimapPage(page)
 	page:Color("Border color (square)", Getter(cfg, "borderColor"), Setter(cfg, "borderColor"))
 	page:Slider("Border thickness (square)", 1, 6, 1, Getter(cfg, "borderSize"), Setter(cfg, "borderSize"))
 	page:Check("Hide the bar behind the zone name", Getter(cfg, "hideHeaderArt"), Setter(cfg, "hideHeaderArt"))
-	page:Slider("Gap above the map (square)", 0, 20, 1, Getter(cfg, "headerGap"), Setter(cfg, "headerGap"))
+	page:Slider("Gap above the map (square)", -10, 20, 1, Getter(cfg, "headerGap"), Setter(cfg, "headerGap"))
 	page:Dropdown("Mail icon (square)", { { "TOPRIGHT", "Top right corner" }, { "TOPLEFT", "Top left corner" },
 		{ "BOTTOMRIGHT", "Bottom right corner" }, { "BOTTOMLEFT", "Bottom left corner" }, { "DEFAULT", "Blizzard's spot" } },
 		Getter(cfg, "mailCorner"), Setter(cfg, "mailCorner"))

@@ -72,8 +72,15 @@ local CORNER = {
 	TOPLEFT = { 1, -1 }, TOPRIGHT = { -1, -1 }, BOTTOMLEFT = { 1, 1 }, BOTTOMRIGHT = { -1, 1 },
 }
 
+-- The zone bar: its own frame on retail. On WoW Forever it's the zone button itself, which the
+-- calendar and tracking button hang off, so they come along.
+local function HeaderBar()
+	local cluster = MinimapCluster
+	return cluster and (cluster.BorderTop or cluster.ZoneTextButton)
+end
+
 local function HeaderUnderneath()
-	local top = MinimapCluster and MinimapCluster.BorderTop
+	local top = HeaderBar()
 	if MM.headerUnder ~= nil then return MM.headerUnder end
 	if not top or not top.GetPoint then return false end
 	local point, rel = top:GetPoint(1)
@@ -109,7 +116,7 @@ function MM.PinSquare()
 	local cluster = MinimapCluster
 	if not cluster then return end
 	MM.pinning = true
-	local top = cluster.BorderTop
+	local top = HeaderBar()
 	local cal = _G.GameTimeFrame
 	if square and top then
 		-- the calendar sits to the right of the bar; shift so bar + calendar are centered together
@@ -126,7 +133,9 @@ function MM.PinSquare()
 	elseif MM.pinnedHeader and top then
 		MM.pinnedHeader = nil
 		if ResetFramePoints then ResetFramePoints(top) end
-		if cluster.SetHeaderUnderneath and MM.headerUnder then pcall(cluster.SetHeaderUnderneath, cluster, true) end
+		if cluster.SetHeaderUnderneath and (MM.headerUnder or not cluster.BorderTop) then
+			pcall(cluster.SetHeaderUnderneath, cluster, MM.headerUnder and true or false)
+		end
 	end
 	-- mail / crafting-order indicator
 	local ind = cluster.IndicatorFrame
@@ -296,7 +305,7 @@ function MM:Init()
 	-- Blizzard re-anchors these (Edit Mode header position, mail / landing page updates): pin again
 	local function repin() if not MM.pinning then MM.PinSquare() end end
 	if MinimapCluster then
-		if MinimapCluster.BorderTop then hooksecurefunc(MinimapCluster.BorderTop, "SetPoint", repin) end
+		if HeaderBar() then hooksecurefunc(HeaderBar(), "SetPoint", repin) end
 		if MinimapCluster.IndicatorFrame then hooksecurefunc(MinimapCluster.IndicatorFrame, "SetPoint", repin) end
 		if MinimapCluster.DielFrame then hooksecurefunc(MinimapCluster.DielFrame, "SetPoint", repin) end
 		if MinimapCluster.SetHeaderUnderneath then

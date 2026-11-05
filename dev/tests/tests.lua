@@ -1598,6 +1598,34 @@ do
 	MM.dielPoint = nil
 end
 
+-- zone bar sits on a square map, on retail's bar or Forever's zone button
+do
+	local MM, c = ns.MinimapSkin, ns.db.minimap
+	local old, oldMinimap, oldShape, oldActive, oldUnder = MinimapCluster, Minimap, c.shape, MM.active, MM.headerUnder
+	local oldGap, oldBorder, oldCal = c.headerGap, c.border, GameTimeFrame
+	local zone = MOCK.NewObj("Frame", "ZoneTest", UIParent)
+	local points, restored = {}, nil
+	zone.SetPoint = function(_, ...) points[#points + 1] = { ... } end
+	Minimap = MOCK.NewObj("Frame", "MinimapTest2", UIParent)
+	MinimapCluster = { ZoneTextButton = zone, SetHeaderUnderneath = function(_, under) restored = under end }
+	GameTimeFrame = nil
+	MM.active, MM.headerUnder, MM.pinnedHeader = true, false, nil
+	c.shape, c.headerGap, c.border = "SQUARE", 4, false
+	MM.PinSquare()
+	local p = points[#points]
+	check("Forever bar sits on the map", p and p[1] == "BOTTOM" and p[2] == Minimap and p[3] == "TOP", p and p[1])
+	check("gap slider reaches it", p and p[5] == 4, p and p[5])
+	c.headerGap = 0
+	MM.PinSquare()
+	check("gap can close completely", points[#points][5] == 0)
+	c.shape = "ROUND"
+	MM.PinSquare()
+	check("round map: Blizzard's layout back", restored == false, restored)
+	MinimapCluster, Minimap, c.shape, MM.active, MM.headerUnder = old, oldMinimap, oldShape, oldActive, oldUnder
+	c.headerGap, c.border, GameTimeFrame = oldGap, oldBorder, oldCal
+	MM.pinnedHeader = nil
+end
+
 -- group leader icon
 do
 	local UF = ns.UF
