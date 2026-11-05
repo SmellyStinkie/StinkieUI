@@ -2098,6 +2098,68 @@ do
 end
 flushErrors("nameplate options")
 
+-- gray out abilities you can't use
+do
+	local CD, c = ns.Cooldowns, ns.db.cooldowns
+	check("gray out is off by default", c.grayUnusable == false)
+	local oldUsable, usable = C_Spell.IsSpellUsable, false
+	rawset(C_Spell, "IsSpellUsable", function() return usable, false end)
+	local gray
+	local icon = { SetDesaturated = function(_, v) gray = v end }
+	local function Item()
+		local item = {
+			cooldownDesaturated = false,
+			GetIconTexture = function() return icon end,
+			GetSpellID = function() return 163201 end,
+			IsExpired = function() return false end,
+			RefreshIconColor = function() end,
+			RefreshIconDesaturation = function() end,
+		}
+		return item
+	end
+	local item = Item()
+	CD.WatchUsable(item)
+	check("off: icon left alone", gray == nil)
+	c.grayUnusable = true
+	item:RefreshIconColor()
+	check("unusable goes gray", gray == true)
+	usable = true
+	item:RefreshIconColor()
+	check("usable or proc'd comes back", gray == false)
+	gray = nil
+	item:RefreshIconColor()
+	check("a usable ability isn't touched", gray == nil)
+	usable = false
+	item:RefreshIconDesaturation()
+	check("Blizzard's update can't undo the gray", gray == true)
+	item.cooldownDesaturated = true
+	usable = true
+	item:RefreshIconColor()
+	check("usable but on cooldown stays gray", gray == true)
+	item.cooldownDesaturated = false
+	do
+		local secret, old = {}, ns.issecret
+		ns.issecret = function(v) return v == secret end
+		rawset(C_Spell, "IsSpellUsable", function() return secret, false end)
+		check("a hidden answer leaves the icon alone", CD.Unusable(163201) == false)
+		ns.issecret = old
+		rawset(C_Spell, "IsSpellUsable", function() return usable, false end)
+	end
+	-- turning it off puts a gray icon back
+	usable = false
+	item:RefreshIconColor()
+	c.grayUnusable = false
+	CD.ApplyUsable(item)
+	check("turned off: the gray goes", gray == false)
+	-- buff icons have no usable state
+	local buff = { GetIconTexture = function() return icon end }
+	CD.WatchUsable(buff)
+	check("buff icons are skipped", buff.RefreshIconColor == nil)
+	check("custom bars ask the same check", CD.Unusable(nil) == false)
+	rawset(C_Spell, "IsSpellUsable", oldUsable)
+end
+flushErrors("gray unusable")
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto

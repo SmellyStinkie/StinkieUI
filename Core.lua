@@ -873,6 +873,7 @@ ns.defaults = {
 	cooldowns = {
 		centerEssential = true, centerUtility = true, centerBuffs = true,
 		skinBlizzard = true,
+		grayUnusable = false, -- gray out abilities you can't use right now (Execute above 20% health)
 		iconZoom = 0.08, -- fraction cropped from each icon edge (custom bars and skinned Blizzard icons)
 		bars = {
 			{

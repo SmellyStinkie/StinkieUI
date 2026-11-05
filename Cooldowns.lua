@@ -87,6 +87,47 @@ local function SkinItem(item)
 end
 CD.SkinItem = SkinItem
 
+---------------------------------------------------------------------------
+-- Gray out abilities you can't use right now (Execute until it's usable or procs). Blizzard already
+-- checks this on each icon and only darkens it, so this follows its updates. Hooks and widget calls
+-- only: nothing is written into Blizzard's items.
+---------------------------------------------------------------------------
+function CD.Unusable(spellID)
+	if not (ns.db.cooldowns.grayUnusable and spellID) then return false end
+	local usable = C_Spell.IsSpellUsable(spellID)
+	if ns.issecret(usable) then return false end -- can't be read: leave the icon as Blizzard has it
+	return not usable
+end
+
+local grayed = setmetatable({}, { __mode = "k" })
+
+function CD.ApplyUsable(item)
+	local icon = item:GetIconTexture()
+	if CD.Unusable(item:GetSpellID()) then
+		grayed[item] = true
+		icon:SetDesaturated(true)
+	elseif grayed[item] then
+		-- usable again: back to what Blizzard wants, which is gray if it's on cooldown
+		grayed[item] = nil
+		local onCooldown = item.cooldownDesaturated
+		if ns.issecret(onCooldown) then
+			icon:SetDesaturated(onCooldown)
+		else
+			icon:SetDesaturated(onCooldown and not item:IsExpired() or false)
+		end
+	end
+end
+
+local watchedUsable = setmetatable({}, { __mode = "k" })
+local function WatchUsable(item)
+	if watchedUsable[item] or not (item.RefreshIconColor and item.RefreshIconDesaturation) then return end
+	watchedUsable[item] = true
+	hooksecurefunc(item, "RefreshIconColor", CD.ApplyUsable)
+	hooksecurefunc(item, "RefreshIconDesaturation", CD.ApplyUsable)
+	CD.ApplyUsable(item)
+end
+CD.WatchUsable = WatchUsable
+
 local pending = {}
 local scheduler = CreateFrame("Frame")
 scheduler:Hide()
@@ -179,6 +220,7 @@ local function HookViewer(viewer)
 	if viewer.OnAcquireItemFrame then
 		hooksecurefunc(viewer, "OnAcquireItemFrame", function(v, item)
 			SkinItem(item)
+			WatchUsable(item)
 			if not hookedItems[item] then
 				hookedItems[item] = true
 				item:HookScript("OnShow", function() Schedule(v) end)
@@ -187,7 +229,10 @@ local function HookViewer(viewer)
 		end)
 	end
 	if viewer.itemFramePool then
-		for item in viewer.itemFramePool:EnumerateActive() do SkinItem(item) end
+		for item in viewer.itemFramePool:EnumerateActive() do
+			SkinItem(item)
+			WatchUsable(item)
+		end
 	end
 	Schedule(viewer)
 end
@@ -415,7 +460,7 @@ local function UpdateButton(b)
 		end
 		local info = C_Spell.GetSpellCooldown(id)
 		local onCD = info and info.isActive and not info.isOnGCD and not hasCharges
-		b.Icon:SetDesaturated(onCD and true or false)
+		b.Icon:SetDesaturated((onCD or CD.Unusable(id)) and true or false)
 	elseif kind == "slot" then
 		local start, dur, enable = GetInventoryItemCooldown("player", id)
 		if start and dur and enable and enable ~= 0 then
@@ -547,7 +592,7 @@ function CD:Init()
 
 	local f = CreateFrame("Frame")
 	for _, e in ipairs({ "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "ACTIONBAR_UPDATE_COOLDOWN",
-		"PET_BAR_UPDATE_COOLDOWN", "SPELL_UPDATE_ICON" }) do
+		"PET_BAR_UPDATE_COOLDOWN", "SPELL_UPDATE_ICON", "SPELL_UPDATE_USABLE" }) do
 		f:RegisterEvent(e)
 	end
 	f:SetScript("OnEvent", UpdateAllButtons)
@@ -581,6 +626,11 @@ function CD:Refresh()
 		if viewer then
 			-- turning centering off takes effect on the next Blizzard relayout or /reload
 			if v.key and ns.db.cooldowns[v.key] then Schedule(viewer) end
+			if viewer.itemFramePool then
+				for item in viewer.itemFramePool:EnumerateActive() do
+					if watchedUsable[item] then CD.ApplyUsable(item) end
+				end
+			end
 		end
 	end
 end
