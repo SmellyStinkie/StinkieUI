@@ -290,7 +290,7 @@ local function unit(t)
 	return t
 end
 
-ns.DB_VERSION = 14
+ns.DB_VERSION = 15
 ns.defaults = {
 	version = ns.DB_VERSION,
 	scale = 1,
@@ -472,6 +472,13 @@ ns.defaults = {
 		nameMaxChars = 0, nameEllipsis = true, -- 0 = full names
 		nameFormat = "full", -- full | first | last
 		marker = true, markerSize = 28, -- raid target marker above the plate
+		-- friendly plates have their own of each of these
+		friendlyNameMaxChars = 0, friendlyNameFormat = "full",
+		friendlyMarker = true, friendlyMarkerSize = 28,
+		friendlyHealerSize = 20,
+		friendlyShowLevel = false, friendlyHealthText = false,
+		-- threat % beside your target's plate
+		threatText = false, threatSide = "RIGHT", threatStyle = text(14),
 		specX = 0, specY = 0,
 		softIconScale = 1.5, softIconY = 4, -- Blizzard's soft-target (quest / interact) icon
 		friendlyLower = 0, -- push friendly plates down to make room above them
@@ -479,6 +486,7 @@ ns.defaults = {
 		healthStyle = text(9),
 		castStyle = text(9),
 		friendlyNameStyle = text(10, true),
+		friendlyHealthStyle = text(9),
 	},
 	classPower = {
 		enabled = true,
@@ -988,6 +996,20 @@ local function Migrate(db)
 		if ch then
 			if ch.whisperTabs == false then ch.whisperDisplay = "main" end
 			ch.whisperTabs = nil
+		end
+	end
+	if v < 15 then
+		-- Nameplates: settings enemy and friendly plates used to share are separate now. Friendly
+		-- plates start from the shared value, so nothing looks different.
+		local np = db.nameplates
+		if np then
+			np.friendlyNameFormat, np.friendlyNameMaxChars = np.nameFormat, np.nameMaxChars
+			np.friendlyMarker, np.friendlyMarkerSize = np.marker, np.markerSize
+			np.friendlyHealerSize = np.healerSize
+			local hs = np.healthStyle
+			if type(hs) == "table" then
+				np.friendlyHealthStyle = { size = hs.size, outline = hs.outline, classColor = hs.classColor, color = hs.color }
+			end
 		end
 	end
 	db.version = ns.DB_VERSION

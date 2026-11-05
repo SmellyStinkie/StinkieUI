@@ -876,27 +876,14 @@ local function BuildMinimapPage(page)
 	page:TextStyle("Coordinates", function() return cfg().coordStyle end)
 end
 
-local function BuildNameplatePage(page)
+local function BuildPlateGeneralPage(page)
 	local function cfg() return ns.db.nameplates end
-	local function hcfg() return ns.db.nameplates.highlight end
-	page:Column(1)
-	page:Header("Enemy nameplates")
-	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"), true)
-	page:Slider("Width", 40, 300, 1, Getter(cfg, "width"), Setter(cfg, "width"))
-	page:Slider("Health height", 2, 40, 1, Getter(cfg, "height"), Setter(cfg, "height"))
-	page:Slider("Castbar height", 4, 30, 1, Getter(cfg, "castHeight"), Setter(cfg, "castHeight"))
-	page:Check("Show level", Getter(cfg, "showLevel"), Setter(cfg, "showLevel"))
-	page:Check("Name inside the bar", Getter(cfg, "nameInBar"), Setter(cfg, "nameInBar"))
-	page:Check("Health percent", Getter(cfg, "showHealthText"), Setter(cfg, "showHealthText"))
-	page:Header("Target highlight")
-	page:Slider("Border thickness", 1, 6, 1, Getter(hcfg, "thickness"), Setter(hcfg, "thickness"))
-	page:Slider("Border outside the bar", 0, 6, 1, Getter(hcfg, "outset"), Setter(hcfg, "outset"))
-	page:Color("Border color", Getter(hcfg, "color"), Setter(hcfg, "color"))
-	page:Check("Show > < around the target", Getter(hcfg, "arrows"), Setter(hcfg, "arrows"))
-	page:Slider("Arrow size", 8, 80, 1, Getter(hcfg, "arrowSize"), Setter(hcfg, "arrowSize"))
-	page:Slider("Target plate scale", 1, 1.6, 0.05, function() return hcfg().scale or 1 end, Setter(hcfg, "scale"))
-	page:Header("Stacking (plates pushing each other up)")
 	local function scfg() return ns.db.nameplates.stacking end
+	page:Column(1)
+	page:Header("Nameplates")
+	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"), true)
+	page:Check("Add \226\128\166 when a name is shortened", Getter(cfg, "nameEllipsis"), Setter(cfg, "nameEllipsis"))
+	page:Header("Stacking (plates pushing each other up)")
 	page:Check("Stack enemy nameplates", Getter(scfg, "enemies"), Setter(scfg, "enemies"))
 	page:Check("Stack friendly nameplates", Getter(scfg, "friendly"), Setter(scfg, "friendly"))
 	page:Note("Off: plates stay over their units and may overlap. On: they move apart, upward.", 36)
@@ -906,33 +893,90 @@ local function BuildNameplatePage(page)
 	page:Slider("Slide speed (0 = game default)", 0, 0.2, 0.005, Getter(scfg, "speed"), Setter(scfg, "speed"))
 	page:Slider("Distance kept from screen top (0 = default)", 0, 0.5, 0.01, Getter(scfg, "topInset"), Setter(scfg, "topInset"))
 	page:Note("These three are older game settings that may no longer exist; /stinkie plates shows which ones this game version has.", 36)
-	page:Header("Clicking")
-	page:Slider("Extra click area, sides", 0, 30, 1, Getter(cfg, "clickPadX"), Setter(cfg, "clickPadX"))
-	page:Slider("Extra click area, top/bottom", 0, 20, 1, Getter(cfg, "clickPadY"), Setter(cfg, "clickPadY"))
-	page:Header("Friendly nameplates")
-	page:Slider("Width", 10, 200, 1, Getter(cfg, "friendlyWidth"), Setter(cfg, "friendlyWidth"))
-	page:Slider("Health height", 1, 20, 1, Getter(cfg, "friendlyHeight"), Setter(cfg, "friendlyHeight"))
-	page:Check("Click-through", Getter(cfg, "friendlyClickThrough"), Setter(cfg, "friendlyClickThrough"))
-	page:Check("Your target gets the full plate and target border", Getter(cfg, "friendlyTargetFull"), Setter(cfg, "friendlyTargetFull"))
-	page:Check("Name on the health bar", Getter(cfg, "friendlyNameInBar"), Setter(cfg, "friendlyNameInBar"))
-	page:Header("Names (all nameplates)")
+end
+
+local function BuildPlateEnemyPage(page)
+	local function cfg() return ns.db.nameplates end
+	page:Column(1)
+	page:Header("Enemy nameplates")
+	page:Slider("Width", 40, 300, 1, Getter(cfg, "width"), Setter(cfg, "width"))
+	page:Slider("Health height", 2, 40, 1, Getter(cfg, "height"), Setter(cfg, "height"))
+	page:Slider("Castbar height", 4, 30, 1, Getter(cfg, "castHeight"), Setter(cfg, "castHeight"))
+	page:Check("Show level", Getter(cfg, "showLevel"), Setter(cfg, "showLevel"))
+	page:Check("Health percent", Getter(cfg, "showHealthText"), Setter(cfg, "showHealthText"))
+	page:Check("Name inside the bar", Getter(cfg, "nameInBar"), Setter(cfg, "nameInBar"))
 	page:Choice("Name shows", nameChoices, Getter(cfg, "nameFormat"), Setter(cfg, "nameFormat"))
 	page:Note("Stormwind Guard: First is Stormwind, Last is Guard. Names the game hides in PvP stay whole.", 36)
 	page:Slider("Max name length (0 = full)", 0, 40, 1, Getter(cfg, "nameMaxChars"), Setter(cfg, "nameMaxChars"))
-	page:Check("Add … when shortened", Getter(cfg, "nameEllipsis"), Setter(cfg, "nameEllipsis"))
+	page:Header("Clicking")
+	page:Slider("Extra click area, sides", 0, 30, 1, Getter(cfg, "clickPadX"), Setter(cfg, "clickPadX"))
+	page:Slider("Extra click area, top/bottom", 0, 20, 1, Getter(cfg, "clickPadY"), Setter(cfg, "clickPadY"))
+	page:Column(2)
+	page:TextStyle("Name", function() return cfg().nameStyle end, { classColor = true })
+	page:TextStyle("Health text", function() return cfg().healthStyle end)
+	page:TextStyle("Castbar text", function() return cfg().castStyle end)
+end
+
+local function BuildPlateFriendlyPage(page)
+	local function cfg() return ns.db.nameplates end
+	page:Column(1)
+	page:Header("Friendly nameplates")
+	page:Slider("Width", 10, 300, 1, Getter(cfg, "friendlyWidth"), Setter(cfg, "friendlyWidth"))
+	page:Slider("Health height", 1, 40, 1, Getter(cfg, "friendlyHeight"), Setter(cfg, "friendlyHeight"))
+	page:Check("Show level", Getter(cfg, "friendlyShowLevel"), Setter(cfg, "friendlyShowLevel"))
+	page:Check("Health percent", Getter(cfg, "friendlyHealthText"), Setter(cfg, "friendlyHealthText"))
+	page:Check("Name on the health bar", Getter(cfg, "friendlyNameInBar"), Setter(cfg, "friendlyNameInBar"))
+	page:Choice("Name shows", nameChoices, Getter(cfg, "friendlyNameFormat"), Setter(cfg, "friendlyNameFormat"))
+	page:Slider("Max name length (0 = full)", 0, 40, 1, Getter(cfg, "friendlyNameMaxChars"), Setter(cfg, "friendlyNameMaxChars"))
+	page:Slider("Lower friendly plates by", 0, 60, 1, Getter(cfg, "friendlyLower"), Setter(cfg, "friendlyLower"))
+	page:Note("Makes room above them for quest and interact icons.", 22)
+	page:Check("Click-through", Getter(cfg, "friendlyClickThrough"), Setter(cfg, "friendlyClickThrough"))
+	page:Check("Your target gets the full plate and target border", Getter(cfg, "friendlyTargetFull"), Setter(cfg, "friendlyTargetFull"))
+	page:Column(2)
+	page:TextStyle("Name", function() return cfg().friendlyNameStyle end, { classColor = true })
+	page:TextStyle("Health text", function() return cfg().friendlyHealthStyle end)
+end
+
+local function BuildPlateTargetPage(page)
+	local function cfg() return ns.db.nameplates end
+	local function hcfg() return ns.db.nameplates.highlight end
+	page:Column(1)
+	page:Header("Target highlight")
+	page:Slider("Border thickness", 1, 6, 1, Getter(hcfg, "thickness"), Setter(hcfg, "thickness"))
+	page:Slider("Border outside the bar", 0, 6, 1, Getter(hcfg, "outset"), Setter(hcfg, "outset"))
+	page:Color("Border color", Getter(hcfg, "color"), Setter(hcfg, "color"))
+	page:Check("Show > < around the target", Getter(hcfg, "arrows"), Setter(hcfg, "arrows"))
+	page:Slider("Arrow size", 8, 80, 1, Getter(hcfg, "arrowSize"), Setter(hcfg, "arrowSize"))
+	page:Slider("Target plate scale", 1, 1.6, 0.05, function() return hcfg().scale or 1 end, Setter(hcfg, "scale"))
+	page:Header("Threat")
+	page:Check("Threat % on your enemy target", Getter(cfg, "threatText"), Setter(cfg, "threatText"))
+	page:Choice("Side", { { "LEFT", "Left" }, { "RIGHT", "Right" } }, Getter(cfg, "threatSide"), Setter(cfg, "threatSide"))
+	page:Note("100% means you have aggro. It takes Blizzard's threat colors, and only shows while the game gives a number.", 36)
+	page:Column(2)
+	page:TextStyle("Threat text", function() return cfg().threatStyle end)
+end
+
+local function BuildPlateIconsPage(page)
+	local function cfg() return ns.db.nameplates end
+	page:Column(1)
 	page:Header("Target markers")
-	page:Check("Show above nameplates", Getter(cfg, "marker"), Setter(cfg, "marker"))
-	page:Slider("Marker size", 12, 64, 1, Getter(cfg, "markerSize"), Setter(cfg, "markerSize"))
+	page:Check("Above enemy nameplates", Getter(cfg, "marker"), Setter(cfg, "marker"))
+	page:Slider("Enemy marker size", 12, 64, 1, Getter(cfg, "markerSize"), Setter(cfg, "markerSize"))
+	page:Check("Above friendly nameplates", Getter(cfg, "friendlyMarker"), Setter(cfg, "friendlyMarker"))
+	page:Slider("Friendly marker size", 12, 64, 1, Getter(cfg, "friendlyMarkerSize"), Setter(cfg, "friendlyMarkerSize"))
 	page:Header("Healers and elites")
-	page:Check("Green cross over friendly healers", Getter(cfg, "healerIcon"), Setter(cfg, "healerIcon"))
 	page:Check("Red cross over enemy healers", Getter(cfg, "enemyHealerIcon"), Setter(cfg, "enemyHealerIcon"))
-	page:Slider("Cross size", 6, 100, 1, Getter(cfg, "healerSize"), Setter(cfg, "healerSize"))
+	page:Slider("Enemy cross size", 6, 100, 1, Getter(cfg, "healerSize"), Setter(cfg, "healerSize"))
+	page:Check("Green cross over friendly healers", Getter(cfg, "healerIcon"), Setter(cfg, "healerIcon"))
+	page:Slider("Friendly cross size", 6, 100, 1, Getter(cfg, "friendlyHealerSize"), Setter(cfg, "friendlyHealerSize"))
 	page:Check("Inspect nearby players to find healers", Getter(cfg, "inspectHealers"), Setter(cfg, "inspectHealers"))
 	page:Note("Outside a group the game doesn't say who is a healer, so Stinkie UI inspects nearby players one at a time (out of combat, not in arena or battlegrounds).", 62)
 	page:Check("Elite / boss star", Getter(cfg, "eliteIcon"), Setter(cfg, "eliteIcon"))
 	page:Slider("Star size", 8, 30, 1, Getter(cfg, "eliteSize"), Setter(cfg, "eliteSize"))
-	page:Check("Spec icon above enemy players", Getter(cfg, "specIcons"), Setter(cfg, "specIcons"))
-	page:Check("Spec icon above friendly players", Getter(cfg, "specIconsFriendly"), Setter(cfg, "specIconsFriendly"))
+	page:Column(2)
+	page:Header("Spec icons")
+	page:Check("Above enemy players", Getter(cfg, "specIcons"), Setter(cfg, "specIcons"))
+	page:Check("Above friendly players", Getter(cfg, "specIconsFriendly"), Setter(cfg, "specIconsFriendly"))
 	page:Slider("Spec icon size", 10, 60, 1, Getter(cfg, "specIconSize"), Setter(cfg, "specIconSize"))
 	page:Dropdown("Spec icon position", { { "LEFT", "Left of the healer cross" }, { "RIGHT", "Right of the healer cross" },
 		{ "CENTER", "Centered, cross to the right" }, { "ABOVE", "Centered, cross above" } },
@@ -943,20 +987,14 @@ local function BuildNameplatePage(page)
 	page:Header("Quest / interact icon")
 	page:Slider("Icon size", 0.5, 4, 0.1, Getter(cfg, "softIconScale"), Setter(cfg, "softIconScale"))
 	page:Slider("Icon height above the plate", -10, 60, 1, Getter(cfg, "softIconY"), Setter(cfg, "softIconY"))
-	page:Slider("Lower friendly plates by", 0, 60, 1, Getter(cfg, "friendlyLower"), Setter(cfg, "friendlyLower"))
 	page:Note("The icon over the unit you soft-target (quest, talk, loot).", 22)
-	page:Check("Flag / orb carrier icon (battlegrounds)", Getter(cfg, "carrierIcon"), Setter(cfg, "carrierIcon"))
+	page:Header("Flag / orb carriers")
+	page:Check("Carrier icon (battlegrounds)", Getter(cfg, "carrierIcon"), Setter(cfg, "carrierIcon"))
 	page:Slider("Carrier icon size", 16, 120, 1, Getter(cfg, "carrierSize"), Setter(cfg, "carrierSize"))
 	page:Choice("Carrier icon position", { { "ABOVE", "Above name" }, { "LEFT", "Left of bar" }, { "TOP", "Top (old)" } },
 		Getter(cfg, "carrierAnchor"), Setter(cfg, "carrierAnchor"))
 	page:Slider("Carrier X offset", -60, 60, 1, Getter(cfg, "carrierX"), Setter(cfg, "carrierX"))
 	page:Slider("Carrier Y offset", -60, 60, 1, Getter(cfg, "carrierY"), Setter(cfg, "carrierY"))
-
-	page:Column(2)
-	page:TextStyle("Enemy name", function() return cfg().nameStyle end, { classColor = true })
-	page:TextStyle("Friendly name", function() return cfg().friendlyNameStyle end, { classColor = true })
-	page:TextStyle("Castbar text", function() return cfg().castStyle end)
-	page:TextStyle("Health text", function() return cfg().healthStyle end)
 end
 
 local function BuildPlateAurasPage(page)
@@ -2316,8 +2354,14 @@ local pages = {
 		{ "Party", BuildPartyPage },
 		{ "Party Targets", BuildPartyTargetsPage },
 	} },
-	{ "Nameplates", BuildNameplatePage },
-	{ "Plate Auras & Units", BuildPlateAurasPage },
+	{ "Nameplates", children = {
+		{ "General", BuildPlateGeneralPage },
+		{ "Enemy", BuildPlateEnemyPage },
+		{ "Friendly", BuildPlateFriendlyPage },
+		{ "Target", BuildPlateTargetPage },
+		{ "Icons", BuildPlateIconsPage },
+		{ "Auras & Units", BuildPlateAurasPage },
+	} },
 	{ "Action Bars", BuildActionBarPage },
 	{ "Cooldowns", BuildCooldownPage },
 	{ "PvP Assist", BuildArenaAssistPage },

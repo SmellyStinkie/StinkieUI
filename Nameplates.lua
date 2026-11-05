@@ -65,6 +65,7 @@ end
 local plateEvents = {
 	"UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_ABSORB_AMOUNT_CHANGED",
 	"UNIT_NAME_UPDATE", "UNIT_FACTION", "UNIT_LEVEL", "UNIT_FLAGS", "UNIT_CLASSIFICATION_CHANGED",
+	"UNIT_THREAT_LIST_UPDATE",
 }
 
 local function UpdateHealth(f, immediate)
@@ -110,7 +111,7 @@ NP.Utf8Head = Utf8Head
 local function UpdateName(f)
 	local u = f.unit
 	local cfg = ns.db.nameplates
-	if not f.friendly and cfg.showLevel then
+	if (f.friendly and cfg.friendlyShowLevel) or (not f.friendly and cfg.showLevel) then
 		local level = UnitLevel(u)
 		local text
 		if level and level > 0 then
@@ -124,8 +125,8 @@ local function UpdateName(f)
 	else
 		f.Level:Hide()
 	end
-	local name = ns.UnitDisplayName(u, cfg.nameFormat)
-	local limit = cfg.nameMaxChars or 0
+	local name = ns.UnitDisplayName(u, f.friendly and cfg.friendlyNameFormat or cfg.nameFormat)
+	local limit = (f.friendly and cfg.friendlyNameMaxChars or cfg.nameMaxChars) or 0
 	-- hidden (secret) names can't be shortened; they're clipped to the plate width instead
 	if limit > 0 and not ns.issecret(name) and type(name) == "string" then
 		local head, cut = Utf8Head(name, limit)
@@ -135,7 +136,9 @@ local function UpdateName(f)
 end
 
 local function UpdateMarker(f)
-	if ns.db.nameplates.marker then ns.UpdateMarker(f.Marker, f.unit) else f.Marker:Hide() end
+	local cfg = ns.db.nameplates
+	local wanted = f.friendly and cfg.friendlyMarker or (not f.friendly and cfg.marker)
+	if wanted then ns.UpdateMarker(f.Marker, f.unit) else f.Marker:Hide() end
 end
 NP.UpdateMarker = UpdateMarker
 
@@ -332,6 +335,31 @@ local function UpdateTarget(f)
 	f.Highlight:SetAlphaFromBoolean(UnitIsUnit(f.unit, "target"), 1, 0)
 end
 
+-- Threat % beside your target's plate. It can be hidden from addons: a hidden number can't be
+-- compared, so it goes straight to the text, and the plate stays clean if the game refuses it.
+function NP.UpdateThreat(f)
+	local cfg = ns.db.nameplates
+	if not (cfg.threatText and f.unit and not f.friendly and NP.IsTargetPlate(f)) then
+		f.Threat:Hide()
+		return
+	end
+	local _, status, percent = UnitDetailedThreatSituation("player", f.unit)
+	if issecret(percent) then
+		f.Threat:SetShown(pcall(f.Threat.SetFormattedText, f.Threat, "%.0f%%", percent))
+	elseif percent == nil then
+		f.Threat:Hide()
+	else
+		f.Threat:SetFormattedText("%.0f%%", percent)
+		f.Threat:Show()
+	end
+	local style = cfg.threatStyle
+	if not issecret(status) and status and GetThreatStatusColor then
+		f.Threat:SetTextColor(GetThreatStatusColor(status))
+	else
+		f.Threat:SetTextColor(style.color[1], style.color[2], style.color[3])
+	end
+end
+
 -- Clickable area: our health bar plus padding (more for important units). Blizzard decides
 -- which plate wins where two overlap; a bigger area only helps where nothing else is.
 local function ApplyHitTest(f)
@@ -368,6 +396,8 @@ local function OnEvent(f, event, unit)
 		end
 	elseif event == "UNIT_CLASSIFICATION_CHANGED" then
 		UpdateClassification(f)
+	elseif event == "UNIT_THREAT_LIST_UPDATE" then
+		NP.UpdateThreat(f)
 	end
 end
 
@@ -429,6 +459,8 @@ local function CreatePlateFrame(nameplate)
 	f.Name = ns.CreateText(textLayer, 11, "LEFT")
 	f.Level = ns.CreateText(textLayer, 11, "LEFT")
 	f.HealthText = ns.CreateText(textLayer, 9, "RIGHT")
+	f.Threat = ns.CreateText(textLayer, 14, "LEFT")
+	f.Threat:Hide()
 	f.Marker = textLayer:CreateTexture(nil, "OVERLAY")
 	f.Marker:SetTexture(ns.MARKER_TEXTURE)
 	f.Marker:Hide()
@@ -612,15 +644,24 @@ local function LayoutPlate(f)
 	local fontSize = nameStyle.size
 	ns.ApplyText(f.Name, nameStyle)
 	ns.ApplyText(f.Level, nameStyle)
-	ns.ApplyText(f.HealthText, cfg.healthStyle)
+	ns.ApplyText(f.HealthText, friendly and cfg.friendlyHealthStyle or cfg.healthStyle)
 	f.HealthText:ClearAllPoints()
 	f.HealthText:SetPoint("RIGHT", f.Health, "RIGHT", -2, 0)
-	local showHP = not friendly and cfg.showHealthText
+	ns.ApplyText(f.Threat, cfg.threatStyle)
+	f.Threat:ClearAllPoints()
+	if cfg.threatSide == "LEFT" then
+		f.Threat:SetPoint("RIGHT", f.HealthFrame, "LEFT", -5, 0)
+	else
+		f.Threat:SetPoint("LEFT", f.HealthFrame, "RIGHT", 5, 0)
+	end
+	local showHP = cfg.showHealthText
+	if friendly then showHP = cfg.friendlyHealthText end
 	f.HealthText:SetShown(showHP)
 
 	f.Name:ClearAllPoints()
 	f.Level:ClearAllPoints()
-	local showLevel = not friendly and cfg.showLevel
+	local showLevel = cfg.showLevel
+	if friendly then showLevel = cfg.friendlyShowLevel end
 	local nameInBar = not friendly and cfg.nameInBar
 	if friendly then
 		f.Name:SetJustifyH("CENTER")
@@ -630,8 +671,10 @@ local function LayoutPlate(f)
 			f.Name:SetWidth(0)
 		else
 			f.Name:SetPoint("BOTTOM", f.Health, "TOP", 0, 2)
-			f.Name:SetWidth(cfg.width)
+			-- a level beside the name needs the name to be only as wide as its text
+			f.Name:SetWidth(showLevel and 0 or cfg.width)
 		end
+		if showLevel then f.Level:SetPoint("RIGHT", f.Name, "LEFT", -2, 0) end
 	else
 		f.Name:SetWidth(0)
 		f.Name:SetJustifyH("LEFT")
@@ -660,7 +703,7 @@ local function LayoutPlate(f)
 		f.Name:SetWordWrap(false)
 	end
 
-	local hs = cfg.healerSize or 20
+	local hs = (friendly and cfg.friendlyHealerSize or cfg.healerSize) or 20
 	local ss = cfg.specIconSize or 20
 	-- the slot above the plate: the healer cross sits here, or the spec icon when it's centered
 	local function Slot(frame, dx, dy)
@@ -703,7 +746,8 @@ local function LayoutPlate(f)
 	-- carrier and quest icons stack above whatever is centered
 	f.TopSlot = (centered and not crossAbove) and f.SpecIcon or f.Healer
 	-- the target marker goes above that slot, so a healer's cross never covers it
-	f.Marker:SetSize(cfg.markerSize, cfg.markerSize)
+	local markerSize = friendly and cfg.friendlyMarkerSize or cfg.markerSize
+	f.Marker:SetSize(markerSize, markerSize)
 	f.Marker:ClearAllPoints()
 	f.Marker:SetPoint("BOTTOM", f.TopSlot, "TOP", 0, 2)
 	UpdateMarker(f)
@@ -1131,6 +1175,7 @@ function NP:Init()
 						UpdateColor(f)
 					end
 					UpdateTarget(f)
+					NP.UpdateThreat(f)
 				end
 			end
 		elseif event == "RAID_TARGET_UPDATE" then

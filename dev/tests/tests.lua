@@ -1837,6 +1837,77 @@ do
 	check("no GCD History for new players", ns.defaults.misc.gcd.enabled == false)
 end
 
+-- nameplate options: enemy and friendly plates have their own settings
+do
+	local np = ns.db.nameplates
+	for _, key in ipairs({ "friendlyNameFormat", "friendlyNameMaxChars", "friendlyMarker", "friendlyMarkerSize",
+		"friendlyHealerSize", "friendlyShowLevel", "friendlyHealthText", "friendlyHealthStyle" }) do
+		check("friendly plates have " .. key, np[key] ~= nil)
+	end
+	-- older profiles keep their look: friendly plates start from the shared value
+	local old = { version = 14, units = {}, nameplates = { nameFormat = "last", nameMaxChars = 12, marker = false,
+		markerSize = 40, healerSize = 55, healthStyle = { size = 11, outline = "NONE" } } }
+	ns.Migrate(old)
+	local o = old.nameplates
+	check("old name settings carried over", o.friendlyNameFormat == "last" and o.friendlyNameMaxChars == 12)
+	check("old marker settings carried over", o.friendlyMarker == false and o.friendlyMarkerSize == 40)
+	check("old cross size carried over", o.friendlyHealerSize == 55)
+	check("old health text carried over", o.friendlyHealthStyle.size == 11 and o.friendlyHealthStyle ~= o.healthStyle)
+
+	-- a real plate for each side
+	local NP = ns.Nameplates
+	local plate = MOCK.NewObj("Frame", nil, UIParent)
+	local oldGet, oldCan, oldName, oldThreat, oldColor = C_NamePlate.GetNamePlateForUnit, UnitCanAttack, UnitName, UnitDetailedThreatSituation, GetThreatStatusColor
+	local hostile, targeted = true, true
+	rawset(C_NamePlate, "GetNamePlateForUnit", function(u)
+		if u == "nameplate8" or (u == "target" and targeted) then return plate end
+	end)
+	UnitCanAttack = function() return hostile end
+	UnitName = function() return "Stormwind Guard" end
+	local percent, status = 87.4, 1
+	UnitDetailedThreatSituation = function() return false, status, percent, 90, 1000 end
+	GetThreatStatusColor = function() return 1, 1, 0 end
+	NP.SetupPlate("nameplate8")
+	local f = plate.SUIFrame
+
+	np.nameFormat, np.friendlyNameFormat = "last", "first"
+	NP.SetupPlate("nameplate8")
+	check("enemy name setting", f.Name:GetText() == "Guard", f.Name:GetText())
+	hostile = false
+	NP.SetupPlate("nameplate8")
+	check("friendly name setting", f.Name:GetText() == "Stormwind", f.Name:GetText())
+	np.nameFormat, np.friendlyNameFormat = "full", "full"
+
+	-- threat: only on an enemy target, only when switched on
+	hostile = true
+	np.threatText = false
+	NP.SetupPlate("nameplate8")
+	NP.UpdateThreat(f)
+	check("threat off by default", not f.Threat:IsShown())
+	np.threatText = true
+	local shown
+	f.Threat.SetFormattedText = function(_, _, v) shown = v end
+	NP.UpdateThreat(f)
+	check("threat shows on the target", f.Threat:IsShown() and shown == 87.4, shown)
+	targeted = false
+	NP.UpdateThreat(f)
+	check("not your target: no threat", not f.Threat:IsShown())
+	targeted, hostile = true, false
+	NP.SetupPlate("nameplate8")
+	NP.UpdateThreat(f)
+	check("friendly plate: no threat", not f.Threat:IsShown())
+	hostile, percent = true, nil
+	NP.SetupPlate("nameplate8")
+	NP.UpdateThreat(f)
+	check("no threat number: hidden", not f.Threat:IsShown())
+	f.Threat.SetFormattedText = nil
+	np.threatText = false
+
+	rawset(C_NamePlate, "GetNamePlateForUnit", oldGet)
+	UnitCanAttack, UnitName, UnitDetailedThreatSituation, GetThreatStatusColor = oldCan, oldName, oldThreat, oldColor
+end
+flushErrors("nameplate options")
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto
@@ -2077,17 +2148,17 @@ do
 	ns.Nameplates.driver:GetScript("OnEvent")(ns.Nameplates.driver, "RAID_TARGET_UPDATE")
 	check("plate marker follows the event", not f.Marker:IsShown())
 	index = 2
-	ns.db.nameplates.marker = false
+	ns.db.nameplates.friendlyMarker = false
 	ns.Nameplates.UpdateMarker(f)
 	check("plate marker off", not f.Marker:IsShown())
-	ns.db.nameplates.marker = true
+	ns.db.nameplates.friendlyMarker = true
 	f.nameFormat = nil
-	ns.db.nameplates.nameFormat = "last"
+	ns.db.nameplates.friendlyNameFormat = "last"
 	local oldUnitName = UnitName
 	UnitName = function() return "Stormwind Guard" end
 	ns.Nameplates.SetupPlate("nameplate9")
 	check("plate name follows the option", f.Name:GetText() == "Guard", f.Name:GetText())
-	ns.db.nameplates.nameFormat = "full"
+	ns.db.nameplates.friendlyNameFormat = "full"
 	UnitName = oldUnitName
 	GetRaidTargetIndex, SetRaidTargetIconTexture = oldIndex, oldSet
 	rawset(C_NamePlate, "GetNamePlates", oldPlates)
