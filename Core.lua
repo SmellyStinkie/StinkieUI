@@ -794,7 +794,7 @@ ns.defaults = {
 		hideArena = true, hideBG = true, hideRaid = true, hideMPlus = false, hideDungeon = false,
 	},
 	-- Damage Numbers: floating combat text over targets (0 = the game's default for each)
-	damageText = { enabled = true, size = 0, height = 0, screenY = 0, critScreenY = 0, critSize = 0, spread = 0, gravity = 0, directional = 0 },
+	damageText = { healing = true, enabled = true, size = 0, height = 0, screenY = 0, critScreenY = 0, critSize = 0, spread = 0, gravity = 0, directional = 0 },
 	-- Window Skins: the Character Sheet's flat look on other Blizzard windows (safe set only)
 	skins = {
 		enabled = true,
@@ -1534,7 +1534,11 @@ ns:On("ADDON_LOADED", function(_, name)
 	ns.db = db
 	-- Floating combat text and world names read these once while the world loads, so this
 	-- has to happen here (before PLAYER_LOGIN) and takes a relog to change.
-	if db.combatTextFont then DAMAGE_TEXT_FONT = ns.GetFontPath() end
+	if db.combatTextFont then
+		local path = ns.GetFontPath()
+		ns.damageFontReady = ns.FontLoads(path) -- /stinkie dmg reports this: a cold login can refuse it
+		DAMAGE_TEXT_FONT = path
+	end
 	if db.worldNameFont then UNIT_NAME_FONT = ns.GetFontPath() end
 end)
 

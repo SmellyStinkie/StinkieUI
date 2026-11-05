@@ -1190,6 +1190,27 @@ do
 	_G.SwingTimerMainHandFrame, _G.SwingTimerOffHandFrame, _G.SwingTimerRangedFrame = nil, nil, nil
 end
 
+-- healing numbers: the game's switch, on whichever name this client has
+do
+	local DT, c = ns.DamageText, ns.db.damageText
+	local old, set = C_CVar, {}
+	local have = { floatingCombatTextCombatHealing_v2 = "0" }
+	C_CVar = { GetCVar = function(n) return have[n] end, SetCVar = function(n, v) set[n] = v end, GetCVarDefault = function() return "1" end }
+	check("healing numbers on by default", c.healing == true)
+	DT.Apply()
+	check("healing switched on", set.floatingCombatTextCombatHealing_v2 == "1")
+	check("a name this client lacks is left alone", set.floatingCombatTextCombatHealing == nil)
+	c.healing = false
+	DT.Apply()
+	check("healing switched off", set.floatingCombatTextCombatHealing_v2 == "0")
+	c.healing = true
+	c.enabled = false
+	DT.Apply()
+	check("healing doesn't depend on the size and position switch", set.floatingCombatTextCombatHealing_v2 == "1")
+	c.enabled = true
+	C_CVar = old
+end
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto

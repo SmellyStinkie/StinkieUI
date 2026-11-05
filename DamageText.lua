@@ -24,6 +24,8 @@ DT.CVARS = {
 	gravity = { "WorldTextGravity_v2", "WorldTextGravity" },        -- how fast they fall back down
 	directional = { "floatingCombatTextCombatDamageDirectionalScale_v2", "floatingCombatTextCombatDamageDirectionalScale" }, -- low = numbers rise straight up
 }
+-- Your own healing numbers. On/off rather than a value, and Blizzard's settings have no box for it.
+DT.HEALING = { "floatingCombatTextCombatHealing_v2", "floatingCombatTextCombatHealing" }
 DT.ORDER = { "screenY", "height", "size", "critScreenY", "critSize", "spread", "gravity", "directional" }
 
 local function HasCVar(name)
@@ -47,6 +49,9 @@ end
 
 function DT.Apply()
 	local c = cfg()
+	for _, name in ipairs(DT.HEALING) do
+		if HasCVar(name) then pcall(C_CVar.SetCVar, name, c.healing and "1" or "0") end
+	end
 	c.touched = c.touched or {}
 	-- settings an earlier version changed that no option drives any more go back to the default
 	local driven = {}
@@ -97,7 +102,15 @@ function DT.Print()
 		table.sort(names)
 		ns:Print("World text settings (" .. #names .. "): " .. (#names > 0 and table.concat(names, ", ") or "none"))
 	end
+	for _, name in ipairs(DT.HEALING) do
+		local ok, v = pcall(C_CVar.GetCVar, name)
+		if ok and v ~= nil then ns:Print("Healing numbers: " .. name .. " = " .. tostring(v)) end
+	end
 	ns:Print("Font: " .. (ns.db.combatTextFont and "Stinkie UI (after a relog)" or "Blizzard's"))
+	ns:Print("Game's damage font: " .. tostring(DAMAGE_TEXT_FONT))
+	if ns.db.combatTextFont then
+		ns:Print("Font file ready when the game was given it: " .. tostring(ns.damageFontReady))
+	end
 end
 
 function DT:Init()
