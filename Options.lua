@@ -953,7 +953,9 @@ local function BuildPlateTargetPage(page)
 	page:Header("Threat")
 	page:Check("Threat % on your enemy target", Getter(cfg, "threatText"), Setter(cfg, "threatText"))
 	page:Choice("Spot above the health bar", { { "LEFT", "Left" }, { "CENTER", "Center" }, { "RIGHT", "Right" } }, Getter(cfg, "threatSide"), Setter(cfg, "threatSide"))
-	page:Note("Green under 50%, yellow from 50%, orange from 80%, red at 100%, when you have aggro. It only shows while the game gives a number. Where the game hides the number, the color follows its threat level instead.", 62)
+	page:Slider("Yellow from (%)", 1, 99, 1, Getter(cfg, "threatYellow"), Setter(cfg, "threatYellow"))
+	page:Slider("Orange from (%)", 1, 99, 1, Getter(cfg, "threatOrange"), Setter(cfg, "threatOrange"))
+	page:Note("Green to start, red when you hold aggro. Orange at 100% means you have aggro but someone is about to take it. It only shows while the game gives a number. Where the game hides the number, the color follows its threat level instead.", 62)
 	page:TextStyle("Threat text", function() return cfg().threatStyle end, { noColor = true })
 end
 

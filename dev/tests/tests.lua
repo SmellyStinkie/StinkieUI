@@ -1938,41 +1938,52 @@ do
 	f.Threat.SetFormattedText = nil
 	np.threatText = false
 
-	-- threat color climbs with the number
+	-- threat color: the percent's steps, sharpened by the game's own threat level
 	do
 		local function near(a, b) return math.abs(a - b) < 0.001 end
-		local function isColor(percent, r, g, b)
-			local c = NP.ThreatColor(percent)
+		local function isColor(percent, st, r, g, b)
+			local c = NP.ThreatColor(percent, st)
 			return near(c[1], r) and near(c[2], g) and near(c[3], b)
 		end
-		check("threat green", isColor(0, 0.25, 1, 0.25) and isColor(49.9, 0.25, 1, 0.25))
-		check("threat yellow", isColor(50, 1, 1, 0) and isColor(79.9, 1, 1, 0))
-		check("threat orange", isColor(80, 1, 0.55, 0) and isColor(99.9, 1, 0.55, 0))
-		check("threat red", isColor(100, 1, 0.15, 0.15) and isColor(130, 1, 0.15, 0.15))
+		local GREEN, YELLOW, ORANGE, RED = { 0.25, 1, 0.25 }, { 1, 1, 0 }, { 1, 0.55, 0 }, { 1, 0.15, 0.15 }
+		local function is(percent, st, want) return isColor(percent, st, want[1], want[2], want[3]) end
+		np.threatYellow, np.threatOrange = 30, 70
+		check("low threat green", is(0, 0, GREEN) and is(29.9, 0, GREEN))
+		check("threat yellow", is(30, 0, YELLOW) and is(69.9, 0, YELLOW))
+		check("threat orange", is(70, 0, ORANGE) and is(99.9, 0, ORANGE))
+		check("steps follow the sliders", (function()
+			np.threatYellow, np.threatOrange = 60, 90
+			local ok = is(50, 0, GREEN) and is(60, 0, YELLOW) and is(90, 0, ORANGE)
+			np.threatYellow, np.threatOrange = 30, 70
+			return ok
+		end)())
+		check("the game's level can raise the color", is(10, 1, YELLOW) and is(10, 2, ORANGE))
+		check("under 100% is never red", is(99, 3, ORANGE))
+		check("aggro held for good is red", is(100, 3, RED))
+		check("aggro about to go is orange", is(100, 2, ORANGE))
+		check("100% with no level is red", is(100, nil, RED))
+		do
+			local secret, old = {}, ns.issecret
+			ns.issecret = function(v) return v == secret end
+			check("hidden %: level 0 green", is(secret, 0, GREEN))
+			check("hidden %: level 1 yellow", is(secret, 1, YELLOW))
+			check("hidden %: level 2 orange", is(secret, 2, ORANGE))
+			check("hidden %: level 3 red", is(secret, 3, RED))
+			check("both hidden: white", is(secret, secret, { 1, 1, 1 }))
+			check("hidden level: the percent still works", is(40, secret, YELLOW) and is(100, secret, RED))
+			ns.issecret = old
+		end
 		local tinted
 		local oldColor = f.Threat.SetTextColor
 		f.Threat.SetTextColor = function(_, r, g, b) tinted = { r, g, b } end
 		f.Threat.SetFormattedText = function() end
-		-- a hidden percent falls back on the game's threat level, then on plain white
-		do
-			local secret, old = {}, ns.issecret
-			ns.issecret = function(v) return v == secret end
-			local function nearColor(c, r, g) return near(c[1], r) and near(c[2], g) end
-			check("hidden %: level 0 green", nearColor(NP.ThreatColorFor(secret, 0), 0.25, 1))
-			check("hidden %: level 1 yellow", nearColor(NP.ThreatColorFor(secret, 1), 1, 1))
-			check("hidden %: level 2 orange", nearColor(NP.ThreatColorFor(secret, 2), 1, 0.55))
-			check("hidden %: level 3 red", nearColor(NP.ThreatColorFor(secret, 3), 1, 0.15))
-			check("both hidden: white", nearColor(NP.ThreatColorFor(secret, secret), 1, 1) and NP.ThreatColorFor(secret, secret)[3] == 1)
-			check("readable % wins over the level", nearColor(NP.ThreatColorFor(60, 3), 1, 1))
-			ns.issecret = old
-		end
-		hostile, targeted, percent, status = true, true, 60, 3
+		hostile, targeted, percent, status = true, true, 60, 0
 		np.threatText = true
 		NP.SetupPlate("nameplate8")
 		NP.UpdateThreat(f)
 		check("the percent sets the color, not the game's status", tinted[1] == 1 and tinted[2] == 1 and tinted[3] == 0, tinted[2])
 		-- a layout paints the text plain; the threat color has to come back with no new threat event
-		percent = 41.5
+		percent = 20
 		tinted = nil
 		NP.SetupPlate("nameplate8")
 		check("a layout keeps the threat color", tinted and near(tinted[1], 0.25) and near(tinted[2], 1), tinted and tinted[1])

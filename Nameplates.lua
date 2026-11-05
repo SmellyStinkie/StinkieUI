@@ -361,26 +361,29 @@ local function UpdateTarget(f)
 	f.Highlight:SetAlphaFromBoolean(UnitIsUnit(f.unit, "target"), 1, 0)
 end
 
--- Green while you're safe, red once you have aggro.
-local THREAT_RED, THREAT_ORANGE = { 1.00, 0.15, 0.15 }, { 1.00, 0.55, 0.00 }
-local THREAT_YELLOW, THREAT_GREEN = { 1.00, 1.00, 0.00 }, { 0.25, 1.00, 0.25 }
+-- Green while you're safe, red when you hold aggro for good. Steps 0 to 3, the same scale as the
+-- game's own threat level.
+local THREAT_COLORS = {
+	[0] = { 0.25, 1.00, 0.25 }, -- green
+	[1] = { 1.00, 1.00, 0.00 }, -- yellow
+	[2] = { 1.00, 0.55, 0.00 }, -- orange
+	[3] = { 1.00, 0.15, 0.15 }, -- red
+}
 local THREAT_NEUTRAL = { 1, 1, 1 }
--- the game's own threat levels, 0 to 3, for when the percent is hidden
-local THREAT_BY_STATUS = { [0] = THREAT_GREEN, [1] = THREAT_YELLOW, [2] = THREAT_ORANGE, [3] = THREAT_RED }
 
-function NP.ThreatColor(percent)
-	if percent >= 100 then return THREAT_RED end
-	if percent >= 80 then return THREAT_ORANGE end
-	if percent >= 50 then return THREAT_YELLOW end
-	return THREAT_GREEN
-end
-
--- A hidden percent can't be compared, and the game's color curves refuse it from addons. The threat
--- level is restricted separately, so it can still be readable then.
-function NP.ThreatColorFor(percent, status)
-	if percent ~= nil and not ns.issecret(percent) then return NP.ThreatColor(percent) end
-	if status ~= nil and not ns.issecret(status) then return THREAT_BY_STATUS[status] or THREAT_NEUTRAL end
-	return THREAT_NEUTRAL
+-- Threat tends to jump rather than climb, so the percent alone skips the middle colors. The game's
+-- level knows what it can't: at 100% you have aggro, and level 2 means someone is about to take it.
+-- A hidden percent can't be compared (the game's color curves refuse it from addons too), but the
+-- level is restricted separately and can still be readable.
+function NP.ThreatColor(percent, status)
+	local c = ns.db.nameplates
+	local level = (status ~= nil and not ns.issecret(status)) and status or nil
+	if percent == nil or ns.issecret(percent) then
+		return level and THREAT_COLORS[level] or THREAT_NEUTRAL
+	end
+	if percent >= 100 then return THREAT_COLORS[level or 3] or THREAT_NEUTRAL end
+	local step = percent >= c.threatOrange and 2 or percent >= c.threatYellow and 1 or 0
+	return THREAT_COLORS[math.max(step, math.min(level or 0, 2))]
 end
 
 -- Threat % on your target's plate. It can be hidden from addons: a hidden number can't be
@@ -400,7 +403,7 @@ function NP.UpdateThreat(f)
 		f.Threat:SetFormattedText("%.0f%%", percent)
 		f.Threat:Show()
 	end
-	local c = NP.ThreatColorFor(percent, UnitThreatSituation("player", f.unit))
+	local c = NP.ThreatColor(percent, UnitThreatSituation("player", f.unit))
 	f.Threat:SetTextColor(c[1], c[2], c[3])
 end
 

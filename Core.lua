@@ -479,6 +479,7 @@ ns.defaults = {
 		friendlyShowLevel = false, friendlyHealthText = false,
 		-- threat % just above your target's health bar: LEFT | CENTER | RIGHT
 		threatText = false, threatSide = "RIGHT", threatStyle = text(14),
+		threatYellow = 30, threatOrange = 70, -- % where the color steps up
 		specX = 0, specY = 0,
 		softIconScale = 1.5, softIconY = 4, -- Blizzard's soft-target (quest / interact) icon
 		friendlyLower = 0, -- push friendly plates down to make room above them
