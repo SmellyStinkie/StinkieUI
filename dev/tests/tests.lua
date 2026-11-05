@@ -132,6 +132,72 @@ MOCK.dead = false
 ns.BGTimers.Debug()
 flushErrors("bgtimers")
 
+-- Blitz base cycle on Arathi Basin and Deepwind Gorge
+do
+	local BT, L = ns.BGTimers, ns.BGTimers.Logic
+	check("cycle maps", L.IsCycleMap("Arathi Basin") and L.IsCycleMap("Deepwind Gorge"))
+	check("not Gilneas", not L.IsCycleMap("Battle for Gilneas"))
+	local n = {}
+	check("assault: 30 seconds", L.OnCycleChange(n, 100, nil) and n.phase == "assault" and n.phaseEnd == 130)
+	check("taken over: starts again", L.OnCycleChange(n, 110, nil) and n.phase == "assault" and n.phaseEnd == 140)
+	check("turned: locked 45 seconds", L.OnCycleChange(n, 139, nil) and n.phase == "lock" and n.phaseEnd == 184)
+	check("locked: icon changes ignored", not L.OnCycleChange(n, 150, nil) and n.phase == "lock" and n.phaseEnd == 184)
+	check("still locked: no move", not L.Advance(n, 183) and n.phase == "lock")
+	check("lock ends: 5 second reset", L.Advance(n, 184) and n.phase == "reset" and n.phaseEnd == 189)
+	check("reset: no team", n.team == nil)
+	check("reset ends: open", L.Advance(n, 189) and n.phase == nil)
+	check("opening icon isn't an assault", not L.OnCycleChange(n, 190, nil) and n.phase == nil)
+	check("next assault counts", L.OnCycleChange(n, 200, nil) and n.phase == "assault")
+
+	n = { }
+	L.OnCycleChange(n, 0, "BG-Horde-Stables-Contested")
+	check("names give the team", n.team == "Horde")
+	check("clock alone moves it on", L.Advance(n, 30) and n.phase == "lock" and n.phaseEnd == 75 and n.team == "Horde")
+	check("late turn icon changes nothing", not L.OnCycleChange(n, 31, "BG-Horde-Stables") and n.phaseEnd == 75)
+	check("a long gap runs through", L.Advance(n, 500) and n.phase == nil)
+	n = {}
+	L.OnCycleChange(n, 0, "BG-Horde-Stables-Contested")
+	check("other team's assault restarts", L.OnCycleChange(n, 10, "BG-Alliance-Stables-Contested") and n.team == "Alliance" and n.phaseEnd == 40)
+	check("same assault doesn't", not L.OnCycleChange(n, 11, "BG-Alliance-Stables-Contested") and n.phaseEnd == 40)
+	check("named neutral icon clears it", L.OnCycleChange(n, 12, "BG-Neutral-Stables") and n.phase == nil)
+	check("named neutral icon doesn't start one", not L.OnCycleChange(n, 13, "BG-Neutral-Stables") and n.phase == nil)
+	check("labels", L.PhaseLabel("Stables", "assault") == "Stables" and L.PhaseLabel("Stables", "lock") == "Stables locked"
+		and L.PhaseLabel("Stables", "reset") == "Stables opens")
+
+	local oldName, oldMap, oldBracket = MOCK.instanceName, MOCK.mapName, MOCK.bracket
+	local function shown()
+		local out = {}
+		for _, o in ipairs(MOCK.frames) do
+			if o._kind == "FontString" and o._parent and o._parent:IsShown() and o._parent._parent == BT.holder and o._text then
+				out[o._text] = true
+			end
+		end
+		return out
+	end
+	MOCK.bracket = "blitz"
+	check("Blitz on Arathi Basin uses the cycle", BT.UsesCycle())
+	MOCK.Fire("PLAYER_ENTERING_WORLD", false, false)
+	MOCK.Advance(1.1)
+	MOCK.pois[1].textureIndex = 21
+	MOCK.Fire("AREA_POIS_UPDATED")
+	MOCK.Advance(1)
+	check("bar: assault", shown()["Stables"])
+	for _ = 1, 30 do MOCK.Advance(1) end
+	check("bar: locked", shown()["Stables locked"] and not shown()["Stables"])
+	for _ = 1, 45 do MOCK.Advance(1) end
+	check("bar: opens", shown()["Stables opens"] and not shown()["Stables locked"])
+	for _ = 1, 7 do MOCK.Advance(1) end
+	check("bar: gone once open", not shown()["Stables opens"])
+	MOCK.instanceName, MOCK.mapName = "Battle for Gilneas", "Battle for Gilneas"
+	check("Gilneas keeps the normal timer", not BT.UsesCycle())
+	MOCK.instanceName, MOCK.mapName = oldName, oldMap
+	MOCK.bracket = nil
+	check("normal Arathi Basin keeps the normal timer", not BT.UsesCycle())
+	MOCK.bracket = oldBracket
+	MOCK.Fire("PLAYER_ENTERING_WORLD", false, false)
+end
+flushErrors("blitz cycle")
+
 ---------------------------------------------------------------------------
 -- Match recorder: a 3v3
 ---------------------------------------------------------------------------

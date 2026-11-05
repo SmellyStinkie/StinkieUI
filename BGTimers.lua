@@ -5,6 +5,9 @@
 -- the map: a base's map icon changes when it's assaulted, and again when it turns or is defended.
 -- The time a base takes to turn isn't exposed, so it's set per map (BG Timers page). The winner
 -- prediction measures each team's score rate from the score bar, so it needs no per-map data.
+-- Blitz on Arathi Basin and Deepwind Gorge runs bases on a fixed cycle instead: 30 seconds to turn,
+-- 45 seconds locked behind a shield, 5 seconds shut, then open again. Those phases run on the clock,
+-- because the shield and reset have no icon we can name; icon changes only start or correct them.
 -- Runs only inside battlegrounds.
 local _, ns = ...
 
@@ -65,6 +68,80 @@ function L.OnNodeChange(node, now, duration, atlas)
 	end
 	node.timerEnd, node.team = now + duration, nil
 	return "START"
+end
+
+-- Blitz base cycle
+L.PHASES = {
+	assault = { secs = 30, nextPhase = "lock" },
+	lock = { secs = 45, nextPhase = "reset" },
+	reset = { secs = 5 },
+}
+local TURN_SLACK = 3 -- seconds either side of a phase ending when an icon change is that ending
+
+function L.IsCycleMap(name)
+	if type(name) ~= "string" then return false end
+	local n = name:lower()
+	return n:find("arathi basin", 1, true) ~= nil or n:find("deepwind gorge", 1, true) ~= nil
+end
+
+local function EnterPhase(node, phase, start, team)
+	node.phase, node.phaseEnd, node.team = phase, start + L.PHASES[phase].secs, team
+end
+
+-- Moves a base on when its phase has run out. Returns true if anything changed.
+function L.Advance(node, now)
+	local moved = false
+	while node.phase and now >= node.phaseEnd do
+		moved = true
+		local nextPhase = L.PHASES[node.phase].nextPhase
+		if nextPhase then
+			EnterPhase(node, nextPhase, node.phaseEnd, nextPhase == "lock" and node.team or nil)
+		else
+			node.recentEnd, node.phase, node.phaseEnd = node.phaseEnd, nil, nil
+		end
+	end
+	return moved
+end
+
+-- A base's map icon changed. Returns true if its timer changed.
+function L.OnCycleChange(node, now, atlas)
+	local state, team = L.AtlasState(atlas)
+	if state == "CONTESTED" then
+		if node.phase == "assault" and node.team == team then return false end
+		EnterPhase(node, "assault", now, team)
+		return true
+	elseif state == "OWNED" then
+		if node.phase == "lock" then return false end
+		EnterPhase(node, "lock", now, team)
+		return true
+	end
+	if type(atlas) == "string" and atlas ~= "" then -- a named icon that's neither: back to neutral
+		if node.phase ~= "assault" then return false end
+		node.phase, node.phaseEnd, node.team = nil, nil, nil
+		return true
+	end
+	-- no readable icon name: go by when it happened
+	if node.phase == "assault" then
+		if now >= node.phaseEnd - TURN_SLACK then
+			EnterPhase(node, "lock", now, node.team)
+		else
+			EnterPhase(node, "assault", now, nil) -- the other team took the assault over
+		end
+		return true
+	end
+	if node.phase then return false end -- nothing can touch a base while it's locked or shut
+	if node.recentEnd and math.abs(now - node.recentEnd) <= TURN_SLACK then
+		node.recentEnd = nil
+		return false -- the base opening again; a real assault takes a 4 second cast after that
+	end
+	EnterPhase(node, "assault", now, nil)
+	return true
+end
+
+function L.PhaseLabel(name, phase)
+	if phase == "lock" then return name .. " locked" end
+	if phase == "reset" then return name .. " opens" end
+	return name
 end
 
 -- Score samples { t, a, h } (oldest first) -> per-second rates over the window
@@ -206,8 +283,26 @@ local function MapDuration()
 	return nil
 end
 
+-- Blitz can take a moment after loading in to report itself, so this is asked each time
+function T.UsesCycle()
+	if ns.CombatLog.MatchType() ~= "blitz" then return false end
+	local instName = GetInstanceInfo()
+	if readable(instName) and L.IsCycleMap(instName) then return true end
+	local info = mapID and C_Map.GetMapInfo(mapID)
+	return info ~= nil and readable(info.name) and L.IsCycleMap(info.name)
+end
+
+local function SyncCycleTimer(id, node)
+	if node.phase then
+		SetTimer("node" .. id, "node", L.PhaseLabel(node.name, node.phase), node.phaseEnd, L.PHASES[node.phase].secs, node.team)
+	else
+		ClearTimer("node" .. id)
+	end
+end
+
 function T:ScanNodes(first)
-	if not (cfg().nodes and mapID and duration and duration > 0) then return end
+	local cycle = T.UsesCycle()
+	if not (cfg().nodes and mapID and (cycle or (duration and duration > 0))) then return end
 	local ids = C_AreaPoiInfo.GetAreaPOIForMap(mapID) or {}
 	local now = GetTime()
 	local seen = {}
@@ -226,6 +321,9 @@ function T:ScanNodes(first)
 				if state == "CONTESTED" and not first then
 					nodes[id].timerEnd, nodes[id].team = now + duration, team
 				end
+			elseif node.sig ~= sig and cycle then
+				node.sig = sig
+				if L.OnCycleChange(node, now, atlas) then SyncCycleTimer(id, node) end
 			elseif node.sig ~= sig then
 				node.sig = sig
 				local result = L.OnNodeChange(node, now, duration, atlas)
@@ -310,6 +408,10 @@ local function OnUpdate(_, elapsed)
 			T:UpdateRespawn(now)
 		end)
 		if not ok and not T.errored then T.errored = true; geterrorhandler()(err) end
+	end
+	-- Blitz bases move through their phases on the clock
+	for id, node in pairs(nodes) do
+		if node.phase and L.Advance(node, now) then SyncCycleTimer(id, node) end
 	end
 	-- drop finished base timers
 	for i = #active, 1, -1 do
@@ -408,6 +510,7 @@ function T.Debug()
 		local p = C_AreaPoiInfo.GetAreaPOIInfo(m, id)
 		if p then print(string.format("  %d %s  atlas=%s  texture=%s", id, tostring(p.name), tostring(p.atlasName), tostring(p.textureIndex))) end
 	end
+	print("  Blitz base cycle: " .. tostring(T.UsesCycle()))
 	local a, h, max = ReadScore()
 	print("  score: " .. tostring(a) .. " / " .. tostring(h) .. " of " .. tostring(max))
 end
