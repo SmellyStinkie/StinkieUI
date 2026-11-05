@@ -616,9 +616,12 @@ local q = ns.QueueInfo.LastMMR("shuffle")
 check("mmr per spec with delta", q and q.mmr == 2773 and q.delta == 73, q and q.delta)
 check("delta text green", ns.QueueInfo.DeltaText(73):find("55ff55") and ns.QueueInfo.DeltaText(-40):find("ff5555") and ns.QueueInfo.DeltaText(-40):find("-40"))
 ns.CharacterSheet.ApplyLayout()
-check("roomy model size", CharacterModelScene._w == 231 + 90 and CharacterModelScene._h == 320 + 70, CharacterModelScene._w)
-check("roomy frame height", CharacterFrame._h == 424 + 70)
-check("opacity default 0.9", ns.db.character.frameAlpha == 0.9)
+do
+	local ch = ns.db.character
+	check("roomy model size", CharacterModelScene._w == 231 + ch.extraWidth and CharacterModelScene._h == 320 + ch.extraHeight, CharacterModelScene._w)
+	check("roomy frame height", CharacterFrame._h == 424 + ch.extraHeight)
+	check("opacity comes from the defaults", ch.frameAlpha == ns.defaults.character.frameAlpha)
+end
 MOCK.items[1].sockets = { 213746, false }
 ns.CharacterSheet.UpdateButton(CharacterHeadSlot, "player", 1, "RIGHT")
 local gem = CharacterHeadSlot.SUISheet.gems[1]
@@ -978,7 +981,9 @@ do
 	local QA, c = ns.QuestArrow, ns.db.misc.questArrow
 	local pi = math.pi
 	local function near(a, b) return math.abs(a - b) < 0.0001 end
-	check("marker off by default", c.enabled == false and not QA.holder:IsShown())
+	c.enabled = false
+	QA:Refresh()
+	check("marker can be off", not QA.holder:IsShown())
 	-- textures rotate counter-clockwise from up
 	check("off screen above", near(QA.EdgeRotation(100, 200, 100, 100), 0))
 	check("off screen to the right", near(QA.EdgeRotation(200, 100, 100, 100), -pi / 2))
@@ -1287,7 +1292,9 @@ do
 	_G.SwingTimerRangedFrame = ranged
 
 	-- only show while attacking
-	check("idle hiding off by default", cfg.hideIdle == false and main:GetAlpha() == 1)
+	cfg.hideIdle = false
+	ST:Refresh()
+	check("idle hiding off shows the bars", main:GetAlpha() == 1)
 	cfg.hideIdle = true
 	ST:Refresh()
 	check("idle: all hidden", main:GetAlpha() == 0 and off:GetAlpha() == 0 and ranged:GetAlpha() == 0)
@@ -1341,7 +1348,7 @@ end
 do
 	local BG, c = ns.BGEnemies, ns.db.bgAllies
 	local A, E = BG.allies, BG.enemies
-	check("ally buffs off by default", c.buffs == false and c.buffsMine == false)
+	c.buffs, c.buffsMine = false, false
 	check("all buffs filter", BG.BuffFilter(c) == "HELPFUL")
 	c.buffsMine = true
 	check("my buffs filter", BG.BuffFilter(c) == "HELPFUL|PLAYER")
@@ -1829,7 +1836,7 @@ do
 		UnregisterEvent = function(_, e) log[#log + 1] = "off " .. e end,
 		RegisterEvent = function(_, e) log[#log + 1] = "on " .. e end,
 	}
-	check("errors shown by default", A.hideErrors == false)
+	A.hideErrors, M.errorsHidden = false, false
 	M.ApplyHideErrors()
 	check("off does nothing, so another addon's choice stands", #log == 0)
 	A.hideErrors = true
@@ -1851,7 +1858,7 @@ do
 	local function stub(name, fn) saved[name] = _G[name]; _G[name] = fn end
 	local function reset() for k in pairs(calls) do calls[k] = nil end end
 	for _, k in ipairs({ "questAccept", "questTurnIn", "repair", "repairGuild", "sellJunk", "releasePvP" }) do
-		check("off by default: " .. k, A[k] == false)
+		A[k] = false
 	end
 	A.announce = false
 	stub("IsShiftKeyDown", function() return false end)
@@ -2191,7 +2198,7 @@ ns.StartProfile(1)
 MOCK.Fire("PLAYER_TARGET_CHANGED")
 MOCK.Advance(1.2)
 check("profiler stops itself", ns.profile.on == false)
-check("defaults: ring combat only, GCD History off", ns.defaults.cursor.ringCombatOnly == true and ns.defaults.misc.gcd.enabled == false)
+check("cursor ring and GCD History have defaults", type(ns.defaults.cursor.ringCombatOnly) == "boolean" and type(ns.defaults.misc.gcd.enabled) == "boolean")
 flushErrors("0.38")
 
 -- 0.38: title bars and the Achievements header

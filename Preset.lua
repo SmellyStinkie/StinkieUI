@@ -59,7 +59,7 @@ local PRESET = {
 			size = 17,
 		},
 		point = { "RIGHT", -560, 105 },
-		spacing = 10,
+		spacing = 20,
 		trinketSize = 55,
 		width = 200,
 	},
@@ -84,6 +84,10 @@ local PRESET = {
 		precogWhere = "always",
 	},
 	bgAllies = {
+		buffSide = "LEFT",
+		buffSize = 35,
+		buffs = true,
+		buffsMine = true,
 		carrierSide = "RIGHT",
 		headerStyle = {
 			size = 18,
@@ -137,22 +141,24 @@ local PRESET = {
 		width = 270,
 	},
 	bgWidgets = {
+		arenaScale = 1.3,
+		arenaTextSize = 18,
 		capturePoint = { "TOP", 0, -120 },
 		captureScale = 1.5,
 		ghostPoint = { "TOP", 0, -230 },
 		ghostScale = 1.2,
 		scoreScale = 1.75,
 	},
-	buffs = {
-		hideDungeon = true,
-		hideRaid = true,
-	},
 	character = {
-		background = "warband:7",
-		dim = 0.55,
+		background = "warband:25",
+		dim = 0.65,
+		extraHeight = 100,
+		extraWidth = 100,
+		frameAlpha = 0.65,
 		gemSize = 13,
 		nameChars = 20,
-		scale = 1.44,
+		outerDim = 0.65,
+		scale = 1.45,
 	},
 	chat = {
 		bgAlpha = 0.6,
@@ -196,6 +202,7 @@ local PRESET = {
 		raid = true,
 		singleFile = true,
 	},
+	combatTextFont = true,
 	cooldowns = {
 		bars = {
 			{
@@ -235,6 +242,7 @@ local PRESET = {
 		ring = true,
 		ringAlpha = 0.85,
 		ringColor = { 0.858824, 0.690196, 1 },
+		ringCombatOnly = false,
 		ringSize = 69,
 	},
 	damageMeter = {
@@ -250,6 +258,12 @@ local PRESET = {
 			size = 14,
 		},
 		windowBorder = false,
+	},
+	damageText = {
+		critScreenY = 0.045,
+		critSize = 2,
+		height = 9.75,
+		screenY = 0.045,
 	},
 	flagCap = {
 		eta = false,
@@ -288,13 +302,30 @@ local PRESET = {
 		},
 	},
 	misc = {
+		auto = {
+			hideErrors = true,
+			questAccept = true,
+			questTurnIn = true,
+			releasePvP = true,
+			repair = true,
+			sellJunk = true,
+		},
 		decor = {
 			enabled = true,
 		},
 		gcd = {
 			direction = "LEFT",
+			enabled = true,
 			point = { "BOTTOM", -380, 0 },
 			spacing = 0,
+		},
+		questArrow = {
+			enabled = true,
+			height = 70,
+			size = 30,
+			textStyle = {
+				size = 25,
+			},
 		},
 	},
 	nameplates = {
@@ -303,7 +334,7 @@ local PRESET = {
 		carrierSize = 70,
 		castHeight = 15,
 		eliteSize = 16,
-		friendlyHeight = 5,
+		friendlyHeight = 6,
 		friendlyLower = 20,
 		friendlyNameInBar = true,
 		friendlyNameStyle = {
@@ -322,7 +353,7 @@ local PRESET = {
 			clickPad = 18,
 		},
 		nameInBar = true,
-		nameMaxChars = 10,
+		nameMaxChars = 20,
 		nameStyle = {
 			size = 18,
 		},
@@ -333,9 +364,8 @@ local PRESET = {
 		specIcons = true,
 		specIconsFriendly = true,
 		stacking = {
-			spacing = 0.6,
-			speed = 0.05,
-			topInset = 0.17,
+			spacing = 0.35,
+			topInset = 0.13,
 		},
 		width = 210,
 	},
@@ -356,12 +386,13 @@ local PRESET = {
 		},
 		point = { "LEFT", 560, 84 },
 		power = "healer",
+		spacing = 20,
 		trinketSize = 0,
 		width = 200,
 	},
 	partyTargets = {
 		enabled = true,
-		height = 20,
+		height = 16,
 		hideInPvP = false,
 	},
 	queueInfo = {
@@ -377,6 +408,13 @@ local PRESET = {
 			size = 17,
 		},
 		width = 523,
+	},
+	swingTimers = {
+		hideIdle = true,
+		rangedColor = { 0.239216, 0.513726, 0.713726 },
+		textStyle = {
+			size = 15,
+		},
 	},
 	units = {
 		focus = {
