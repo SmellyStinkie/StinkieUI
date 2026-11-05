@@ -1005,6 +1005,7 @@ local function BuildActionBarPage(page)
 	page:Check("Hide Blizzard bar art", Getter(cfg, "hideArt"), Setter(cfg, "hideArt"), true)
 	page:Check("Show macro names", Getter(cfg, "macroText"), Setter(cfg, "macroText"))
 	page:Check("Show keybinds", Getter(cfg, "hotkeys"), Setter(cfg, "hotkeys"))
+	page:Check("Keybinds off: show them when hovering a bar", Getter(cfg, "hotkeysHover"), Setter(cfg, "hotkeysHover"))
 	page:Check("Lock buttons", ns.ActionBars.ButtonsLocked, ns.ActionBars.SetButtonsLocked)
 	page:Note("Stops buttons being dragged off the bars. This is the game's own Lock Action Bars setting. Shift still moves them while locked.", 48)
 	page:Slider("Icon zoom (shared with cooldowns)", 0, 0.2, 0.01, function() return ns.db.cooldowns.iconZoom end,
@@ -1100,6 +1101,7 @@ local function BuildMiscPage(page)
 	local function gcd() return ns.db.misc.gcd end
 	local function decor() return ns.db.misc.decor end
 	local function auto() return ns.db.misc.auto end
+	local function arrow() return ns.db.misc.questArrow end
 	page:Column(1)
 	page:Header("GCD History")
 	page:Check("Enabled", Getter(gcd, "enabled"), Setter(gcd, "enabled"))
@@ -1138,6 +1140,14 @@ local function BuildMiscPage(page)
 	page:Check("Release when you die", Getter(auto, "releasePvP"), Setter(auto, "releasePvP"))
 	page:Note("Battlegrounds and Blitz only. With a soulstone or similar, the choice stays yours.", 36)
 	page:Check("Say in chat what was done", Getter(auto, "announce"), Setter(auto, "announce"))
+	page:Header("Quest arrow")
+	page:Check("Enabled", Getter(arrow, "enabled"), Setter(arrow, "enabled"))
+	page:Note("Points at the objective of the quest you're actively tracking (the one with the diamond), with the distance in yards. When the way there needs a portal or flight, it points to that first. No arrow where the game hides your position, such as many instances.", 76)
+	page:Slider("Arrow size", 16, 128, 1, Getter(arrow, "size"), Setter(arrow, "size"))
+	page:Color("Arrow color", Getter(arrow, "color"), Setter(arrow, "color"))
+	page:Check("Show quest name", Getter(arrow, "showName"), Setter(arrow, "showName"))
+	page:Position(nil, function() return "questArrow" end)
+	page:TextStyle("Quest arrow text", function() return arrow().textStyle end)
 end
 
 local function BuildCombatPage(page)

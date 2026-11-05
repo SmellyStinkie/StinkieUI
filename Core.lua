@@ -13,6 +13,7 @@ ns.MEDIA = {
 	cross = [[Interface\AddOns\StinkieUI\Media\cross]],
 	logo = [[Interface\AddOns\StinkieUI\Media\logo]],
 	logoIcon = [[Interface\AddOns\StinkieUI\Media\logo_icon]], -- plus sign, same shape as the nameplate healer cross
+	arrow = [[Interface\AddOns\StinkieUI\Media\arrow]], -- white arrowhead pointing up with a black outline (tinted)
 	star = [[Interface\AddOns\StinkieUI\Media\star]],   -- white star with a black outline (tinted gold/silver)
 	edge = [[Interface\AddOns\StinkieUI\Media\edge]],   -- square outline
 	blank = [[Interface\AddOns\StinkieUI\Media\blank]],
@@ -585,6 +586,7 @@ ns.defaults = {
 		hideArt = true,
 		macroText = false,
 		hotkeys = true,
+		hotkeysHover = false, -- keybinds off: they still show on the bar under the mouse
 		hotkeyStyle = text(11),
 		countStyle = text(12),
 		macroStyle = text(10),
@@ -635,6 +637,14 @@ ns.defaults = {
 			enabled = false,
 			maxGold = 0, -- 0: no limit
 			announce = true,
+		},
+		-- points at the objective of the quest you're actively tracking
+		questArrow = {
+			enabled = false,
+			size = 48, color = { 0.75, 0.80, 0.16 },
+			showName = true,
+			textStyle = text(13),
+			point = { "TOP", 0, -170 },
 		},
 		-- errands done for you; each one is off until it's asked for
 		auto = {

@@ -164,6 +164,7 @@ function AB.SkinBar(bar)
 	if not bar then return end
 	StripBarArt(bar)
 	for _, b in ipairs(bar.actionButtons or {}) do AB.SkinButton(b) end
+	bar.SUIHotkeysShown = nil
 end
 
 local function SkinAll()
@@ -208,6 +209,31 @@ local function UpdateFade()
 	end
 end
 
+-- Keybinds off, but shown on the bar under the mouse. StyleText puts them back to hidden, so a
+-- skinned bar forgets what was last painted here.
+local function UpdateHotkeyHover()
+	local cfg = ns.db.actionBars
+	if cfg.hotkeys or not cfg.hotkeysHover then return end
+	for _, def in ipairs(AB.BARS) do
+		local bar = not def[3] and GetBar(def[1])
+		if bar then
+			local over = BarHovered(bar)
+			if over ~= (bar.SUIHotkeysShown or false) then
+				bar.SUIHotkeysShown = over
+				for _, b in ipairs(bar.actionButtons or {}) do
+					if b.HotKey then b.HotKey:SetAlpha(over and 1 or 0) end
+				end
+			end
+		end
+	end
+end
+AB.UpdateHotkeyHover = UpdateHotkeyHover
+
+local function OnTick()
+	UpdateFade()
+	UpdateHotkeyHover()
+end
+
 function AB:Init()
 	if not ns.db.actionBars.enabled then return end
 	if C_AddOns and C_AddOns.IsAddOnLoaded then
@@ -237,7 +263,7 @@ function AB:Init()
 	end
 	ns:On("PLAYER_ENTERING_WORLD", function() C_Timer.After(0, function() ns:RunOOC(SkinAll) end) end)
 	ns:On("UPDATE_BINDINGS", function() C_Timer.After(0, function() ns:RunOOC(SkinAll) end) end)
-	AB.ticker = C_Timer.NewTicker(0.1, ns.Timed("Action bar fade", UpdateFade))
+	AB.ticker = C_Timer.NewTicker(0.1, ns.Timed("Action bar fade", OnTick))
 	AB.KeepVehicleExit()
 end
 

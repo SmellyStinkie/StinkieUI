@@ -34,6 +34,7 @@ PartyTargets.lua
 Minimap.lua
 Chat.lua
 Misc.lua
+QuestArrow.lua
 Objectives.lua
 Buffs.lua
 Tooltip.lua
