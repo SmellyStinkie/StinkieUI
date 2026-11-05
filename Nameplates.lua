@@ -335,7 +335,7 @@ local function UpdateTarget(f)
 	f.Highlight:SetAlphaFromBoolean(UnitIsUnit(f.unit, "target"), 1, 0)
 end
 
--- Threat % beside your target's plate. It can be hidden from addons: a hidden number can't be
+-- Threat % in your target's health bar. It can be hidden from addons: a hidden number can't be
 -- compared, so it goes straight to the text, and the plate stays clean if the game refuses it.
 function NP.UpdateThreat(f)
 	local cfg = ns.db.nameplates
@@ -648,12 +648,10 @@ local function LayoutPlate(f)
 	f.HealthText:ClearAllPoints()
 	f.HealthText:SetPoint("RIGHT", f.Health, "RIGHT", -2, 0)
 	ns.ApplyText(f.Threat, cfg.threatStyle)
+	-- inside the bar, on the text layer above it
+	local threatSpot = cfg.threatSide or "RIGHT"
 	f.Threat:ClearAllPoints()
-	if cfg.threatSide == "LEFT" then
-		f.Threat:SetPoint("RIGHT", f.HealthFrame, "LEFT", -5, 0)
-	else
-		f.Threat:SetPoint("LEFT", f.HealthFrame, "RIGHT", 5, 0)
-	end
+	f.Threat:SetPoint(threatSpot, f.Health, threatSpot, threatSpot == "LEFT" and 3 or threatSpot == "RIGHT" and -3 or 0, 0)
 	local showHP = cfg.showHealthText
 	if friendly then showHP = cfg.friendlyHealthText end
 	f.HealthText:SetShown(showHP)

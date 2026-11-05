@@ -949,10 +949,9 @@ local function BuildPlateTargetPage(page)
 	page:Slider("Arrow size", 8, 80, 1, Getter(hcfg, "arrowSize"), Setter(hcfg, "arrowSize"))
 	page:Slider("Target plate scale", 1, 1.6, 0.05, function() return hcfg().scale or 1 end, Setter(hcfg, "scale"))
 	page:Header("Threat")
-	page:Check("Threat % on your enemy target", Getter(cfg, "threatText"), Setter(cfg, "threatText"))
-	page:Choice("Side", { { "LEFT", "Left" }, { "RIGHT", "Right" } }, Getter(cfg, "threatSide"), Setter(cfg, "threatSide"))
+	page:Check("Threat % in your enemy target's health bar", Getter(cfg, "threatText"), Setter(cfg, "threatText"))
+	page:Choice("Spot in the health bar", { { "LEFT", "Left" }, { "CENTER", "Center" }, { "RIGHT", "Right" } }, Getter(cfg, "threatSide"), Setter(cfg, "threatSide"))
 	page:Note("100% means you have aggro. It takes Blizzard's threat colors, and only shows while the game gives a number.", 36)
-	page:Column(2)
 	page:TextStyle("Threat text", function() return cfg().threatStyle end)
 end
 

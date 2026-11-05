@@ -477,7 +477,7 @@ ns.defaults = {
 		friendlyMarker = true, friendlyMarkerSize = 28,
 		friendlyHealerSize = 20,
 		friendlyShowLevel = false, friendlyHealthText = false,
-		-- threat % beside your target's plate
+		-- threat % inside your target's health bar: LEFT | CENTER | RIGHT
 		threatText = false, threatSide = "RIGHT", threatStyle = text(14),
 		specX = 0, specY = 0,
 		softIconScale = 1.5, softIconY = 4, -- Blizzard's soft-target (quest / interact) icon
