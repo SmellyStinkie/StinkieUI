@@ -1192,6 +1192,51 @@ do
 	C_CVar = old
 end
 
+-- ally buffs: all of them, or only yours
+do
+	local BG, c = ns.BGEnemies, ns.db.bgAllies
+	local A, E = BG.allies, BG.enemies
+	check("ally buffs off by default", c.buffs == false and c.buffsMine == false)
+	check("all buffs filter", BG.BuffFilter(c) == "HELPFUL")
+	c.buffsMine = true
+	check("my buffs filter", BG.BuffFilter(c) == "HELPFUL|PLAYER")
+	c.buffsMine = false
+	check("enemies get no buffs", E.rows[1].Buffs == nil and ns.db.bgEnemies.buffs == nil)
+	local row = A.rows[1]
+	check("ally rows have buffs", row.Buffs ~= nil)
+	local unit, enabled, filter, max
+	local b = row.Buffs
+	b.SetUnit = function(_, u) unit = u end
+	b.GetUnit = function() return unit end
+	b.SetEnabled = function(_, on) enabled = on end
+	b.SetAuraGroupFilterString = function(_, _, f) filter = f end
+	b.SetAuraGroupMaxFrameCount = function(_, _, n) max = n end
+	b.UpdateAllAuras = function() end
+
+	row.unit = "raid3"
+	A:UpdateBuffs(row)
+	check("off: nothing watched", enabled == false)
+	c.buffs = true
+	A:LayoutRow(row)
+	check("on: watches the ally", enabled == true and unit == "raid3", unit)
+	check("on: icons shown", b:IsShown())
+	check("buff count applied", max == c.buffMax, max)
+	c.buffsMine = true
+	A:LayoutRow(row)
+	check("only mine changes the filter live", filter == "HELPFUL|PLAYER", filter)
+	row.preview = true
+	A:UpdateBuffs(row)
+	check("test mode: your own buffs", unit == "player")
+	row.preview = nil
+	row.unit = nil
+	A:UpdateBuffs(row)
+	check("unbound row watches nobody", enabled == false)
+	c.buffs, c.buffsMine = false, false
+	A:LayoutRow(row)
+	check("off again: icons hidden", not b:IsShown())
+end
+flushErrors("ally buffs")
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto

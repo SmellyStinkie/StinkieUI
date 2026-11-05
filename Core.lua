@@ -549,6 +549,8 @@ ns.defaults = {
 		specText = true, specStyle = text(9),
 		carrier = true, carrierSide = "LEFT",
 		stacks = true, stackSize = 20,
+		buffs = false, buffsMine = false, -- buffs beside each ally; only the ones you cast
+		buffMax = 4, buffSize = 18, buffSide = "RIGHT",
 		header = true,
 		targetHighlight = true, targetThickness = 2, targetColor = { 1, 1, 1 },
 		rightClick = "focus",

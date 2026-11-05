@@ -154,10 +154,23 @@ function Side:FindRowLoose(unit)
 	return count == 1 and hit or nil
 end
 
+BG.MAX_BUFFS = 8
+
+function BG.BuffFilter(c)
+	return c.buffsMine and "HELPFUL|PLAYER" or "HELPFUL"
+end
+
+-- Ally rows only. In test mode there's no unit, so the icons show your own buffs.
+function Side:UpdateBuffs(row)
+	if not row.Buffs then return end
+	ns.SetAuraUnit(row.Buffs, self:cfg().buffs and (row.preview and "player" or row.unit) or nil)
+end
+
 function Side:Unbind(row)
 	if row.unit then self.rowByUnit[row.unit] = nil end
 	row.unit = nil
 	ns.SetAuraUnit(row.Stacks, nil)
+	self:UpdateBuffs(row)
 end
 
 function Side:UpdateRowHealth(row, immediate)
@@ -235,6 +248,7 @@ function Side:Bind(row, unit)
 	row.unit = unit
 	self.rowByUnit[unit] = row
 	if self:cfg().stacks then ns.SetAuraUnit(row.Stacks, unit) end
+	self:UpdateBuffs(row)
 	self:UpdateRowHealth(row, true)
 	if not self.enemy then self:UpdateHealer(row) end -- allies: group role from the raid unit
 	self:UpdateRowPower(row)
@@ -450,6 +464,15 @@ function Side:CreateRow(i)
 	ns.SetAuraGroupCandidates(row.Stacks, 2, { includeSpellIDs = self.enemy and BG.OBJECTIVE_AURAS or BG.ALLY_AURAS })
 	ns.SetAuraUnit(row.Stacks, nil)
 
+	-- teammates: their buffs, through the same container, so it keeps working in live matches
+	if not self.enemy then
+		row.Buffs = ns.CreateAuraContainer(row, { { filter = BG.BuffFilter(c), max = c.buffMax } }, {
+			size = c.buffSize, spacing = 2, anchor = "TOPLEFT", growthX = "RIGHT", growthY = "DOWN",
+			maxWidth = (c.buffSize + 2) * BG.MAX_BUFFS, disableMouse = true,
+		})
+		ns.SetAuraUnit(row.Buffs, nil)
+	end
+
 	row:Hide()
 	return row
 end
@@ -543,6 +566,24 @@ function Side:LayoutRow(row)
 	elseif row.SUIOrbStacks then
 		ns.RestyleAuraButtons(row.Stacks, nil, c.stackSize)
 		row.SUIOrbStacks = nil
+	end
+
+	if row.Buffs then
+		-- beyond the carrier and stack icons when they're on the same side
+		local past = c.carrierSide == c.buffSide and (cs + c.stackSize + 5) or 0
+		row.Buffs:ClearAllPoints()
+		if c.buffSide == "LEFT" then
+			local spec = c.specIcon and (c.height + 3) or 0
+			row.Buffs:SetPoint("TOPRIGHT", row, "TOPLEFT", -(3 + spec + past), 0)
+			ns.SetAuraGrowth(row.Buffs, "TOPRIGHT", "LEFT", "DOWN")
+		else
+			row.Buffs:SetPoint("TOPLEFT", row, "TOPRIGHT", 3 + past, 0)
+			ns.SetAuraGrowth(row.Buffs, "TOPLEFT", "RIGHT", "DOWN")
+		end
+		row.Buffs:SetShown(c.buffs)
+		ns.SetAuraGroupFilter(row.Buffs, 1, BG.BuffFilter(c))
+		ns.SetAuraGroupMax(row.Buffs, 1, c.buffMax)
+		self:UpdateBuffs(row)
 	end
 
 	-- right click: focus (default), target, or nothing. Callers run this out of combat.
@@ -727,6 +768,7 @@ function Side:Layout()
 	local perCol = math.ceil(math.min(c.maxRows, MAX_ROWS) / cols)
 	local colGap = 8 + (c.specIcon and (c.height + 3) or 0)
 		+ (c.carrier and (c.height + 7) or 0) + (c.stacks and (c.stackSize + 2) or 0)
+		+ (c.buffs and c.buffMax * (c.buffSize + 2) or 0)
 	holder:SetScale(ns.db.scale)
 	holder:SetSize(cols * c.width + (cols - 1) * colGap, perCol * (c.height + c.spacing) - c.spacing)
 	ns:ApplyPoint(holder, c.point)
@@ -765,6 +807,7 @@ function Side:ShowPreview(on)
 		for _, row in ipairs(self.rows) do
 			row.preview = nil
 			if row.StackPreview then row.StackPreview:Hide() end
+			self:UpdateBuffs(row)
 		end
 		return
 	end
@@ -789,11 +832,13 @@ function Side:ShowPreview(on)
 			row.Carrier:SetShown(c.carrier and e.carrier ~= nil)
 			if e.carrier then ns.ApplyCarrierStyle(row.Carrier.tex, ns.CARRIER_STYLE[e.carrier]) end
 			self:PreviewStacks(row, c.stacks and e.stacks)
+			self:UpdateBuffs(row)
 			row.TargetHL:SetAlpha((i == 2 and c.targetHighlight ~= false) and 1 or 0)
 			row:Show()
 		else
 			row.preview = nil
 			self:PreviewStacks(row, nil)
+			self:UpdateBuffs(row)
 			row:Hide()
 		end
 	end
