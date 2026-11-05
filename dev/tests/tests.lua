@@ -954,6 +954,10 @@ do
 		f.outOfRange = false
 		f.IsOutOfRange = function(self) return self.outOfRange end
 		f.ApplyRangePresentation = function() end
+		f.HasSwingTimer = function(self) return self.swinging == true end
+		f.ResetSwingTimer = function(self) self.swinging = true end
+		f.ClearSwingTimer = function(self) self.swinging = nil end
+		f.SetIsInEditMode = function(self, on) self.isInEditMode = on end
 		return f
 	end
 	local main, off, ranged = Bar("SwingTimerMainHandFrame"), Bar("SwingTimerOffHandFrame"), Bar("SwingTimerRangedFrame")
@@ -992,6 +996,35 @@ do
 	_G.SwingTimerRangedFrame = late
 	ST.SkinAll()
 	check("late bar skinned", late.SUISwingSkin == true)
+	_G.SwingTimerRangedFrame = ranged
+
+	-- only show while attacking
+	check("idle hiding off by default", cfg.hideIdle == false and main:GetAlpha() == 1)
+	cfg.hideIdle = true
+	ST:Refresh()
+	check("idle: all hidden", main:GetAlpha() == 0 and off:GetAlpha() == 0 and ranged:GetAlpha() == 0)
+	MOCK.Fire("PLAYER_ENTER_COMBAT")
+	check("auto attack shows melee bars only", main:GetAlpha() == 1 and off:GetAlpha() == 1 and ranged:GetAlpha() == 0)
+	MOCK.Fire("PLAYER_LEAVE_COMBAT")
+	check("auto attack off hides them", main:GetAlpha() == 0)
+	MOCK.Fire("START_AUTOREPEAT_SPELL")
+	check("auto shot shows the ranged bar only", ranged:GetAlpha() == 1 and main:GetAlpha() == 0)
+	MOCK.Fire("STOP_AUTOREPEAT_SPELL")
+	main:ResetSwingTimer()
+	check("a swing under way stays visible", main:GetAlpha() == 1)
+	main:ClearSwingTimer()
+	check("hides when that swing ends", main:GetAlpha() == 0)
+	ranged:SetIsInEditMode(true)
+	check("Edit Mode always sees it", ranged:GetAlpha() == 1)
+	ranged:SetIsInEditMode(false)
+	check("back to hidden after Edit Mode", ranged:GetAlpha() == 0)
+	-- with the flat look off, the option still works
+	cfg.enabled = false
+	ST.SkinAll()
+	check("idle hiding without the flat look", main:GetAlpha() == 0)
+	cfg.enabled, cfg.hideIdle = true, false
+	ST:Refresh()
+	check("option off shows them again", main:GetAlpha() == 1 and ranged:GetAlpha() == 1)
 	_G.SwingTimerMainHandFrame, _G.SwingTimerOffHandFrame, _G.SwingTimerRangedFrame = nil, nil, nil
 end
 

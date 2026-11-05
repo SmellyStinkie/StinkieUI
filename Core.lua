@@ -577,6 +577,7 @@ ns.defaults = {
 		offColor = { 0.55, 0.36, 0.70 },
 		rangedColor = { 0.30, 0.65, 0.90 },
 		showLabel = true, showTime = true,
+		hideIdle = false, -- hidden unless you're auto attacking or a swing is under way
 		textStyle = text(11),
 	},
 	actionBars = {

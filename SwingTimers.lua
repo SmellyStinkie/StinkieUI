@@ -65,12 +65,65 @@ local function Skin(f, colorKey)
 	ColorText(f)
 end
 
+-- Hidden while idle: a bar shows while its attack is switched on, and until a swing already under
+-- way finishes. These are Edit Mode frames, so this uses alpha, never Hide(), and Edit Mode always
+-- sees them. Blizzard only dims the bar's parts, so the frame's own alpha is ours.
+local function IsActive(f)
+	if f.isInEditMode or f:HasSwingTimer() then return true end
+	if f == _G.SwingTimerRangedFrame then return ST.shooting end
+	return ST.attacking
+end
+
+local function UpdateIdle(f)
+	f:SetAlpha((cfg().hideIdle and not IsActive(f)) and 0 or 1)
+end
+
+local function Watch(f)
+	if f.SUISwingWatch then return end
+	f.SUISwingWatch = true
+	hooksecurefunc(f, "ResetSwingTimer", UpdateIdle)
+	hooksecurefunc(f, "ClearSwingTimer", UpdateIdle)
+	hooksecurefunc(f, "SetIsInEditMode", UpdateIdle)
+end
+
+function ST.UpdateIdleAll()
+	for _, def in ipairs(ST.BARS) do
+		local f = _G[def[1]]
+		if f and f.StatusBar then UpdateIdle(f) end
+	end
+end
+
 function ST.SkinAll()
-	if not cfg().enabled then return end
-	for _, def in ipairs(ST.BARS) do Skin(_G[def[1]], def[2]) end
+	for _, def in ipairs(ST.BARS) do
+		local f = _G[def[1]]
+		if f and f.StatusBar then
+			Watch(f)
+			UpdateIdle(f)
+			if cfg().enabled then Skin(f, def[2]) end
+		end
+	end
+end
+
+-- attack state, from the same events Blizzard's action buttons use
+local function SetAttacking(on)
+	ST.attacking = on
+	ST.UpdateIdleAll()
+end
+
+local function SetShooting(on)
+	ST.shooting = on
+	ST.UpdateIdleAll()
 end
 
 function ST:Init()
+	-- already attacking (a reload mid-fight): no event will say so
+	local S = C_Spell
+	ST.attacking = (S and S.IsCurrentSpell and S.IsCurrentSpell(6603)) and true or false
+	ST.shooting = (S and S.IsAutoRepeatSpell and S.IsAutoRepeatSpell(75)) and true or false
+	ns:On("PLAYER_ENTER_COMBAT", function() SetAttacking(true) end)
+	ns:On("PLAYER_LEAVE_COMBAT", function() SetAttacking(false) end)
+	ns:On("START_AUTOREPEAT_SPELL", function() SetShooting(true) end)
+	ns:On("STOP_AUTOREPEAT_SPELL", function() SetShooting(false) end)
 	ns:RunOOC(ST.SkinAll)
 	-- Blizzard's addon may load after ours
 	ns:On("ADDON_LOADED", function(_, name)
