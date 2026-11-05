@@ -1,5 +1,10 @@
 # Stinkie UI changelog
 
+## 0.39.1
+- Quest marker: the off-screen arrow now sits near the edge of the screen, with a slider for the gap.
+- Quest marker: hides while you're inside the quest's area with objectives left, and comes back to point at the turn-in once the quest is done.
+- Fixed: on WoW Forever, the side tabs in Collections (Mounts, Pets, Toys, Heirlooms, Wardrobe) lost their icons with the flat skin, and the selected tab now shows.
+
 ## 0.39.0
 - New Quest marker (Objectives page, off until you turn it on): a small nameplate in the world on the quest you're actively tracking, with the quest name and distance in yards, in place of Blizzard's diamond. It shows at long range, shrinks with distance and becomes an arrow at the edge of the screen when the spot is off screen. Works for quests ready to turn in. Height above the spot, arrow size, color and text options.
 - All unit frames (player, target, target of target, focus, pet, party, party targets, arena): choose whether names show first, last or both, and an option to show level. Nameplates get the same name choice.
