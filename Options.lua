@@ -1586,7 +1586,7 @@ local function BuildObjectivesPage(page)
 	local function arrow() return ns.db.misc.questArrow end
 	page:Header("Quest marker")
 	page:Check("Enabled", Getter(arrow, "enabled"), Setter(arrow, "enabled"))
-	page:Note("A small nameplate in the world on the quest you're actively tracking, with the distance in yards, in place of Blizzard's diamond. Off screen it becomes an arrow at the edge of the screen. It goes wherever the diamond would.", 62)
+	page:Note("A small nameplate in the world on the quest you're actively tracking, or your corpse while you're dead, with the distance in yards, in place of Blizzard's marker. Off screen it becomes an arrow at the edge of the screen. It goes wherever Blizzard's marker would.", 76)
 	page:Slider("Height above the spot", 0, 300, 5, Getter(arrow, "height"), Setter(arrow, "height"))
 	page:Slider("Off-screen arrow: gap to screen edge", 20, 300, 5, Getter(arrow, "edgeMargin"), Setter(arrow, "edgeMargin"))
 	page:Slider("Arrow size", 12, 64, 1, Getter(arrow, "size"), Setter(arrow, "size"))

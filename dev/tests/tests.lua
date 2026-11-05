@@ -1023,7 +1023,7 @@ do
 	})
 	stub("C_Minimap", { IsInsideQuestBlob = function() return inArea end })
 	local oldType = Enum.SuperTrackingType
-	Enum.SuperTrackingType = { Quest = 1 }
+	Enum.SuperTrackingType = { Quest = 1, Corpse = 5 }
 	local oldState = Enum.NavigationState
 	Enum.NavigationState = { Invalid = 0, Occluded = 1, InRange = 2, Disabled = 3 }
 	local blizzard = MOCK.NewObj("Frame", "SuperTrackedFrame", UIParent)
@@ -1147,6 +1147,17 @@ do
 	check("a client without the area check: marker stays", h:IsShown())
 	C_Minimap = { IsInsideQuestBlob = function() return inArea end }
 
+	-- dead: your corpse, even where a quest area would hide the marker
+	kind = 5
+	inArea = true
+	QA.Update()
+	check("corpse: marker shows", h:IsShown() and blizzard.Icon:GetAlpha() == 0)
+	check("corpse: named", h.Name:GetText() == "Your corpse", h.Name:GetText())
+	kind = 1
+	inArea = false
+	QA.Update()
+	check("alive again: back to the quest", h.Name:GetText() == "Quest 88", h.Name:GetText())
+
 	-- a map pin or anything else: Blizzard's own marker comes back
 	kind = 2
 	QA.Update()
@@ -1189,7 +1200,7 @@ do
 	UIParent.GetEffectiveScale = oldScale
 	UIParent.GetWidth, UIParent.GetHeight = oldWidth, oldHeight
 	h.Arrow.SetRotation = nil
-	QA.blizzardShown, QA.clamped, QA.questID = nil, nil, nil
+	QA.blizzardShown, QA.clamped, QA.target = nil, nil, nil
 	for k, v in pairs(saved) do _G[k] = v or nil end
 end
 flushErrors("quest arrow")

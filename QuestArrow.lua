@@ -1,5 +1,5 @@
 -- StinkieUI: quest marker. A small nameplate in the world on the quest you're actively tracking,
--- with the distance in yards. When the spot is off screen it becomes an arrow at the edge of the
+-- or your corpse while you're dead, with the distance in yards. When the spot is off screen it becomes an arrow at the edge of the
 -- screen, pointing the way. Blizzard's SuperTrackedFrame already sits on the spot, stays on screen
 -- and fades, so the marker follows it and Blizzard's own diamond is hidden while it does.
 local _, ns = ...
@@ -8,6 +8,7 @@ local QA = {}
 ns.QuestArrow = QA
 
 local TICK = 0.05
+local CORPSE = "corpse" -- what the marker follows while you're dead, in place of a quest ID
 local PLATE_WIDTH, PLATE_WIDTH_NO_NAME = 200, 64
 local NEAR_YARDS, FAR_YARDS, FAR_SCALE = 50, 1000, 0.6 -- full size up to NEAR, smallest from FAR
 
@@ -34,9 +35,12 @@ function QA.DistanceScale(yards)
 	return 1 - t * (1 - FAR_SCALE)
 end
 
-function QA.TrackedQuest()
+-- What Blizzard is navigating to, if it's something the marker shows.
+function QA.TrackedTarget()
 	if not (C_SuperTrack and C_Navigation and C_Navigation.GetFrame()) then return end
-	if C_SuperTrack.GetHighestPrioritySuperTrackingType() ~= Enum.SuperTrackingType.Quest then return end
+	local kind = C_SuperTrack.GetHighestPrioritySuperTrackingType()
+	if kind == Enum.SuperTrackingType.Corpse then return CORPSE end
+	if kind ~= Enum.SuperTrackingType.Quest then return end
 	local questID = C_SuperTrack.GetSuperTrackedQuestID()
 	if questID and questID ~= 0 then return questID end
 end
@@ -46,6 +50,7 @@ end
 -- wherever it's turned in.
 function QA.InQuestArea(questID)
 	local M = C_Minimap
+	if questID == CORPSE then return false end
 	if not (M and M.IsInsideQuestBlob and M.IsInsideQuestBlob(questID)) then return false end
 	return not C_QuestLog.IsComplete(questID)
 end
@@ -114,9 +119,9 @@ end
 function QA.Update()
 	local h, f = QA.holder, _G.SuperTrackedFrame
 	if not (h and f and f.Icon and f.Arrow and f.DistanceText) then return end
-	local questID = cfg().enabled and QA.TrackedQuest()
-	ShowBlizzardMarker(not questID)
-	if not questID or QA.InQuestArea(questID) then
+	local target = cfg().enabled and QA.TrackedTarget()
+	ShowBlizzardMarker(not target)
+	if not target or QA.InQuestArea(target) then
 		h:Hide()
 		return
 	end
@@ -130,9 +135,9 @@ function QA.Update()
 	h.Distance:SetText(math.floor(yards + 0.5) .. " yd")
 	h:SetScale(clamped and 1 or QA.DistanceScale(yards)) -- the edge arrow stays easy to see
 	if clamped then QA.UpdateEdge() end
-	if questID ~= QA.questID then
-		QA.questID = questID
-		h.Name:SetText(C_QuestLog.GetTitleForQuestID(questID) or "")
+	if target ~= QA.target then
+		QA.target = target
+		h.Name:SetText(target == CORPSE and "Your corpse" or C_QuestLog.GetTitleForQuestID(target) or "")
 	end
 	h:Show()
 end
@@ -152,7 +157,8 @@ function QA.Debug()
 		return
 	end
 	local kind = S.GetHighestPrioritySuperTrackingType()
-	show("tracking type (quest = " .. tostring(Enum.SuperTrackingType.Quest) .. ")", kind)
+	show("tracking type (quest = " .. tostring(Enum.SuperTrackingType.Quest)
+		.. ", corpse = " .. tostring(Enum.SuperTrackingType.Corpse) .. ")", kind)
 	local questID = S.GetSuperTrackedQuestID()
 	show("tracked quest", questID)
 	if questID and questID ~= 0 and C_QuestLog then
