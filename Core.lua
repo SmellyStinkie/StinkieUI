@@ -1639,6 +1639,8 @@ SlashCmdList.STINKIEUI = function(msg)
 		ns:FontCheck()
 	elseif msg == "quest" then
 		ns.QuestArrow.Debug()
+	elseif msg == "tooltip" then
+		ns.Tooltip.Debug()
 	elseif msg == "dmg" then
 		if ns.DamageText then ns.DamageText.Print() end
 	elseif msg == "cpu" then

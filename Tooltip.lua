@@ -17,6 +17,12 @@ local function cfg() return ns.db.tooltip end
 ---------------------------------------------------------------------------
 -- Anchoring
 ---------------------------------------------------------------------------
+local function PlaceFixed(tooltip)
+	local c = cfg()
+	tooltip:ClearAllPoints()
+	tooltip:SetPoint(c.fixedPoint or "BOTTOMRIGHT", T.anchor, c.fixedPoint or "BOTTOMRIGHT", 0, 0)
+end
+
 -- called by Blizzard each time a tooltip goes to its default spot
 local function OnDefaultAnchor(tooltip, parent)
 	local c = cfg()
@@ -24,9 +30,39 @@ local function OnDefaultAnchor(tooltip, parent)
 	if c.anchor == "mouse" then
 		tooltip:SetOwner(parent, "ANCHOR_CURSOR_RIGHT", c.offsetX, c.offsetY)
 	elseif c.anchor == "fixed" and T.anchor then
-		tooltip:ClearAllPoints()
-		tooltip:SetPoint(c.fixedPoint or "BOTTOMRIGHT", T.anchor, c.fixedPoint or "BOTTOMRIGHT", 0, 0)
+		PlaceFixed(tooltip)
 	end
+end
+
+-- World objects such as signs skip the default spot: the game pins them to the cursor itself. By
+-- the time it shows, the text is in, so this moves it without SetOwner, which would clear it.
+-- Only the game's own world tooltips: owned by UIParent and following the cursor.
+function T.Reanchor(tooltip)
+	local c = cfg()
+	if c.anchor == "blizzard" or tooltip ~= GameTooltip or tooltip:GetOwner() ~= UIParent then return end
+	local kind = tooltip:GetAnchorType()
+	if kind ~= "ANCHOR_CURSOR" and kind ~= "ANCHOR_CURSOR_RIGHT" then return end
+	if c.anchor == "mouse" then
+		tooltip:SetAnchorType("ANCHOR_CURSOR_RIGHT", c.offsetX, c.offsetY)
+	elseif T.anchor then
+		tooltip:SetAnchorType("ANCHOR_NONE")
+		PlaceFixed(tooltip)
+	end
+end
+
+-- /stinkie tooltip: what the game reports for the tooltip under the mouse, a few seconds from now
+-- so there's time to hover over something.
+local DEBUG_DELAY = 4
+function T.Debug()
+	ns:Print("Hover over something: reading the tooltip in " .. DEBUG_DELAY .. " seconds.")
+	C_Timer.After(DEBUG_DELAY, function()
+		local owner = GameTooltip:GetOwner()
+		local name = owner and owner.GetName and owner:GetName()
+		ns:Print("Tooltip shown: " .. tostring(GameTooltip:IsShown()))
+		ns:Print("Owner: " .. tostring(name or owner))
+		ns:Print("Anchor: " .. tostring(GameTooltip:GetAnchorType()))
+		ns:Print("First line: " .. tostring(_G.GameTooltipTextLeft1 and _G.GameTooltipTextLeft1:GetText()))
+	end)
 end
 
 function T.ApplyScale()
@@ -60,6 +96,7 @@ local function OnShow(tooltip)
 	end
 	local bar = _G.GameTooltipStatusBar
 	if bar then bar:SetAlpha(c.healthBar and 1 or 0) end
+	T.Reanchor(tooltip)
 end
 
 ---------------------------------------------------------------------------

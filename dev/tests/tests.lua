@@ -1783,6 +1783,54 @@ do
 end
 flushErrors("scrolling lanes")
 
+-- signs and other world objects: the tooltip follows the anchor setting too
+do
+	local TT, c = ns.Tooltip, ns.db.tooltip
+	local owner, kind, set, cleared, placed = UIParent, "ANCHOR_CURSOR", nil, 0, nil
+	local g = GameTooltip
+	local saved = { g.GetOwner, g.GetAnchorType, g.SetAnchorType, g.ClearAllPoints, g.SetPoint, g.SetOwner }
+	local ownerCalls = 0
+	g.GetOwner = function() return owner end
+	g.GetAnchorType = function() return kind end
+	g.SetAnchorType = function(_, k, x, y) set = { k, x, y } end
+	g.ClearAllPoints = function() cleared = cleared + 1 end
+	g.SetPoint = function(_, p, rel) placed = { p, rel } end
+	g.SetOwner = function() ownerCalls = ownerCalls + 1 end
+	local oldAnchor, oldX, oldY = c.anchor, c.offsetX, c.offsetY
+	c.anchor, c.offsetX, c.offsetY = "mouse", 128, 25
+
+	TT.Reanchor(g)
+	check("sign goes off to the side", set and set[1] == "ANCHOR_CURSOR_RIGHT" and set[2] == 128 and set[3] == 25)
+	check("the text stays: no SetOwner", ownerCalls == 0)
+	set = nil
+	kind = "ANCHOR_RIGHT"
+	TT.Reanchor(g)
+	check("a tooltip a frame placed itself stays", set == nil)
+	kind = "ANCHOR_NONE"
+	TT.Reanchor(g)
+	check("default-spot tooltips stay", set == nil)
+	kind, owner = "ANCHOR_CURSOR", MOCK.NewObj("Frame", nil, UIParent)
+	TT.Reanchor(g)
+	check("a frame's cursor tooltip stays", set == nil)
+	owner = UIParent
+	c.anchor = "blizzard"
+	TT.Reanchor(g)
+	check("Blizzard anchor: left alone", set == nil)
+	c.anchor = "fixed"
+	TT.Reanchor(g)
+	check("fixed spot: sign goes there", set and set[1] == "ANCHOR_NONE" and placed and placed[2] == TT.anchor and cleared == 1)
+	TT.Reanchor({})
+	check("other tooltips: left alone", cleared == 1)
+
+	TT.Debug()
+	MOCK.Advance(5)
+	check("/stinkie tooltip runs", true)
+	c.anchor, c.offsetX, c.offsetY = oldAnchor, oldX, oldY
+	g.GetOwner, g.GetAnchorType, g.SetAnchorType, g.ClearAllPoints, g.SetPoint, g.SetOwner =
+		saved[1], saved[2], saved[3], saved[4], saved[5], saved[6]
+end
+flushErrors("sign tooltips")
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto
