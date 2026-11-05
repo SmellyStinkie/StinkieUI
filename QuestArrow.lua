@@ -18,6 +18,16 @@ function QA.EdgeRotation(x, y, centerX, centerY)
 	return math.atan2(centerX - x, y - centerY)
 end
 
+-- Blizzard keeps an off-screen spot on a small oval around the screen center. This goes the same
+-- way from the center, out to a box just inside the screen edge.
+function QA.EdgePosition(dx, dy, halfWidth, halfHeight)
+	if dx == 0 and dy == 0 then return 0, 0 end
+	local toSide = dx ~= 0 and halfWidth / math.abs(dx) or math.huge
+	local toTop = dy ~= 0 and halfHeight / math.abs(dy) or math.huge
+	local reach = math.min(toSide, toTop)
+	return dx * reach, dy * reach
+end
+
 -- Smaller the further away, like a distant nameplate. A straight line between the two sizes.
 function QA.DistanceScale(yards)
 	local t = math.max(0, math.min(1, (yards - NEAR_YARDS) / (FAR_YARDS - NEAR_YARDS)))
@@ -47,7 +57,7 @@ local function LayoutMarker(clamped)
 	local h = QA.holder
 	local c = cfg()
 	h:ClearAllPoints()
-	h:SetPoint("CENTER", _G.SuperTrackedFrame, "CENTER", 0, clamped and 0 or c.height)
+	if not clamped then h:SetPoint("CENTER", _G.SuperTrackedFrame, "CENTER", 0, c.height) end
 	h.Plate:SetShown(not clamped)
 	h.Name:SetShown(c.showName)
 	h.Plate:SetSize(c.showName and PLATE_WIDTH or PLATE_WIDTH_NO_NAME, c.textStyle.size + 8)
@@ -75,6 +85,23 @@ function QA.MarkerAlpha(clamped)
 	return (state == N.Occluded and not clamped) and 0.6 or 1
 end
 
+-- Off screen: the marker's place and the arrow's direction. Runs every frame, as nothing else moves
+-- it here.
+function QA.UpdateEdge()
+	local h, f = QA.holder, _G.SuperTrackedFrame
+	local x, y = f:GetCenter()
+	local worldX, worldY = WorldFrame:GetCenter()
+	if not (x and worldX) then return end
+	local scale = UIParent:GetEffectiveScale()
+	local centerX, centerY = worldX / scale, worldY / scale
+	local margin = cfg().edgeMargin
+	local px, py = QA.EdgePosition(x - centerX, y - centerY,
+		UIParent:GetWidth() / 2 - margin, UIParent:GetHeight() / 2 - margin)
+	h:ClearAllPoints()
+	h:SetPoint("CENTER", UIParent, "CENTER", px, py)
+	h.Arrow:SetRotation(QA.EdgeRotation(x, y, centerX, centerY))
+end
+
 function QA.Update()
 	local h, f = QA.holder, _G.SuperTrackedFrame
 	if not (h and f and f.Icon and f.Arrow and f.DistanceText) then return end
@@ -90,15 +117,10 @@ function QA.Update()
 		QA.clamped = clamped
 		LayoutMarker(clamped)
 	end
-	if clamped then
-		local x, y = f:GetCenter()
-		local worldX, worldY = WorldFrame:GetCenter()
-		local scale = UIParent:GetEffectiveScale()
-		if x and worldX then h.Arrow:SetRotation(QA.EdgeRotation(x, y, worldX / scale, worldY / scale)) end
-	end
 	local yards = C_Navigation.GetDistance()
 	h.Distance:SetText(math.floor(yards + 0.5) .. " yd")
 	h:SetScale(clamped and 1 or QA.DistanceScale(yards)) -- the edge arrow stays easy to see
+	if clamped then QA.UpdateEdge() end
 	if questID ~= QA.questID then
 		QA.questID = questID
 		h.Name:SetText(C_QuestLog.GetTitleForQuestID(questID) or "")
@@ -141,6 +163,7 @@ function QA.Debug()
 end
 
 local function OnUpdate(_, elapsed)
+	if QA.clamped and QA.holder:IsShown() then QA.UpdateEdge() end
 	QA.sinceUpdate = QA.sinceUpdate + elapsed
 	if QA.sinceUpdate < TICK then return end
 	QA.sinceUpdate = 0

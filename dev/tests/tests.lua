@@ -985,6 +985,18 @@ do
 	check("off screen to the left", near(QA.EdgeRotation(0, 100, 100, 100), pi / 2))
 	check("off screen below", near(math.abs(QA.EdgeRotation(100, 0, 100, 100)), pi))
 
+	do
+		local x, y = QA.EdgePosition(250, 0, 900, 480)
+		check("edge: straight out to the side", near(x, 900) and near(y, 0), x)
+		x, y = QA.EdgePosition(-250, 0, 900, 480)
+		check("edge: the left side too", near(x, -900) and near(y, 0), x)
+		x, y = QA.EdgePosition(0, 100, 900, 480)
+		check("edge: straight up", near(x, 0) and near(y, 480), y)
+		x, y = QA.EdgePosition(100, 100, 900, 480)
+		check("edge: a corner stops at the nearer edge", near(x, 480) and near(y, 480), x)
+		x, y = QA.EdgePosition(0, 0, 900, 480)
+		check("edge: nothing to go on", x == 0 and y == 0)
+	end
 	check("close up: full size", near(QA.DistanceScale(0), 1) and near(QA.DistanceScale(50), 1))
 	check("far away: smallest", near(QA.DistanceScale(1000), 0.6) and near(QA.DistanceScale(5000), 0.6))
 	check("in between: on the way down", near(QA.DistanceScale(525), 0.8))
@@ -1019,6 +1031,9 @@ do
 	WorldFrame = { GetCenter = function() return 500, 100 end }
 	local oldScale = UIParent.GetEffectiveScale
 	UIParent.GetEffectiveScale = function() return 1 end
+	local oldWidth, oldHeight = UIParent.GetWidth, UIParent.GetHeight
+	UIParent.GetWidth = function() return 1000 end
+	UIParent.GetHeight = function() return 600 end
 	local h = QA.holder
 	local turned
 	h.Arrow.SetRotation = function(_, r) turned = r end
@@ -1040,6 +1055,17 @@ do
 	clamped = true
 	QA.Update()
 	check("edge arrow isn't raised", raised == 0, raised)
+	-- Blizzard has it 400 right of center; it goes out to 60 from the 1000 wide screen edge
+	local atX
+	h.SetPoint = function(_, _, _, _, x) atX = x end
+	c.edgeMargin = 60
+	QA.Update()
+	check("edge arrow sits near the screen edge", near(atX, 440), atX)
+	c.edgeMargin = 200
+	QA.Update()
+	check("edge gap is a setting", near(atX, 300), atX)
+	c.edgeMargin = ns.defaults.misc.questArrow.edgeMargin
+	h.SetPoint = function(_, _, _, _, _, y) raised = y end
 	clamped = false
 	QA.Update()
 	check("raised again back on screen", raised == 90, raised)
@@ -1139,6 +1165,7 @@ do
 	Enum.NavigationState = oldState
 	WorldFrame = oldWorld
 	UIParent.GetEffectiveScale = oldScale
+	UIParent.GetWidth, UIParent.GetHeight = oldWidth, oldHeight
 	h.Arrow.SetRotation = nil
 	QA.blizzardShown, QA.clamped, QA.questID = nil, nil, nil
 	for k, v in pairs(saved) do _G[k] = v or nil end
