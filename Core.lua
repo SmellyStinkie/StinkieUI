@@ -1603,6 +1603,9 @@ function ns:Refresh()
 	end)
 end
 
+SLASH_STINKIERELOAD1 = "/rl"
+SlashCmdList.STINKIERELOAD = function() ReloadUI() end
+
 SLASH_STINKIEUI1 = "/stinkie"
 SLASH_STINKIEUI2 = "/sui"
 SLASH_STINKIEUI3 = "/st"
@@ -1614,6 +1617,8 @@ SlashCmdList.STINKIEUI = function(msg)
 		ns:SetLocked(true)
 	elseif msg == "fontcheck" then
 		ns:FontCheck()
+	elseif msg == "quest" then
+		ns.QuestArrow.Debug()
 	elseif msg == "dmg" then
 		if ns.DamageText then ns.DamageText.Print() end
 	elseif msg == "cpu" then

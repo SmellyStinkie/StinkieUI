@@ -107,6 +107,40 @@ function QA.Update()
 	h:Show()
 end
 
+-- /stinkie quest: each thing the marker needs, in order, as the game reports it
+function QA.Debug()
+	local function show(label, v)
+		if ns.issecret(v) then v = "<secret>" end
+		ns:Print(label .. ": " .. tostring(v))
+	end
+	local f, N, S = _G.SuperTrackedFrame, C_Navigation, C_SuperTrack
+	show("marker enabled", cfg().enabled)
+	show("Blizzard's marker frame", f ~= nil)
+	show("its parts", f and f.Icon ~= nil and f.Arrow ~= nil and f.DistanceText ~= nil)
+	if not (N and S) then
+		show("navigation API", false)
+		return
+	end
+	local kind = S.GetHighestPrioritySuperTrackingType()
+	show("tracking type (quest = " .. tostring(Enum.SuperTrackingType.Quest) .. ")", kind)
+	local questID = S.GetSuperTrackedQuestID()
+	show("tracked quest", questID)
+	if questID and questID ~= 0 and C_QuestLog then
+		show("quest name", C_QuestLog.GetTitleForQuestID(questID))
+		show("quest complete", C_QuestLog.IsComplete and C_QuestLog.IsComplete(questID))
+	end
+	show("navigation frame", N.GetFrame() ~= nil)
+	show("valid screen position", N.HasValidScreenPosition())
+	show("target state", N.GetTargetState())
+	show("off screen", N.WasClampedToScreen())
+	show("distance", N.GetDistance())
+	local h = QA.holder
+	if h then
+		show("marker shown", h:IsShown())
+		show("marker alpha", h:GetAlpha())
+	end
+end
+
 local function OnUpdate(_, elapsed)
 	QA.sinceUpdate = QA.sinceUpdate + elapsed
 	if QA.sinceUpdate < TICK then return end

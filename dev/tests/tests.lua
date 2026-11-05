@@ -1100,6 +1100,19 @@ do
 	ns:Refresh(); MOCK.Advance(0.2)
 	check("turned off: Blizzard's diamond back", not h:IsShown() and blizzard.Icon:GetAlpha() == 1)
 
+	-- /stinkie quest reports each step
+	do
+		local lines, oldPrint = {}, ns.Print
+		ns.Print = function(_, m) lines[#lines + 1] = m end
+		quest = 77
+		QA.Debug()
+		ns.Print = oldPrint
+		local text = table.concat(lines, "\n")
+		check("debug names the tracked quest", text:find("tracked quest: 77", 1, true) ~= nil, text)
+		check("debug reports navigation", text:find("navigation frame: true", 1, true) ~= nil, text)
+		check("debug reports the marker", text:find("marker shown", 1, true) ~= nil, text)
+	end
+
 	-- a client without Blizzard's frame
 	SuperTrackedFrame = nil
 	QA.Update()
@@ -1276,6 +1289,16 @@ do
 	check("off again: icons hidden", not b:IsShown())
 end
 flushErrors("ally buffs")
+
+-- /rl reloads
+do
+	local old, reloaded = ReloadUI, false
+	ReloadUI = function() reloaded = true end
+	check("/rl registered", SLASH_STINKIERELOAD1 == "/rl")
+	SlashCmdList.STINKIERELOAD("")
+	check("/rl reloads", reloaded)
+	ReloadUI = old
+end
 
 -- hide error messages: only the red event, and only what we changed
 do
