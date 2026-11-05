@@ -1106,7 +1106,7 @@ do
 	clamped = false
 	navState = 0
 	QA.Update()
-	check("too far for the diamond: still shown", h:GetAlpha() == 1)
+	check("invalid state with a screen position: still shown", h:GetAlpha() == 1)
 	navState = 3
 	QA.Update()
 	check("disabled: hidden", h:GetAlpha() == 0)
