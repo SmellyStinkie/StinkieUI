@@ -1,5 +1,12 @@
 # Stinkie UI changelog
 
+## 0.40.1
+- Fixed: scrolling combat text errors ("secret number value" in CombatText.lua), caused by the scrolling text options in 0.40.0.
+- Fixed: on WoW Forever, unit frames and nameplates now show last names: Name shows First, Last and Both all work for characters with a surname.
+- Scrolling combat text: Direction is one choice now (Up, Down, Arc, or heals and damage going opposite ways), and it needs a reload to change. Splitting heals and damage now works when the game hides the numbers. The gap between lines only applies to the split directions.
+- Quest marker: hides when you're close to an unfinished objective, where it swung around, with a slider for how close (30 yards to start). Turn-ins always show.
+- Chat: a whisper tab stops flashing once you reply.
+
 ## 0.40.0
 - Chat: whispers no longer get lost. New Whispers show in option: Both (a tab for each person plus the main tab, the new default), Main tab or Own tab. Covers character and Battle.net whispers. Tab-only whispers are kept in chat history, and the whisper that opens a new tab now flashes it.
 - Quest marker: also points to your corpse while you're dead.

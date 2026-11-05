@@ -1,4 +1,4 @@
-# Stinkie UI 0.40.0
+# Stinkie UI 0.40.1
 
 Flat PvP UI for WoW: Midnight (12.1.5, Interface 120105) and WoW Forever (Interface 16001), from one build: unit, party, arena and battleground frames, nameplates, castbars, class resource bar, cooldown bars, chat, minimap and more. No library dependencies.
 
