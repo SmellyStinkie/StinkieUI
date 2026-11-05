@@ -1541,6 +1541,98 @@ do
 end
 flushErrors("whispers")
 
+-- social button stays beside the chat tabs, whatever Blizzard's alerts do
+do
+	local CH, c = ns.Chat, ns.db.chat
+	local oldSocial, oldSide = QuickJoinToastButton, ChatFrame1ButtonFrame
+	local side = MOCK.NewObj("Frame", "SideButtons", UIParent)
+	local social = MOCK.NewObj("Frame", "SocialTest", UIParent)
+	local placed
+	social.SetPoint = function(_, p, rel, rp, x, y) placed = { p, rel, rp, x, y } end
+	QuickJoinToastButton, ChatFrame1ButtonFrame = social, side
+	check("social by the tabs by default", c.socialByTabs == true)
+	local wasActive = CH.active
+	CH.active = true
+	CH.PlaceSocial()
+	check("social sits on the side buttons", placed[1] == "BOTTOM" and placed[2] == side and placed[3] == "TOP")
+	placed = nil
+	c.socialByTabs = false
+	CH.PlaceSocial()
+	check("option off: left alone", placed == nil)
+	c.socialByTabs = true
+	CH.active = wasActive
+	QuickJoinToastButton, ChatFrame1ButtonFrame = oldSocial, oldSide
+end
+
+-- day / night icon on a square map
+do
+	local MM, c = ns.MinimapSkin, ns.db.minimap
+	local old, oldMinimap, oldShape, oldActive = MinimapCluster, Minimap, c.shape, MM.active
+	local diel = MOCK.NewObj("Frame", "DielTest", UIParent)
+	local points = {}
+	diel.SetPoint = function(_, ...) points[#points + 1] = { ... } end
+	diel.GetPoint = function() return "CENTER", UIParent, "CENTER", 55, 86 end
+	MinimapCluster = { DielFrame = diel }
+	Minimap = MOCK.NewObj("Frame", "MinimapTest", UIParent)
+	MM.active = true
+	c.shape, c.dielCorner = "SQUARE", "TOPLEFT"
+	MM.PinSquare()
+	local p = points[#points]
+	check("day / night goes in the corner", p[1] == "TOPLEFT" and p[2] == Minimap and p[3] == "TOPLEFT", p[1])
+	c.dielCorner = "HIDE"
+	MM.PinSquare()
+	check("day / night can be hidden", diel:GetAlpha() == 0)
+	c.dielCorner = "BOTTOMRIGHT"
+	MM.PinSquare()
+	check("shown again in another corner", diel:GetAlpha() == 1 and points[#points][1] == "BOTTOMRIGHT")
+	c.shape = "ROUND"
+	MM.PinSquare()
+	p = points[#points]
+	check("round map: back to Blizzard's spot", p[1] == "CENTER" and p[4] == 55 and p[5] == 86, p[1])
+	c.shape, c.dielCorner = "SQUARE", "DEFAULT"
+	local before = #points
+	MM.PinSquare()
+	check("Blizzard's spot: left alone", #points == before)
+	MinimapCluster, Minimap, c.shape, MM.active = old, oldMinimap, oldShape, oldActive
+	c.dielCorner = ns.defaults.minimap.dielCorner
+	MM.dielPoint = nil
+end
+
+-- group leader icon
+do
+	local UF = ns.UF
+	local f = UF.frames.target
+	local cfg = ns.db.units.target
+	local old, leader = UnitIsGroupLeader, true
+	UnitIsGroupLeader = function() return leader end
+	check("leader icon off by default", cfg.leaderIcon == false and ns.db.party.leaderIcon == false)
+	UF.UpdateLeader(f)
+	check("off: hidden", not f.Leader:IsShown())
+	cfg.leaderIcon = true
+	UF.Layout(f, cfg)
+	UF.UpdateLeader(f)
+	check("leader shows the icon", f.Leader:IsShown() and f.Leader:GetAlpha() == 1)
+	leader = false
+	f:GetScript("OnEvent")(f, "PARTY_LEADER_CHANGED")
+	check("not leader: hidden", not f.Leader:IsShown())
+	-- a secret answer can't be tested: the game decides
+	local secret, oldSecret, seen = {}, ns.issecret, nil
+	ns.issecret = function(v) return v == secret end
+	UnitIsGroupLeader = function() return secret end
+	local oldBool = f.Leader.SetAlphaFromBoolean
+	f.Leader.SetAlphaFromBoolean = function(_, v) seen = v end
+	UF.UpdateLeader(f)
+	check("secret leader goes straight to the icon", seen == secret and f.Leader:IsShown())
+	f.Leader.SetAlphaFromBoolean = oldBool
+	ns.issecret = oldSecret
+	cfg.leaderIcon = false
+	UF.Layout(f, cfg)
+	UnitIsGroupLeader = old
+	UF.UpdateLeader(f)
+	check("every unit frame has the option", ns.db.units.player.leaderIcon == false and ns.db.units.focus.leaderIcon == false)
+end
+flushErrors("social, day / night, leader")
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto

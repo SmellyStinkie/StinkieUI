@@ -81,6 +81,27 @@ local function HeaderUnderneath()
 	return point == "BOTTOM" and rel == MinimapCluster
 end
 
+-- WoW Forever's day / night icon. Blizzard places it on the round map's ring, which leaves it
+-- floating inside a square map, so there it goes into a corner like the mail icon.
+function MM.PinDiel(square)
+	local diel = MinimapCluster and MinimapCluster.DielFrame
+	if not diel then return end
+	local where = cfg().dielCorner or "TOPLEFT"
+	local moved = square and CORNER[where] ~= nil
+	diel:SetAlpha((square and where == "HIDE") and 0 or 1)
+	if moved then
+		if not MM.dielPoint then MM.dielPoint = { diel:GetPoint(1) } end
+		local o = CORNER[where]
+		diel:ClearAllPoints()
+		diel:SetPoint(where, Minimap, where, o[1] * 2, o[2] * 2)
+		diel:SetFrameLevel(Minimap:GetFrameLevel() + 6)
+	elseif MM.dielPoint then
+		diel:ClearAllPoints()
+		diel:SetPoint(unpack(MM.dielPoint))
+		MM.dielPoint = nil
+	end
+end
+
 function MM.PinSquare()
 	if not MM.active or MM.pinning then return end
 	local c = cfg()
@@ -143,6 +164,7 @@ function MM.PinSquare()
 			if folio.UpdateIcon then pcall(folio.UpdateIcon, folio) end
 		end
 	end
+	MM.PinDiel(square)
 	MM.pinning = nil
 end
 
@@ -276,6 +298,7 @@ function MM:Init()
 	if MinimapCluster then
 		if MinimapCluster.BorderTop then hooksecurefunc(MinimapCluster.BorderTop, "SetPoint", repin) end
 		if MinimapCluster.IndicatorFrame then hooksecurefunc(MinimapCluster.IndicatorFrame, "SetPoint", repin) end
+		if MinimapCluster.DielFrame then hooksecurefunc(MinimapCluster.DielFrame, "SetPoint", repin) end
 		if MinimapCluster.SetHeaderUnderneath then
 			hooksecurefunc(MinimapCluster, "SetHeaderUnderneath", function(_, under)
 				MM.headerUnder = under and true or false

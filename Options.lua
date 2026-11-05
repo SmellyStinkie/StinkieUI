@@ -640,6 +640,9 @@ local function BuildUnitPage(page, unit)
 	page:Choice("Name shows", nameChoices, Getter(cfg, "nameFormat"), Setter(cfg, "nameFormat"))
 	page:Check("Name above frame", Getter(cfg, "nameAbove"), Setter(cfg, "nameAbove"))
 	page:Check("Show level", Getter(cfg, "showLevel"), Setter(cfg, "showLevel"))
+	if unit == "player" or unit == "target" or unit == "focus" then
+		page:Check("Group leader icon", Getter(cfg, "leaderIcon"), Setter(cfg, "leaderIcon"))
+	end
 	page:Choice("Health text", healthTextChoices, Getter(cfg, "healthText"), Setter(cfg, "healthText"))
 	page:TextStyle("Name text", function() return cfg().nameStyle end, { classColor = true })
 	page:TextStyle("Health text", function() return cfg().healthStyle end)
@@ -711,6 +714,7 @@ local function BuildPartyPage(page)
 	page:Slider("Healer cross size", 6, 100, 1, Getter(cfg, "healerSize"), Setter(cfg, "healerSize"))
 	page:Check("Target marker", Getter(cfg, "marker"), Setter(cfg, "marker"))
 	page:Slider("Target marker size", 10, 40, 1, Getter(cfg, "markerSize"), Setter(cfg, "markerSize"))
+	page:Check("Group leader icon", Getter(cfg, "leaderIcon"), Setter(cfg, "leaderIcon"))
 	page:Check("Castbars", Getter(ccfg, "enabled"), Setter(ccfg, "enabled"), true)
 	page:Note("Test mode shows looping casts on enabled castbars.", 22)
 	page:Slider("Castbar height", 4, 30, 1, Getter(ccfg, "height"), Setter(ccfg, "height"))
@@ -830,6 +834,11 @@ local function BuildMinimapPage(page)
 	page:Dropdown("Mail icon (square)", { { "TOPRIGHT", "Top right corner" }, { "TOPLEFT", "Top left corner" },
 		{ "BOTTOMRIGHT", "Bottom right corner" }, { "BOTTOMLEFT", "Bottom left corner" }, { "DEFAULT", "Blizzard's spot" } },
 		Getter(cfg, "mailCorner"), Setter(cfg, "mailCorner"))
+	if ns.IS_FOREVER then
+		page:Dropdown("Day / night icon (square)", { { "TOPLEFT", "Top left corner" }, { "TOPRIGHT", "Top right corner" },
+			{ "BOTTOMLEFT", "Bottom left corner" }, { "BOTTOMRIGHT", "Bottom right corner" },
+			{ "DEFAULT", "Blizzard's spot" }, { "HIDE", "Hidden" } }, Getter(cfg, "dielCorner"), Setter(cfg, "dielCorner"))
+	end
 	if ns.HAS_FOLIO then
 		page:Check("Omnium Folio button", Getter(cfg, "folio"), Setter(cfg, "folio"))
 		page:Dropdown("Omnium Folio corner (square)", { { "BOTTOMLEFT", "Bottom left" }, { "BOTTOMRIGHT", "Bottom right" },
@@ -1048,6 +1057,7 @@ local function BuildChatPage(page)
 	page:Check("Show briefly on new messages", Getter(cfg, "showOnMessage"), Setter(cfg, "showOnMessage"))
 	page:Slider("Seconds shown", 1, 30, 1, Getter(cfg, "showOnMessageTime"), Setter(cfg, "showOnMessageTime"))
 	page:Choice("Side buttons (menu, channels, social)", { { "show", "Show" }, { "hide", "Hide" } }, Getter(cfg, "buttons"), Setter(cfg, "buttons"))
+	page:Check("Social button beside the chat tabs", Getter(cfg, "socialByTabs"), Setter(cfg, "socialByTabs"), true)
 	page:Header("Tabs")
 	page:Check("Flash tabs on new messages", Getter(cfg, "flashTabs"), Setter(cfg, "flashTabs"), true)
 	page:Check("Only flash for messages from players", Getter(cfg, "flashPlayerOnly"), Setter(cfg, "flashPlayerOnly"))

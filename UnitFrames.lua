@@ -81,6 +81,24 @@ function UF.PreviewLevel(f)
 	if f.Level:IsShown() then f.Level:SetText(UnitLevel("player")) end
 end
 
+-- Group leader crown. The answer can be secret, so it's never tested then: the game shows or hides
+-- the icon from it directly.
+function UF.UpdateLeader(f)
+	local icon = f.Leader
+	if not f.leaderShown then
+		icon:Hide()
+		return
+	end
+	local isLeader = UnitIsGroupLeader(f.unit)
+	if ns.issecret(isLeader) then
+		icon:Show()
+		icon:SetAlphaFromBoolean(isLeader, 1, 0)
+	else
+		icon:SetAlpha(1)
+		icon:SetShown(isLeader and true or false)
+	end
+end
+
 -- Raid target marker (only frames that build one, and only when switched on).
 function UF.UpdateMarker(f)
 	if not f.Marker then return end
@@ -114,6 +132,7 @@ function UF.UpdateAll(f)
 	UF.UpdatePower(f, true)
 	UF.UpdateName(f)
 	UF.UpdateLevel(f)
+	UF.UpdateLeader(f)
 	UF.UpdateMarker(f)
 	if f.PostUpdate then f:PostUpdate() end
 	if f.Auras then ns.SetAuraUnit(f.Auras, f.unit) end
@@ -149,6 +168,8 @@ local function OnEvent(f, event, unit)
 		UF.UpdateLevel(f)
 	elseif event == "RAID_TARGET_UPDATE" then
 		UF.UpdateMarker(f)
+	elseif event == "PARTY_LEADER_CHANGED" then
+		UF.UpdateLeader(f)
 	elseif event == "UNIT_CLASSIFICATION_CHANGED" then
 		UF.UpdateElite(f)
 	elseif event == "UNIT_CONNECTION" or event == "UNIT_FACTION" or event == "UNIT_FLAGS" then
@@ -173,6 +194,7 @@ function UF.RegisterUnitEvents(f)
 	for _, e in ipairs(unitEvents) do
 		f:RegisterUnitEvent(e, u)
 	end
+	f:RegisterEvent("PARTY_LEADER_CHANGED")
 	if u == "target" then f:RegisterEvent("PLAYER_TARGET_CHANGED") end
 	if u == "focus" then f:RegisterEvent("PLAYER_FOCUS_CHANGED") end
 	if u == "target" or u == "focus" then f:RegisterUnitEvent("UNIT_CLASSIFICATION_CHANGED", u) end
@@ -205,6 +227,9 @@ local function PingGUID(self)
 end
 local function PingIsPingable(self) return PingGUID(self) ~= nil end
 local function PingTargetInfo(self) return { guid = PingGUID(self) } end
+
+local LEADER_ATLAS = "UI-HUD-UnitFrame-Player-Group-LeaderIcon"
+local LEADER_FILE = [[Interface\GroupFrame\UI-Group-LeaderIcon]]
 
 function UF.CreateFrame(unit, name, noUnitWatch)
 	local f = CreateFrame("Button", name, UIParent, "SecureUnitButtonTemplate, PingableUnitFrameTemplate")
@@ -240,6 +265,14 @@ function UF.CreateFrame(unit, name, noUnitWatch)
 	f.Name = ns.CreateText(textLayer, 12, "LEFT")
 	f.HealthText = ns.CreateText(textLayer, 12, "RIGHT")
 	f.Level = ns.CreateText(textLayer, 12, "LEFT")
+	f.Leader = textLayer:CreateTexture(nil, "OVERLAY", nil, 7)
+	if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(LEADER_ATLAS) then
+		f.Leader:SetAtlas(LEADER_ATLAS)
+	else
+		f.Leader:SetTexture(LEADER_FILE)
+	end
+	f.Leader:SetSize(14, 14)
+	f.Leader:Hide()
 	if unit == "target" or unit == "focus" then
 		f.Elite = textLayer:CreateTexture(nil, "OVERLAY", nil, 7)
 		f.Elite:SetTexture(ns.MEDIA.star, "CLAMP", "CLAMP", "TRILINEAR")
@@ -304,6 +337,9 @@ function UF.Layout(f, cfg)
 
 	f.nameStyle = cfg.nameStyle
 	f.nameFormat = cfg.nameFormat
+	f.leaderShown = cfg.leaderIcon
+	f.Leader:ClearAllPoints()
+	f.Leader:SetPoint("CENTER", f, "TOPRIGHT", -8, 0)
 	ns.ApplyText(f.Name, cfg.nameStyle)
 	ns.ApplyText(f.HealthText, cfg.healthStyle)
 

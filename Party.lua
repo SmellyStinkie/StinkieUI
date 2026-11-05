@@ -216,7 +216,7 @@ local function LayoutPartyFrame(f, index)
 		showPower = false, -- power is split from health in PostUpdate
 		powerHeight = cfg.powerHeight,
 		showName = true, nameAbove = false,
-		nameFormat = cfg.nameFormat, showLevel = cfg.showLevel,
+		nameFormat = cfg.nameFormat, showLevel = cfg.showLevel, leaderIcon = cfg.leaderIcon,
 		healthText = cfg.healthText,
 		nameStyle = cfg.nameStyle, healthStyle = cfg.healthStyle,
 	})
@@ -624,6 +624,8 @@ function Party.FillPreview(f, i)
 	if col then f.Health:SetStatusBarColor(col:GetRGB()) end
 	f.Name:SetText(d.name)
 	UF.PreviewLevel(f)
+	f.Leader:SetAlpha(1)
+	f.Leader:SetShown(f.leaderShown and i == 1 or false) -- test mode: one leader, so it can be seen
 	if f.markerShown then SetRaidTargetIconTexture(f.Marker, i) end
 	f.Marker:SetShown(f.markerShown and true or false)
 	f.HealthText:SetText(math.floor(d.hp * 100) .. "%")

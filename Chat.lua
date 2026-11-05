@@ -681,11 +681,30 @@ local function Skin(f)
 	pcall(f.SetTextCopyable, f, c.dragCopy and true or false)
 end
 
+-- The social button, just above the side buttons, level with the chat tabs. Blizzard's alert system
+-- places it, so this runs again after each time it does.
+local placingSocial = false
+function CH.PlaceSocial()
+	local b, side = _G.QuickJoinToastButton, _G.ChatFrame1ButtonFrame
+	if placingSocial or not (b and side and CH.active and cfg().socialByTabs) then return end
+	placingSocial = true
+	b:ClearAllPoints()
+	b:SetPoint("BOTTOM", side, "TOP", 0, 1)
+	placingSocial = false
+end
+
 -- Side buttons (menu, channels, voice) and the social button. Blizzard fades them itself, so
 -- "hide" really hides them (out of combat) and keeps them hidden.
 local buttonHooked, hiddenByUs = {}, {}
+local socialHooked = false
 local function ApplyButtons()
 	if InCombatLockdown() then return end
+	local social = _G.QuickJoinToastButton
+	if type(social) == "table" and social.SetPoint and not socialHooked then
+		socialHooked = true
+		hooksecurefunc(social, "SetPoint", CH.PlaceSocial)
+	end
+	CH.PlaceSocial()
 	local hide = cfg().buttons == "hide"
 	for _, b in ipairs({ _G.ChatFrame1ButtonFrame, _G.QuickJoinToastButton }) do
 		if type(b) == "table" and b.Hide then

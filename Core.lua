@@ -280,6 +280,7 @@ local function unit(t)
 	t.showName = t.showName ~= false
 	t.nameFormat = "full" -- full | first | last
 	t.showLevel = false
+	t.leaderIcon = false -- crown on the group leader
 	t.nameAbove = false
 	t.healthText = "percent"
 	t.shields = true -- absorb shield and overshield on the health bar
@@ -353,6 +354,7 @@ ns.defaults = {
 		healthText = "percent",
 		nameFormat = "full", showLevel = false,
 		marker = false, markerSize = 16, -- raid target marker on the frame's top edge
+		leaderIcon = false, -- crown on the group leader
 		rangeFade = true,
 		healerIcon = true, healerSize = 12,
 		nameStyle = text(12),
@@ -377,6 +379,7 @@ ns.defaults = {
 		hideArena = false, hidePvP = false, hideMPlus = false, hideRaid = false,
 		headerGap = 2, -- square: space between the zone bar and the map
 		mailCorner = "TOPRIGHT", -- square: TOPLEFT / TOPRIGHT / BOTTOMLEFT / BOTTOMRIGHT / DEFAULT
+		dielCorner = "TOPLEFT", -- WoW Forever's day / night icon on a square map: a corner | HIDE | DEFAULT
 		folio = true, folioCorner = "BOTTOMLEFT", folioScale = 0.7, folioInset = 14, folioX = 0, folioY = 0, -- Omnium Folio (expansion button)
 	},
 	arenaAssist = {
@@ -606,6 +609,7 @@ ns.defaults = {
 		tabStyle = text(12),
 		mouseover = false, fadeAlpha = 0, showOnMessage = false, showOnMessageTime = 5,
 		buttons = "show", -- side buttons: show | hide
+		socialByTabs = true, -- social button level with the chat tabs, on top of the side buttons
 		copyButton = true, dragCopy = false,
 		-- text
 		fontSize = 0, -- 0: each window keeps its size from Blizzard's chat settings
