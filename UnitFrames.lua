@@ -46,9 +46,7 @@ end
 
 function UF.UpdateName(f)
 	if f.Name:IsShown() then
-		local name = UnitName(f.unit)
-		if f.lastName then name = ns.LastName(name) end
-		f.Name:SetText(name)
+		f.Name:SetText(ns.ShortenName((UnitName(f.unit)), f.nameFormat))
 		local style = f.nameStyle
 		if style and style.classColor then
 			f.Name:SetTextColor(ns.GetHealthColor(f.unit, true):GetRGB())
@@ -59,11 +57,16 @@ function UF.UpdateName(f)
 	end
 end
 
--- Level on the player frame, in the name's color.
+-- Level, in the name's color. Bosses report -1 and show as ??.
 function UF.UpdateLevel(f)
 	local level = f.Level
-	if not (level and level:IsShown()) then return end
-	level:SetText(UnitLevel(f.unit))
+	if not level:IsShown() then return end
+	local value = UnitLevel(f.unit)
+	if ns.issecret(value) or (value and value > 0) then
+		level:SetText(value)
+	else
+		level:SetText("??")
+	end
 	local style = f.nameStyle
 	if style and style.classColor then
 		level:SetTextColor(ns.GetHealthColor(f.unit, true):GetRGB())
@@ -71,6 +74,17 @@ function UF.UpdateLevel(f)
 		local c = style.color
 		level:SetTextColor(c[1], c[2], c[3])
 	end
+end
+
+-- Test mode and unlocked frames have no real unit to ask.
+function UF.PreviewLevel(f)
+	if f.Level:IsShown() then f.Level:SetText(UnitLevel("player")) end
+end
+
+-- Raid target marker (only frames that build one, and only when switched on).
+function UF.UpdateMarker(f)
+	if not f.Marker then return end
+	if f.markerShown then ns.UpdateMarker(f.Marker, f.unit) else f.Marker:Hide() end
 end
 
 -- Elite / boss star (target and focus): gold for elite and bosses, silver for rares.
@@ -100,6 +114,7 @@ function UF.UpdateAll(f)
 	UF.UpdatePower(f, true)
 	UF.UpdateName(f)
 	UF.UpdateLevel(f)
+	UF.UpdateMarker(f)
 	if f.PostUpdate then f:PostUpdate() end
 	if f.Auras then ns.SetAuraUnit(f.Auras, f.unit) end
 	if f.CCIcon then ns.SetAuraUnit(f.CCIcon, f.unit) end
@@ -112,6 +127,7 @@ local function SafeUpdateAll(f)
 		local ok = pcall(UF.UpdateAll, f)
 		if not ok then
 			f.Name:SetText("")
+			f.Level:SetText("")
 			f.HealthText:SetText("")
 		end
 	else
@@ -131,6 +147,8 @@ local function OnEvent(f, event, unit)
 		UF.UpdateName(f)
 	elseif event == "UNIT_LEVEL" then
 		UF.UpdateLevel(f)
+	elseif event == "RAID_TARGET_UPDATE" then
+		UF.UpdateMarker(f)
 	elseif event == "UNIT_CLASSIFICATION_CHANGED" then
 		UF.UpdateElite(f)
 	elseif event == "UNIT_CONNECTION" or event == "UNIT_FACTION" or event == "UNIT_FLAGS" then
@@ -146,7 +164,7 @@ end
 local unitEvents = {
 	"UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_ABSORB_AMOUNT_CHANGED",
 	"UNIT_POWER_FREQUENT", "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER",
-	"UNIT_NAME_UPDATE", "UNIT_CONNECTION", "UNIT_FACTION", "UNIT_FLAGS",
+	"UNIT_NAME_UPDATE", "UNIT_LEVEL", "UNIT_CONNECTION", "UNIT_FACTION", "UNIT_FLAGS",
 }
 
 function UF.RegisterUnitEvents(f)
@@ -159,7 +177,6 @@ function UF.RegisterUnitEvents(f)
 	if u == "focus" then f:RegisterEvent("PLAYER_FOCUS_CHANGED") end
 	if u == "target" or u == "focus" then f:RegisterUnitEvent("UNIT_CLASSIFICATION_CHANGED", u) end
 	if u == "pet" then f:RegisterUnitEvent("UNIT_PET", "player") end
-	if u == "player" then f:RegisterUnitEvent("UNIT_LEVEL", u) end
 end
 
 ---------------------------------------------------------------------------
@@ -222,7 +239,7 @@ function UF.CreateFrame(unit, name, noUnitWatch)
 	f.TextLayer = textLayer
 	f.Name = ns.CreateText(textLayer, 12, "LEFT")
 	f.HealthText = ns.CreateText(textLayer, 12, "RIGHT")
-	if unit == "player" then f.Level = ns.CreateText(textLayer, 12, "LEFT") end
+	f.Level = ns.CreateText(textLayer, 12, "LEFT")
 	if unit == "target" or unit == "focus" then
 		f.Elite = textLayer:CreateTexture(nil, "OVERLAY", nil, 7)
 		f.Elite:SetTexture(ns.MEDIA.star, "CLAMP", "CLAMP", "TRILINEAR")
@@ -286,18 +303,16 @@ function UF.Layout(f, cfg)
 	end
 
 	f.nameStyle = cfg.nameStyle
-	f.lastName = cfg.lastName
+	f.nameFormat = cfg.nameFormat
 	ns.ApplyText(f.Name, cfg.nameStyle)
 	ns.ApplyText(f.HealthText, cfg.healthStyle)
 
 	-- the level sits at the left of the bar; a name on the bar starts after it
-	local showLevel = f.Level ~= nil and cfg.showLevel == true
-	if f.Level then
-		ns.ApplyText(f.Level, cfg.nameStyle)
-		f.Level:SetShown(showLevel)
-		f.Level:ClearAllPoints()
-		f.Level:SetPoint("LEFT", f.Health, "LEFT", 4, 0)
-	end
+	local showLevel = cfg.showLevel == true
+	ns.ApplyText(f.Level, cfg.nameStyle)
+	f.Level:SetShown(showLevel)
+	f.Level:ClearAllPoints()
+	f.Level:SetPoint("LEFT", f.Health, "LEFT", 4, 0)
 
 	f.Name:SetShown(cfg.showName ~= false)
 	f.Name:ClearAllPoints()
@@ -326,6 +341,19 @@ function UF.Layout(f, cfg)
 		f.Elite:SetPoint("CENTER", f, cfg.eliteCorner or "TOPLEFT", 0, 0) -- centered on the chosen corner
 		if f.preview == nil and UnitExists(f.unit) then UF.UpdateElite(f) end
 	end
+end
+
+-- Party and arena frames keep their name in the top left corner, above the power split.
+function UF.PlaceNameTopLeft(f)
+	f.Name:ClearAllPoints()
+	if f.Level:IsShown() then
+		f.Level:ClearAllPoints()
+		f.Level:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -3)
+		f.Name:SetPoint("LEFT", f.Level, "RIGHT", 4, 0)
+	else
+		f.Name:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -3)
+	end
+	f.Name:SetPoint("RIGHT", f, "RIGHT", -40, 0)
 end
 
 ---------------------------------------------------------------------------

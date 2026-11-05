@@ -276,7 +276,8 @@ end
 local function unit(t)
 	t.enabled = true
 	t.showName = t.showName ~= false
-	t.lastName = false -- only the last word of the name
+	t.nameFormat = "full" -- full | first | last
+	t.showLevel = false
 	t.nameAbove = false
 	t.healthText = "percent"
 	t.shields = true -- absorb shield and overshield on the health bar
@@ -308,7 +309,6 @@ ns.defaults = {
 	units = {
 		player = unit({
 			width = 150, height = 24, showPower = false, powerHeight = 6,
-			showLevel = false,
 			point = { "BOTTOM", -230, 240 },
 			castbar = castbar(true, 220, 18, { "BOTTOM", 0, 190 }, 12),
 		}),
@@ -349,6 +349,8 @@ ns.defaults = {
 		ccMax = 2,
 		dispelPosition = "BELOW", -- BELOW (row under the frame) | SIDE (after the CC icons)
 		healthText = "percent",
+		nameFormat = "full", showLevel = false,
+		marker = false, markerSize = 16, -- raid target marker on the frame's top edge
 		rangeFade = true,
 		healerIcon = true, healerSize = 12,
 		nameStyle = text(12),
@@ -463,7 +465,8 @@ ns.defaults = {
 		specIcons = false, specIconsFriendly = false, specIconSize = 20,
 		specAnchor = "LEFT", -- LEFT / RIGHT of the cross, CENTER (cross to its right) or ABOVE (centered, cross on top)
 		nameMaxChars = 0, nameEllipsis = true, -- 0 = full names
-		lastName = false, -- only the last word of the name
+		nameFormat = "full", -- full | first | last
+		marker = true, markerSize = 28, -- raid target marker above the plate
 		specX = 0, specY = 0,
 		softIconScale = 1.5, softIconY = 4, -- Blizzard's soft-target (quest / interact) icon
 		friendlyLower = 0, -- push friendly plates down to make room above them
@@ -492,6 +495,7 @@ ns.defaults = {
 		power = "healer", -- all | healer | none
 		powerHeight = 5,
 		healthText = "percent",
+		nameFormat = "full", showLevel = false,
 		nameStyle = text(12),
 		healthStyle = text(12),
 		castbar = { enabled = true, height = 12, textStyle = text(10) },
@@ -622,6 +626,14 @@ ns.defaults = {
 			maxGold = 0, -- 0: no limit
 			announce = true,
 		},
+		-- errands done for you; each one is off until it's asked for
+		auto = {
+			questAccept = false, questTurnIn = false,
+			repair = false, repairGuild = false,
+			sellJunk = false,
+			releasePvP = false,
+			announce = true,
+		},
 	},
 	cursor = {
 		-- size: cursorSizePreferred (-1 default, 0..4 = 32/48/64/96/128); read from the game on first load
@@ -672,6 +684,7 @@ ns.defaults = {
 		enabled = false,
 		width = 90, height = 18, showPower = false, powerHeight = 3,
 		showName = true, nameAbove = false, healthText = "percent", shields = false,
+		nameFormat = "full", showLevel = false,
 		nameStyle = text(10, true), healthStyle = text(10),
 		hideInPvP = true,
 		point = { "LEFT", 560, 120 },
@@ -1539,11 +1552,15 @@ ns:On("PLAYER_LOGIN", function()
 	end
 end)
 
--- "Stormwind Guard" -> "Guard". A title after a comma isn't part of the name ("Thrall, Warchief of
--- the Horde" -> "Thrall"). A hidden (secret) name can't be read, so it's returned whole.
-function ns.LastName(name)
+-- Which part of a name to show: "first", "last", anything else keeps it whole. "Stormwind Guard"
+-- -> "Stormwind" / "Guard". A title after a comma isn't part of the name ("Thrall, Warchief of the
+-- Horde" -> "Thrall"). A hidden (secret) name can't be read, so it's returned whole. Spaces are
+-- matched literally: %s can take a byte of an accented letter for a space.
+function ns.ShortenName(name, format)
+	if format ~= "first" and format ~= "last" then return name end
 	if ns.issecret(name) or type(name) ~= "string" then return name end
 	local beforeComma = name:match("^[^,]+") or name
+	if format == "first" then return beforeComma:match("^ *([^ ]+)") or name end
 	return beforeComma:match("([^ ]+) *$") or name
 end
 

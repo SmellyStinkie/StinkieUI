@@ -75,6 +75,18 @@ function ns.CreateText(parent, size, justify, layer)
 	return fs
 end
 
+-- A raid target marker on a texture. In Midnight the index can be secret: it can't be tested, so
+-- it goes straight to Blizzard's setter, and if that refuses it the marker stays hidden.
+ns.MARKER_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
+function ns.UpdateMarker(tex, unit)
+	local index = unit and GetRaidTargetIndex(unit)
+	if not issecret(index) and index == nil then
+		tex:Hide()
+		return
+	end
+	tex:SetShown(pcall(SetRaidTargetIconTexture, tex, index))
+end
+
 function ns.SetFontSize(fs, size, flags)
 	ns.SetFont(fs, size, flags or "OUTLINE")
 end

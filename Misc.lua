@@ -1,6 +1,6 @@
 -- StinkieUI: miscellaneous. GCD History (a strip of the spells you just cast, sliding along as
--- you cast more) and Auto-Confirm Decor Purchases (skips the "are you sure" popup when buying
--- housing decor from a vendor).
+-- you cast more), Auto-Confirm Decor Purchases (skips the "are you sure" popup when buying
+-- housing decor from a vendor) and small errands: quests, repairs, junk and releasing in PvP.
 local _, ns = ...
 
 local MISC = {}
@@ -9,6 +9,7 @@ ns.Misc = MISC
 local issecret = ns.issecret
 local function gcfg() return ns.db.misc.gcd end
 local function dcfg() return ns.db.misc.decor end
+local function acfg() return ns.db.misc.auto end
 
 ---------------------------------------------------------------------------
 -- GCD History
@@ -268,9 +269,152 @@ local function InitDecor()
 end
 
 ---------------------------------------------------------------------------
+-- Auto quests. Hold Shift while talking to an NPC to do it by hand. Anything that needs a decision
+-- is left alone: a choice of rewards, a quest that costs gold or currency, and a quest that flags
+-- you for PvP (the game asks you to confirm those).
+---------------------------------------------------------------------------
+local function Say(msg)
+	if acfg().announce then ns:Print(msg) end
+end
+
+function MISC.OnGossip()
+	local c = acfg()
+	if IsShiftKeyDown() or not C_GossipInfo then return end
+	if c.questTurnIn then
+		for _, q in ipairs(C_GossipInfo.GetActiveQuests() or {}) do
+			if q.isComplete then C_GossipInfo.SelectActiveQuest(q.questID) return end
+		end
+	end
+	if c.questAccept then
+		for _, q in ipairs(C_GossipInfo.GetAvailableQuests() or {}) do
+			if not q.isIgnored then C_GossipInfo.SelectAvailableQuest(q.questID) return end
+		end
+	end
+end
+
+-- the older quest list, from NPCs that have nothing else to say
+function MISC.OnQuestGreeting()
+	local c = acfg()
+	if IsShiftKeyDown() then return end
+	if c.questTurnIn then
+		for i = 1, GetNumActiveQuests() do
+			local _, isComplete = GetActiveTitle(i)
+			if isComplete then SelectActiveQuest(i) return end
+		end
+	end
+	if c.questAccept and GetNumAvailableQuests() > 0 then SelectAvailableQuest(1) end
+end
+
+function MISC.OnQuestDetail()
+	if not acfg().questAccept or IsShiftKeyDown() or QuestFlagsPVP() then return end
+	if QuestGetAutoAccept() then AcknowledgeAutoAcceptQuest() else AcceptQuest() end
+end
+
+function MISC.OnQuestProgress()
+	if not acfg().questTurnIn or IsShiftKeyDown() or not IsQuestCompletable() then return end
+	if (GetQuestMoneyToGet() or 0) > 0 or (GetNumQuestCurrencies() or 0) > 0 then return end
+	CompleteQuest()
+end
+
+function MISC.OnQuestComplete()
+	if not acfg().questTurnIn or IsShiftKeyDown() then return end
+	if (GetQuestMoneyToGet() or 0) > 0 then return end
+	local choices = GetNumQuestChoices()
+	if choices > 1 then
+		Say("This quest has a choice of rewards, so that one's yours to pick.")
+		return
+	end
+	GetQuestReward(choices)
+end
+
+---------------------------------------------------------------------------
+-- Auto repair and junk, when a vendor opens. Junk goes first: its gold can pay for the repairs.
+---------------------------------------------------------------------------
+local function Coins(copper)
+	local fmt = (C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString) or GetCoinTextureString
+	return fmt and fmt(copper) or tostring(copper)
+end
+
+function MISC.SellJunk()
+	local M = C_MerchantFrame
+	if M and M.SellAllJunkItems and M.IsSellAllJunkEnabled and M.IsSellAllJunkEnabled() then
+		local n = M.GetNumJunkItems and M.GetNumJunkItems() or 0
+		if n == 0 then return end
+		M.SellAllJunkItems()
+		Say("Sold " .. n .. " junk item" .. (n == 1 and "" or "s") .. ".")
+		return
+	end
+	-- clients without Blizzard's own button
+	local n = 0
+	for bag = 0, NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4 do
+		for slot = 1, C_Container.GetContainerNumSlots(bag) do
+			local info = C_Container.GetContainerItemInfo(bag, slot)
+			if info and info.quality == 0 and not info.hasNoValue and not info.isLocked then
+				C_Container.UseContainerItem(bag, slot)
+				n = n + 1
+			end
+		end
+	end
+	if n > 0 then Say("Sold " .. n .. " junk item" .. (n == 1 and "" or "s") .. ".") end
+end
+
+-- what the guild will pay right now; 0 if it can't or won't
+local function GuildFunds()
+	if not (CanGuildBankRepair and CanGuildBankRepair()) then return 0 end
+	local limit, bank = GetGuildBankWithdrawMoney(), GetGuildBankMoney()
+	if limit < 0 then return bank end -- no daily limit
+	return math.min(limit, bank)
+end
+
+function MISC.Repair()
+	if not CanMerchantRepair() then return end
+	local cost, canRepair = GetRepairAllCost()
+	if not canRepair or not cost or cost <= 0 then return end
+	if acfg().repairGuild and GuildFunds() >= cost then
+		RepairAllItems(true)
+		Say("Repaired for " .. Coins(cost) .. " (guild funds).")
+	elseif GetMoney() >= cost then
+		RepairAllItems()
+		Say("Repaired for " .. Coins(cost) .. ".")
+	else
+		Say("Not enough gold to repair (" .. Coins(cost) .. ").")
+	end
+end
+
+function MISC.OnMerchant()
+	local c = acfg()
+	if c.sellJunk then MISC.SellJunk() end
+	if c.repair then MISC.Repair() end
+end
+
+---------------------------------------------------------------------------
+-- Auto release in battlegrounds. Arenas have nothing to release to. With a way to come back on the
+-- spot (soulstone, reincarnation), the choice stays yours.
+---------------------------------------------------------------------------
+function MISC.OnDead()
+	if not acfg().releasePvP then return end
+	local _, kind = IsInInstance()
+	if kind ~= "pvp" then return end
+	local options = C_DeathInfo and C_DeathInfo.GetSelfResurrectOptions and C_DeathInfo.GetSelfResurrectOptions()
+	if options and #options > 0 then return end
+	RepopMe()
+end
+
+local function InitAuto()
+	ns:On("GOSSIP_SHOW", MISC.OnGossip)
+	ns:On("QUEST_GREETING", MISC.OnQuestGreeting)
+	ns:On("QUEST_DETAIL", MISC.OnQuestDetail)
+	ns:On("QUEST_PROGRESS", MISC.OnQuestProgress)
+	ns:On("QUEST_COMPLETE", MISC.OnQuestComplete)
+	ns:On("MERCHANT_SHOW", MISC.OnMerchant)
+	ns:On("PLAYER_DEAD", MISC.OnDead)
+end
+
+---------------------------------------------------------------------------
 function MISC:Init()
 	InitGCD()
 	InitDecor()
+	InitAuto()
 end
 
 function MISC:Refresh()

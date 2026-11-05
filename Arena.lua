@@ -411,6 +411,7 @@ local function LayoutArenaFrame(f)
 		width = c.width, height = c.height,
 		showPower = false, powerHeight = c.powerHeight,
 		showName = true, nameAbove = false,
+		nameFormat = c.nameFormat, showLevel = c.showLevel,
 		healthText = c.healthText,
 		nameStyle = c.nameStyle, healthStyle = c.healthStyle,
 	})
@@ -423,9 +424,7 @@ local function LayoutArenaFrame(f)
 	f.PowerSeparator:SetPoint("BOTTOMLEFT", f.Power, "TOPLEFT")
 	f.PowerSeparator:SetPoint("BOTTOMRIGHT", f.Power, "TOPRIGHT")
 	f.PowerSeparator:SetHeight(px)
-	f.Name:ClearAllPoints()
-	f.Name:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -3)
-	f.Name:SetPoint("RIGHT", f, "RIGHT", -40, 0)
+	UF.PlaceNameTopLeft(f)
 	f.HealthText:ClearAllPoints()
 	f.HealthText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -4, -3)
 	ns.SetFont(f.Status, math.max(12, math.floor(c.height * (c.deadSize or 0.6))), "OUTLINE")
@@ -564,6 +563,7 @@ local function ShowPreview(f, on)
 	local col = C_ClassColor.GetClassColor(d.class)
 	f.Health:SetStatusBarColor(col:GetRGB())
 	f.Name:SetText(d.name)
+	UF.PreviewLevel(f)
 	f.HealthText:SetText(math.floor(d.hp * 100) .. "%")
 	f.Spec.tex:SetTexture(d.icon)
 	if d.healer then f.Role:SetTexture(ns.MEDIA.cross) end

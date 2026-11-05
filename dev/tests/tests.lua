@@ -806,17 +806,20 @@ check("lock buttons on", ns.ActionBars.ButtonsLocked() == true and MOCK.cvars.lo
 ns.ActionBars.SetButtonsLocked(false)
 check("lock buttons off", ns.ActionBars.ButtonsLocked() == false and MOCK.cvars.lockActionBars == "0")
 
--- last names
-check("last name: two words", ns.LastName("Stormwind Guard") == "Guard")
-check("last name: one word", ns.LastName("Stinkie") == "Stinkie")
-check("last name: title after comma", ns.LastName("Thrall, Warchief of the Horde") == "Thrall")
-check("last name: trailing space", ns.LastName("Lady Liadrin ") == "Liadrin")
-check("last name: accents", ns.LastName("Élan Vitàl") == "Vitàl")
-check("last name: nothing to shorten", ns.LastName(nil) == nil and ns.LastName("") == "")
+-- first / last / both
+local Short = ns.ShortenName
+check("name: both is untouched", Short("Stormwind Guard", "full") == "Stormwind Guard" and Short("Stormwind Guard") == "Stormwind Guard")
+check("name: last", Short("Stormwind Guard", "last") == "Guard")
+check("name: first", Short("Stormwind Guard", "first") == "Stormwind")
+check("name: one word", Short("Stinkie", "last") == "Stinkie" and Short("Stinkie", "first") == "Stinkie")
+check("name: title after comma", Short("Thrall, Warchief of the Horde", "last") == "Thrall")
+check("name: stray spaces", Short("Lady Liadrin ", "last") == "Liadrin" and Short(" Lady Liadrin", "first") == "Lady")
+check("name: accents", Short("Élan Vitàl", "last") == "Vitàl" and Short("Vitàl Élan", "first") == "Vitàl")
+check("name: nothing to shorten", Short(nil, "last") == nil and Short("", "first") == "")
 do
 	local secret, old = {}, ns.issecret
 	ns.issecret = function(v) return v == secret end
-	check("last name: secret passes through untouched", ns.LastName(secret) == secret)
+	check("name: secret passes through untouched", Short(secret, "last") == secret)
 	ns.issecret = old
 end
 do
@@ -824,13 +827,16 @@ do
 	local oldUnitName, oldShown = UnitName, f.Name:IsShown()
 	UnitName = function(u) if u == f.unit then return "Stormwind Guard" end return oldUnitName(u) end
 	f.Name:SetShown(true)
-	f.lastName = false
+	f.nameFormat = "full"
 	ns.UF.UpdateName(f)
 	check("unit frame: full name by default", f.Name:GetText() == "Stormwind Guard", f.Name:GetText())
-	f.lastName = true
+	f.nameFormat = "last"
 	ns.UF.UpdateName(f)
-	check("unit frame: last name only", f.Name:GetText() == "Guard", f.Name:GetText())
-	f.lastName = false
+	check("unit frame: last name", f.Name:GetText() == "Guard", f.Name:GetText())
+	f.nameFormat = "first"
+	ns.UF.UpdateName(f)
+	check("unit frame: first name", f.Name:GetText() == "Stormwind", f.Name:GetText())
+	f.nameFormat = "full"
 	UnitName = oldUnitName
 	f.Name:SetShown(oldShown)
 end
@@ -851,7 +857,228 @@ do
 	cfg.showLevel = false
 	ns.UF.Layout(f, cfg)
 	check("level hides again", not f.Level:IsShown())
-	check("only the player frame has a level", ns.UF.frames.target.Level == nil)
+	-- every unit frame has one, and a boss reads ??
+	local t = ns.UF.frames.target
+	local tc = ns.db.units.target
+	MOCK.unitLevels.target = -1
+	tc.showLevel = true
+	ns.UF.Layout(t, tc)
+	ns.UF.UpdateLevel(t)
+	check("boss level reads ??", t.Level:IsShown() and t.Level:GetText() == "??", t.Level:GetText())
+	tc.showLevel = false
+	ns.UF.Layout(t, tc)
+	for _, key in ipairs({ "player", "target", "targettarget", "focus", "pet" }) do
+		check(key .. " has the level option", ns.db.units[key].showLevel == false and ns.db.units[key].nameFormat == "full")
+	end
+	for _, key in ipairs({ "party", "arena", "partyTargets" }) do
+		check(key .. " has the level option", ns.db[key].showLevel == false and ns.db[key].nameFormat == "full")
+	end
+end
+
+-- party frames: the level comes first and the name follows it, both in the top corner
+do
+	local f = MOCK.NewObj("Frame", "PlaceNameFrame", UIParent)
+	f.Name, f.Level = MOCK.NewObj("Frame", "PlaceName", f), MOCK.NewObj("Frame", "PlaceLevel", f)
+	local levelAnchor, nameAnchor
+	f.Level.SetPoint = function(_, p) levelAnchor = p end
+	f.Name.SetPoint = function(_, p, rel) if p == "LEFT" or p == "TOPLEFT" then nameAnchor = { p, rel } end end
+	f.Level:Show()
+	ns.UF.PlaceNameTopLeft(f)
+	check("level in the corner", levelAnchor == "TOPLEFT")
+	check("name after the level", nameAnchor[1] == "LEFT" and nameAnchor[2] == f.Level)
+	f.Level:Hide()
+	ns.UF.PlaceNameTopLeft(f)
+	check("name in the corner without level", nameAnchor[1] == "TOPLEFT" and nameAnchor[2] == f)
+end
+
+-- target markers
+do
+	local tex = MOCK.NewObj("Texture", "MarkerTex", UIParent)
+	local set
+	local oldIndex, oldSet = GetRaidTargetIndex, SetRaidTargetIconTexture
+	SetRaidTargetIconTexture = function(_, i) set = i end
+	GetRaidTargetIndex = function() return nil end
+	tex:Show()
+	ns.UpdateMarker(tex, "party1")
+	check("no marker: hidden", not tex:IsShown())
+	GetRaidTargetIndex = function() return 8 end
+	ns.UpdateMarker(tex, "party1")
+	check("marker shown", tex:IsShown() and set == 8, set)
+	-- a secret index goes straight to the setter; a refusal keeps it hidden
+	local secret, oldSecret = {}, ns.issecret
+	GetRaidTargetIndex = function() return secret end
+	ns.issecret = function(v) return v == secret end
+	ns.UpdateMarker(tex, "party1")
+	check("secret marker reaches the setter", tex:IsShown() and set == secret)
+	SetRaidTargetIconTexture = function() error("refused") end
+	ns.UpdateMarker(tex, "party1")
+	check("refused marker stays hidden", not tex:IsShown())
+	ns.issecret = oldSecret
+	GetRaidTargetIndex, SetRaidTargetIconTexture = oldIndex, oldSet
+	check("marker defaults", ns.db.nameplates.marker == true and ns.db.party.marker == false)
+end
+
+-- automation: nothing happens until it's switched on, and decisions stay with the player
+do
+	local M, A = ns.Misc, ns.db.misc.auto
+	local calls = {}
+	local function log(name) return function(...) calls[#calls + 1] = name; calls[name] = { ... } end end
+	local saved = {}
+	local function stub(name, fn) saved[name] = _G[name]; _G[name] = fn end
+	local function reset() for k in pairs(calls) do calls[k] = nil end end
+	for _, k in ipairs({ "questAccept", "questTurnIn", "repair", "repairGuild", "sellJunk", "releasePvP" }) do
+		check("off by default: " .. k, A[k] == false)
+	end
+	A.announce = false
+	stub("IsShiftKeyDown", function() return false end)
+	stub("AcceptQuest", log("AcceptQuest"))
+	stub("AcknowledgeAutoAcceptQuest", log("Ack"))
+	stub("QuestFlagsPVP", function() return false end)
+	stub("QuestGetAutoAccept", function() return false end)
+	stub("CompleteQuest", log("CompleteQuest"))
+	stub("IsQuestCompletable", function() return true end)
+	stub("GetQuestMoneyToGet", function() return 0 end)
+	stub("GetNumQuestCurrencies", function() return 0 end)
+	stub("GetNumQuestChoices", function() return 1 end)
+	stub("GetQuestReward", log("GetQuestReward"))
+	stub("C_GossipInfo", {
+		GetActiveQuests = function() return { { questID = 1, isComplete = false }, { questID = 2, isComplete = true } } end,
+		GetAvailableQuests = function() return { { questID = 3, isIgnored = true }, { questID = 4 } } end,
+		SelectActiveQuest = log("SelectActive"), SelectAvailableQuest = log("SelectAvailable"),
+	})
+
+	M.OnQuestDetail(); M.OnQuestProgress(); M.OnQuestComplete(); M.OnGossip()
+	check("quests: off does nothing", #calls == 0)
+	A.questAccept, A.questTurnIn = true, true
+	M.OnGossip()
+	check("gossip: finished quest first", calls.SelectActive and calls.SelectActive[1] == 2 and not calls.SelectAvailable)
+	reset()
+	A.questTurnIn = false
+	M.OnGossip()
+	check("gossip: skips ignored quests", calls.SelectAvailable and calls.SelectAvailable[1] == 4)
+	A.questTurnIn = true
+	reset()
+	M.OnQuestDetail()
+	check("accepts", calls.AcceptQuest ~= nil)
+	reset()
+	QuestFlagsPVP = function() return true end
+	M.OnQuestDetail()
+	check("PvP-flagging quest left alone", #calls == 0)
+	QuestFlagsPVP = function() return false end
+	QuestGetAutoAccept = function() return true end
+	M.OnQuestDetail()
+	check("auto-accept quest acknowledged", calls.Ack ~= nil and calls.AcceptQuest == nil)
+	reset()
+	IsShiftKeyDown = function() return true end
+	M.OnQuestDetail(); M.OnQuestProgress(); M.OnQuestComplete(); M.OnGossip()
+	check("Shift pauses all of it", #calls == 0)
+	IsShiftKeyDown = function() return false end
+	M.OnQuestProgress()
+	check("turns in", calls.CompleteQuest ~= nil)
+	reset()
+	GetNumQuestCurrencies = function() return 1 end
+	M.OnQuestProgress()
+	check("quest that costs currency left alone", #calls == 0)
+	GetNumQuestCurrencies = function() return 0 end
+	GetQuestMoneyToGet = function() return 100 end
+	M.OnQuestProgress(); M.OnQuestComplete()
+	check("quest that costs gold left alone", #calls == 0)
+	GetQuestMoneyToGet = function() return 0 end
+	M.OnQuestComplete()
+	check("single reward taken", calls.GetQuestReward and calls.GetQuestReward[1] == 1)
+	reset()
+	GetNumQuestChoices = function() return 0 end
+	M.OnQuestComplete()
+	check("no reward choice", calls.GetQuestReward and calls.GetQuestReward[1] == 0)
+	reset()
+	GetNumQuestChoices = function() return 3 end
+	M.OnQuestComplete()
+	check("a choice of rewards waits for you", #calls == 0)
+
+	-- vendors
+	stub("CanMerchantRepair", function() return true end)
+	stub("GetRepairAllCost", function() return 5000, true end)
+	stub("RepairAllItems", log("Repair"))
+	stub("GetMoney", function() return 10000 end)
+	stub("CanGuildBankRepair", function() return false end)
+	stub("GetGuildBankWithdrawMoney", function() return 100000 end)
+	stub("GetGuildBankMoney", function() return 100000 end)
+	stub("C_MerchantFrame", { IsSellAllJunkEnabled = function() return true end, GetNumJunkItems = function() return 2 end, SellAllJunkItems = log("SellJunk") })
+	reset()
+	M.OnMerchant()
+	check("vendor: off does nothing", #calls == 0)
+	A.repair, A.sellJunk = true, true
+	M.OnMerchant()
+	check("junk goes before repairs", calls[1] == "SellJunk" and calls[2] == "Repair")
+	check("repairs with your gold", calls.Repair and calls.Repair[1] == nil)
+	reset()
+	A.repairGuild = true
+	CanGuildBankRepair = function() return true end
+	M.Repair()
+	check("repairs with guild funds", calls.Repair and calls.Repair[1] == true)
+	reset()
+	GetGuildBankWithdrawMoney = function() return 100 end
+	M.Repair()
+	check("guild limit too low: your gold", calls.Repair and calls.Repair[1] == nil)
+	reset()
+	GetGuildBankWithdrawMoney = function() return -1 end
+	M.Repair()
+	check("no guild limit", calls.Repair and calls.Repair[1] == true)
+	reset()
+	CanGuildBankRepair = function() return false end
+	GetMoney = function() return 1 end
+	M.Repair()
+	check("can't afford it: no repair", #calls == 0)
+	GetRepairAllCost = function() return 0, false end
+	GetMoney = function() return 10000 end
+	M.Repair()
+	check("nothing to repair", #calls == 0)
+	CanMerchantRepair = function() return false end
+	GetRepairAllCost = function() return 5000, true end
+	M.Repair()
+	check("vendor can't repair", #calls == 0)
+	C_MerchantFrame = { IsSellAllJunkEnabled = function() return true end, GetNumJunkItems = function() return 0 end, SellAllJunkItems = log("SellJunk") }
+	M.SellJunk()
+	check("no junk: nothing sold", #calls == 0)
+	-- clients without Blizzard's sell-all button
+	C_MerchantFrame = {}
+	stub("C_Container", {
+		GetContainerNumSlots = function(bag) return bag == 0 and 3 or 0 end,
+		GetContainerItemInfo = function(_, slot)
+			if slot == 1 then return { quality = 0 } end
+			if slot == 2 then return { quality = 1 } end
+			return { quality = 0, hasNoValue = true }
+		end,
+		UseContainerItem = log("Use"),
+	})
+	M.SellJunk()
+	check("fallback sells only valuable grays", #calls == 1 and calls.Use[2] == 1)
+	reset()
+
+	-- release
+	stub("RepopMe", log("Repop"))
+	stub("IsInInstance", function() return true, "pvp" end)
+	stub("C_DeathInfo", { GetSelfResurrectOptions = function() return {} end })
+	M.OnDead()
+	check("release: off does nothing", #calls == 0)
+	A.releasePvP = true
+	M.OnDead()
+	check("releases in a battleground", calls.Repop ~= nil)
+	reset()
+	IsInInstance = function() return true, "arena" end
+	M.OnDead()
+	check("no release in arena", #calls == 0)
+	IsInInstance = function() return false, "none" end
+	M.OnDead()
+	check("no release in the world", #calls == 0)
+	IsInInstance = function() return true, "pvp" end
+	C_DeathInfo = { GetSelfResurrectOptions = function() return { { name = "Soulstone" } } end }
+	M.OnDead()
+	check("self-resurrect: your choice", #calls == 0)
+
+	for k, v in pairs(saved) do _G[k] = v end
+	for _, k in ipairs({ "questAccept", "questTurnIn", "repair", "repairGuild", "sellJunk", "releasePvP" }) do A[k] = false end
+	A.announce = true
 end
 
 -- Character Sheet: window opacity reaches what's on screen
@@ -892,6 +1119,40 @@ local oldGet = C_NamePlate.GetNamePlateForUnit
 rawset(C_NamePlate, "GetNamePlateForUnit", function(u) if u == "target" then return plateA end end)
 check("target plate by frame", ns.Nameplates.IsTargetPlate({ nameplate = plateA, unit = "nameplate1" }) == true)
 check("other plate not target", ns.Nameplates.IsTargetPlate({ nameplate = plateB, unit = "nameplate2" }) == false)
+-- target marker on a real plate: built by plate setup, follows the marker event
+do
+	local plate = MOCK.NewObj("Frame", nil, UIParent)
+	rawset(C_NamePlate, "GetNamePlateForUnit", function(u) if u == "nameplate9" then return plate end end)
+	local oldPlates = C_NamePlate.GetNamePlates
+	rawset(C_NamePlate, "GetNamePlates", function() return { plate } end)
+	local oldIndex, oldSet = GetRaidTargetIndex, SetRaidTargetIconTexture
+	local index, set = 4, nil
+	GetRaidTargetIndex = function() return index end
+	SetRaidTargetIconTexture = function(_, i) set = i end
+	ns.Nameplates.SetupPlate("nameplate9")
+	local f = plate.SUIFrame
+	check("plate built", f ~= nil and f.unit == "nameplate9")
+	check("plate marker shown on setup", f.Marker:IsShown() and set == 4, set)
+	index = nil
+	ns.Nameplates.driver:GetScript("OnEvent")(ns.Nameplates.driver, "RAID_TARGET_UPDATE")
+	check("plate marker follows the event", not f.Marker:IsShown())
+	index = 2
+	ns.db.nameplates.marker = false
+	ns.Nameplates.UpdateMarker(f)
+	check("plate marker off", not f.Marker:IsShown())
+	ns.db.nameplates.marker = true
+	f.nameFormat = nil
+	ns.db.nameplates.nameFormat = "last"
+	local oldUnitName = UnitName
+	UnitName = function() return "Stormwind Guard" end
+	ns.Nameplates.SetupPlate("nameplate9")
+	check("plate name follows the option", f.Name:GetText() == "Guard", f.Name:GetText())
+	ns.db.nameplates.nameFormat = "full"
+	UnitName = oldUnitName
+	GetRaidTargetIndex, SetRaidTargetIconTexture = oldIndex, oldSet
+	rawset(C_NamePlate, "GetNamePlates", oldPlates)
+end
+flushErrors("plate marker")
 rawset(C_NamePlate, "GetNamePlateForUnit", oldGet)
 check("important aura marker default", ns.db.nameplates.important.auraMarker == true and ns.db.nameplates.important.auraIDs[1] == "8178")
 flushErrors("0.34")

@@ -124,6 +124,11 @@ local function CreatePartyFrame(unit, index)
 	f:RegisterEvent("GROUP_ROSTER_UPDATE")
 	f:RegisterEvent("PLAYER_TARGET_CHANGED")
 	f:RegisterEvent("PLAYER_ROLES_ASSIGNED")
+	f:RegisterEvent("RAID_TARGET_UPDATE")
+
+	f.Marker = f.TextLayer:CreateTexture(nil, "OVERLAY")
+	f.Marker:SetTexture(ns.MARKER_TEXTURE)
+	f.Marker:Hide()
 
 	-- simple green cross, same shape as the nameplate healer cross
 	local role = f.TextLayer:CreateTexture(nil, "OVERLAY")
@@ -211,6 +216,7 @@ local function LayoutPartyFrame(f, index)
 		showPower = false, -- power is split from health in PostUpdate
 		powerHeight = cfg.powerHeight,
 		showName = true, nameAbove = false,
+		nameFormat = cfg.nameFormat, showLevel = cfg.showLevel,
 		healthText = cfg.healthText,
 		nameStyle = cfg.nameStyle, healthStyle = cfg.healthStyle,
 	})
@@ -225,11 +231,13 @@ local function LayoutPartyFrame(f, index)
 	f.PowerSeparator:SetPoint("BOTTOMRIGHT", f.Power, "TOPRIGHT")
 	f.PowerSeparator:SetHeight(px)
 
-	f.Name:ClearAllPoints()
-	f.Name:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -3)
-	f.Name:SetPoint("RIGHT", f, "RIGHT", -40, 0)
+	UF.PlaceNameTopLeft(f)
 	f.HealthText:ClearAllPoints()
 	f.HealthText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -4, -3)
+	f.markerShown = cfg.marker
+	f.Marker:SetSize(cfg.markerSize, cfg.markerSize)
+	f.Marker:ClearAllPoints()
+	f.Marker:SetPoint("CENTER", f, "TOP", 0, 0)
 	local rs = cfg.healerSize or 12
 	f.RoleIcon:SetSize(rs, rs)
 	f.RoleIcon:ClearAllPoints()
@@ -615,6 +623,9 @@ function Party.FillPreview(f, i)
 	local col = C_ClassColor.GetClassColor(d.class)
 	if col then f.Health:SetStatusBarColor(col:GetRGB()) end
 	f.Name:SetText(d.name)
+	UF.PreviewLevel(f)
+	if f.markerShown then SetRaidTargetIconTexture(f.Marker, i) end
+	f.Marker:SetShown(f.markerShown and true or false)
 	f.HealthText:SetText(math.floor(d.hp * 100) .. "%")
 	f.Absorb:SetValue(0)
 	f.OverAbsorb:SetAlpha(0)

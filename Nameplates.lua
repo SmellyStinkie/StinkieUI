@@ -125,7 +125,7 @@ local function UpdateName(f)
 		f.Level:Hide()
 	end
 	local name = UnitName(u)
-	if cfg.lastName then name = ns.LastName(name) end
+	name = ns.ShortenName(name, cfg.nameFormat)
 	local limit = cfg.nameMaxChars or 0
 	-- hidden (secret) names can't be shortened; they're clipped to the plate width instead
 	if limit > 0 and not ns.issecret(name) and type(name) == "string" then
@@ -134,6 +134,11 @@ local function UpdateName(f)
 	end
 	f.Name:SetText(name)
 end
+
+local function UpdateMarker(f)
+	if ns.db.nameplates.marker then ns.UpdateMarker(f.Marker, f.unit) else f.Marker:Hide() end
+end
+NP.UpdateMarker = UpdateMarker
 
 local ARENA_ROLE_MAP = { HEALER = ns.MEDIA.cross, TANK = ns.MEDIA.blank, DAMAGER = ns.MEDIA.blank }
 local UNIT_ROLE_OPTIONS = { displayRoleIcon = true, textureMap = { HEALER = ns.MEDIA.cross, TANK = ns.MEDIA.blank, DAMAGER = ns.MEDIA.blank } }
@@ -425,6 +430,9 @@ local function CreatePlateFrame(nameplate)
 	f.Name = ns.CreateText(textLayer, 11, "LEFT")
 	f.Level = ns.CreateText(textLayer, 11, "LEFT")
 	f.HealthText = ns.CreateText(textLayer, 9, "RIGHT")
+	f.Marker = textLayer:CreateTexture(nil, "OVERLAY")
+	f.Marker:SetTexture(ns.MARKER_TEXTURE)
+	f.Marker:Hide()
 
 	-- healer cross: white plus with a thin black outline, tinted green (friendly) or red (enemy)
 	local healer = CreateFrame("Frame", nil, f)
@@ -695,6 +703,11 @@ local function LayoutPlate(f)
 	end
 	-- carrier and quest icons stack above whatever is centered
 	f.TopSlot = (centered and not crossAbove) and f.SpecIcon or f.Healer
+	-- the target marker goes above that slot, so a healer's cross never covers it
+	f.Marker:SetSize(cfg.markerSize, cfg.markerSize)
+	f.Marker:ClearAllPoints()
+	f.Marker:SetPoint("BOTTOM", f.TopSlot, "TOP", 0, 2)
+	UpdateMarker(f)
 	-- Blizzard's helpers fix their icons at 12x12, so the holder is scaled to the chosen size
 	local roles = f.SecretRoles
 	roles:SetScale(hs / 12)
@@ -933,6 +946,7 @@ function NP.DebugTarget()
 	show("name (secret = hidden by the game)", UnitName("target"))
 	show("NPC ID (secret = hidden by the game)", UnitCreatureID and UnitCreatureID("target"))
 	show("minion (pet / totem / guardian)", UnitIsMinion and UnitIsMinion("target"))
+	show("target marker (secret = hidden by the game)", GetRaidTargetIndex("target"))
 	show("important unit", f.important)
 	show("UnitCanAttack now", UnitCanAttack("player", "target"))
 	local c = f.Auras
@@ -1102,6 +1116,7 @@ function NP:Init()
 	driver:RegisterEvent("ARENA_OPPONENT_UPDATE")
 	driver:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
 	driver:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
+	driver:RegisterEvent("RAID_TARGET_UPDATE")
 	driver:SetScript("OnEvent", ns.Timed("Nameplates (add / remove / target)", function(_, event, unit)
 		if event == "NAME_PLATE_UNIT_ADDED" then
 			OnPlateAdded(unit)
@@ -1118,6 +1133,10 @@ function NP:Init()
 					end
 					UpdateTarget(f)
 				end
+			end
+		elseif event == "RAID_TARGET_UPDATE" then
+			for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+				if plate.SUIFrame and plate.SUIFrame.unit then UpdateMarker(plate.SUIFrame) end
 			end
 		else
 			for _, plate in ipairs(C_NamePlate.GetNamePlates()) do

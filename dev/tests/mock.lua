@@ -221,6 +221,7 @@ function LoggingCombat() return false end
 function GetCVar() return "0" end
 function GetCVarBool(name) return MOCK.cvars ~= nil and MOCK.cvars[name] == "1" end
 function SetCVar(name, value) MOCK.cvars = MOCK.cvars or {}; MOCK.cvars[name] = value end
+NUM_TOTAL_EQUIPPED_BAG_SLOTS = 5
 function UnitLevel(u) return MOCK.unitLevels and MOCK.unitLevels[u] end
 function GetBuildInfo() return "12.1.5", "70688", "", 120105 end
 function ReloadUI() end

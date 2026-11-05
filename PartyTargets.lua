@@ -104,6 +104,7 @@ end
 function PT.FillPreview(f, i)
 	local d = PREVIEW[i] or PREVIEW[1]
 	f.Name:SetText(d.name)
+	UF.PreviewLevel(f)
 	local col = d.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[d.class]
 	if col then f.Health:SetStatusBarColor(col.r, col.g, col.b) else f.Health:SetStatusBarColor(0.8, 0.2, 0.2) end
 	f.Health:SetMinMaxValues(0, 1)
