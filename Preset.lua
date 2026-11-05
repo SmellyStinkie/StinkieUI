@@ -303,11 +303,6 @@ local PRESET = {
 	},
 	misc = {
 		auto = {
-			hideErrors = true,
-			questAccept = true,
-			questTurnIn = true,
-			releasePvP = true,
-			repair = true,
 			sellJunk = true,
 		},
 		decor = {
@@ -315,7 +310,6 @@ local PRESET = {
 		},
 		gcd = {
 			direction = "LEFT",
-			enabled = true,
 			point = { "BOTTOM", -380, 0 },
 			spacing = 0,
 		},

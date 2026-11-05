@@ -1828,6 +1828,15 @@ do
 end
 flushErrors("scrolling text")
 
+-- what a new player starts with: junk sold, nothing else done for them
+do
+	local auto = ns.defaults.misc.auto
+	check("new players sell junk", auto.sellJunk == true)
+	check("no other automation for new players", auto.questAccept == false and auto.questTurnIn == false
+		and auto.repair == false and auto.releasePvP == false and auto.hideErrors == false)
+	check("no GCD History for new players", ns.defaults.misc.gcd.enabled == false)
+end
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto
