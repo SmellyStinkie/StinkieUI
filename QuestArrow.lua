@@ -1,7 +1,8 @@
 -- StinkieUI: quest marker. A small nameplate in the world on the quest you're actively tracking,
 -- or your corpse while you're dead, with the distance in yards. When the spot is off screen it becomes an arrow at the edge of the
--- screen, pointing the way. Blizzard's SuperTrackedFrame already sits on the spot, stays on screen
--- and fades, so the marker follows it and Blizzard's own diamond is hidden while it does.
+-- screen, pointing the way. The marker follows Blizzard's navigation frame, not its SuperTrackedFrame:
+-- that one jumps to a small oval around the middle of the screen as the spot goes off screen, which
+-- would drag the plate there for a moment. Blizzard's own diamond is hidden while the marker shows.
 local _, ns = ...
 
 local QA = {}
@@ -72,7 +73,7 @@ local function LayoutMarker(clamped)
 	local h = QA.holder
 	local c = cfg()
 	h:ClearAllPoints()
-	if not clamped then h:SetPoint("CENTER", _G.SuperTrackedFrame, "CENTER", 0, c.height) end
+	if not clamped then h:SetPoint("CENTER", C_Navigation.GetFrame(), "CENTER", 0, c.height) end
 	h.Plate:SetShown(not clamped)
 	h.Name:SetShown(c.showName)
 	h.Plate:SetSize(c.showName and PLATE_WIDTH or PLATE_WIDTH_NO_NAME, c.textStyle.size + 8)
@@ -110,6 +111,8 @@ function QA.UpdateEdge()
 	local scale = UIParent:GetEffectiveScale()
 	local centerX, centerY = worldX / scale, worldY / scale
 	local margin = cfg().edgeMargin
+	-- dead center tells nothing about direction: stay put rather than sit in the middle of the screen
+	if math.abs(x - centerX) < 1 and math.abs(y - centerY) < 1 then return end
 	local px, py = QA.EdgePosition(x - centerX, y - centerY,
 		UIParent:GetWidth() / 2 - margin, UIParent:GetHeight() / 2 - margin)
 	h:ClearAllPoints()
@@ -150,8 +153,10 @@ function QA.Update(settle)
 	end
 	local clamped = C_Navigation.WasClampedToScreen() and true or false
 	h:SetAlpha(QA.MarkerAlpha(clamped))
-	if clamped ~= QA.clamped then
-		QA.clamped = clamped
+	-- Blizzard can replace the navigation frame, and an anchor to the old one goes nowhere
+	local nav = C_Navigation.GetFrame()
+	if clamped ~= QA.clamped or nav ~= QA.nav then
+		QA.clamped, QA.nav = clamped, nav
 		LayoutMarker(clamped)
 	end
 	local yards = C_Navigation.GetDistance()
@@ -201,8 +206,20 @@ function QA.Debug()
 	end
 end
 
+-- Every frame while it's up: anything that moves it must not wait for the next tick, or it's seen
+-- in the wrong place for a moment.
+local function EveryFrame()
+	local clamped = C_Navigation.WasClampedToScreen() and true or false
+	if clamped ~= QA.clamped then
+		QA.clamped = clamped
+		LayoutMarker(clamped)
+	end
+	QA.holder:SetAlpha(QA.MarkerAlpha(clamped))
+	if clamped then QA.UpdateEdge() end
+end
+
 local function OnUpdate(_, elapsed)
-	if QA.clamped and QA.holder:IsShown() then QA.UpdateEdge() end
+	if QA.holder:IsShown() and C_Navigation.GetFrame() then EveryFrame() end
 	QA.sinceUpdate = QA.sinceUpdate + elapsed
 	if QA.sinceUpdate < TICK then return end
 	QA.sinceUpdate = 0

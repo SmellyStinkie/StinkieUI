@@ -1056,6 +1056,39 @@ do
 	check("marker shows", h:IsShown())
 	check("Blizzard's diamond hidden", blizzard.Icon:GetAlpha() == 0 and blizzard.DistanceText:GetAlpha() == 0 and blizzard.Arrow:GetAlpha() == 0)
 	check("marker shows yards", h.Distance:GetText() == "42 yd", h.Distance:GetText())
+	-- the plate follows the navigation frame itself: Blizzard's marker frame jumps to a small oval
+	-- near the middle of the screen as the spot goes off screen
+	do
+		local anchor
+		h.SetPoint = function(_, _, rel) anchor = rel end
+		QA.clamped = nil
+		QA.Update()
+		check("marker follows the navigation frame", anchor == true and anchor ~= blizzard)
+		-- going off screen is picked up on the very next frame, not the next tick
+		QA.sinceUpdate = 0
+		clamped = true
+		h.Plate:Show()
+		QA.onUpdate(h, 0.001)
+		check("off screen is seen straight away", not h.Plate:IsShown())
+		clamped = false
+		QA.onUpdate(h, 0.001)
+		check("back on screen straight away", h.Plate:IsShown())
+		validScreen = false
+		QA.onUpdate(h, 0.001)
+		check("no screen position hides it straight away", h:GetAlpha() == 0)
+		validScreen = true
+		QA.onUpdate(h, 0.001)
+		-- a replaced navigation frame gets anchored again
+		local replaced = {}
+		nav = replaced
+		anchor = nil
+		QA.Update()
+		check("a new navigation frame is followed", anchor == replaced)
+		nav = true
+		QA.Update()
+		h.SetPoint = nil
+	end
+
 	-- raised off the spot on screen, but not at the screen edge
 	local raised
 	h.SetPoint = function(_, _, _, _, _, y) raised = y end
@@ -1075,6 +1108,15 @@ do
 	QA.Update()
 	check("edge gap is a setting", near(atX, 300), atX)
 	c.edgeMargin = ns.defaults.misc.questArrow.edgeMargin
+	-- dead center says nothing about direction: the arrow stays where it was
+	do
+		local oldCenter = blizzard.GetCenter
+		blizzard.GetCenter = function() return 500, 100 end
+		atX = nil
+		QA.UpdateEdge()
+		check("dead center doesn't move the arrow", atX == nil, atX)
+		blizzard.GetCenter = oldCenter
+	end
 	h.SetPoint = function(_, _, _, _, _, y) raised = y end
 	clamped = false
 	QA.Update()
@@ -1253,7 +1295,7 @@ do
 	UIParent.GetEffectiveScale = oldScale
 	UIParent.GetWidth, UIParent.GetHeight = oldWidth, oldHeight
 	h.Arrow.SetRotation = nil
-	QA.blizzardShown, QA.clamped, QA.target, QA.state, QA.pending = nil, nil, nil, nil, nil
+	QA.blizzardShown, QA.clamped, QA.target, QA.state, QA.pending, QA.nav = nil, nil, nil, nil, nil, nil
 	for k, v in pairs(saved) do _G[k] = v or nil end
 end
 flushErrors("quest arrow")
