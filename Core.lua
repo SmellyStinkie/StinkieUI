@@ -644,6 +644,7 @@ ns.defaults = {
 		questArrow = {
 			enabled = false,
 			size = 24, color = { 0.75, 0.80, 0.16 },
+			height = 60, -- raised off the spot, so it clears the target's own nameplate
 			showName = true,
 			textStyle = text(13),
 		},

@@ -1101,7 +1101,6 @@ local function BuildMiscPage(page)
 	local function gcd() return ns.db.misc.gcd end
 	local function decor() return ns.db.misc.decor end
 	local function auto() return ns.db.misc.auto end
-	local function arrow() return ns.db.misc.questArrow end
 	page:Column(1)
 	page:Header("GCD History")
 	page:Check("Enabled", Getter(gcd, "enabled"), Setter(gcd, "enabled"))
@@ -1140,13 +1139,6 @@ local function BuildMiscPage(page)
 	page:Check("Release when you die", Getter(auto, "releasePvP"), Setter(auto, "releasePvP"))
 	page:Note("Battlegrounds and Blitz only. With a soulstone or similar, the choice stays yours.", 36)
 	page:Check("Say in chat what was done", Getter(auto, "announce"), Setter(auto, "announce"))
-	page:Header("Quest marker")
-	page:Check("Enabled", Getter(arrow, "enabled"), Setter(arrow, "enabled"))
-	page:Note("A small nameplate in the world on the quest you're actively tracking, with the distance in yards, in place of Blizzard's diamond. Off screen it becomes an arrow at the edge of the screen. It goes wherever the diamond would.", 62)
-	page:Slider("Arrow size", 12, 64, 1, Getter(arrow, "size"), Setter(arrow, "size"))
-	page:Color("Arrow color", Getter(arrow, "color"), Setter(arrow, "color"))
-	page:Check("Show quest name", Getter(arrow, "showName"), Setter(arrow, "showName"))
-	page:TextStyle("Quest marker text", function() return arrow().textStyle end)
 end
 
 local function BuildCombatPage(page)
@@ -1591,6 +1583,15 @@ local function BuildObjectivesPage(page)
 	page:Check("Mythic+", Getter(cfg, "hideMPlus"), Setter(cfg, "hideMPlus"))
 	page:Check("Other dungeons", Getter(cfg, "hideDungeon"), Setter(cfg, "hideDungeon"))
 	page:Note("Hidden means invisible (it stays where it is). New text sizes show on the tracker's next update or a /reload.", 36)
+	local function arrow() return ns.db.misc.questArrow end
+	page:Header("Quest marker")
+	page:Check("Enabled", Getter(arrow, "enabled"), Setter(arrow, "enabled"))
+	page:Note("A small nameplate in the world on the quest you're actively tracking, with the distance in yards, in place of Blizzard's diamond. Off screen it becomes an arrow at the edge of the screen. It goes wherever the diamond would.", 62)
+	page:Slider("Height above the spot", 0, 300, 5, Getter(arrow, "height"), Setter(arrow, "height"))
+	page:Slider("Arrow size", 12, 64, 1, Getter(arrow, "size"), Setter(arrow, "size"))
+	page:Color("Arrow color", Getter(arrow, "color"), Setter(arrow, "color"))
+	page:Check("Show quest name", Getter(arrow, "showName"), Setter(arrow, "showName"))
+	page:TextStyle("Quest marker text", function() return arrow().textStyle end)
 end
 
 local function BuildDamageTextPage(page)

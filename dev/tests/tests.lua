@@ -1031,6 +1031,20 @@ do
 	check("marker shows", h:IsShown())
 	check("Blizzard's diamond hidden", blizzard.Icon:GetAlpha() == 0 and blizzard.DistanceText:GetAlpha() == 0 and blizzard.Arrow:GetAlpha() == 0)
 	check("marker shows yards", h.Distance:GetText() == "42 yd", h.Distance:GetText())
+	-- raised off the spot on screen, but not at the screen edge
+	local raised
+	h.SetPoint = function(_, _, _, _, _, y) raised = y end
+	c.height = 90
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("height setting raises the marker", raised == 90, raised)
+	clamped = true
+	QA.Update()
+	check("edge arrow isn't raised", raised == 0, raised)
+	clamped = false
+	QA.Update()
+	check("raised again back on screen", raised == 90, raised)
+	h.SetPoint = nil
+	c.height = ns.defaults.misc.questArrow.height
 	local scaled
 	h.SetScale = function(_, s) scaled = s end
 	distance = 1000
@@ -1126,7 +1140,7 @@ do
 	WorldFrame = oldWorld
 	UIParent.GetEffectiveScale = oldScale
 	h.Arrow.SetRotation = nil
-	QA.blizzardShown, QA.anchored, QA.clamped, QA.questID = nil, nil, nil, nil
+	QA.blizzardShown, QA.clamped, QA.questID = nil, nil, nil
 	for k, v in pairs(saved) do _G[k] = v or nil end
 end
 flushErrors("quest arrow")

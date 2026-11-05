@@ -41,11 +41,13 @@ local function ShowBlizzardMarker(show)
 	f.DistanceText:SetAlpha(alpha)
 end
 
--- On screen: plate above an arrow pointing down at the spot. Off screen: the arrow on the spot,
--- with the distance under it.
+-- On screen: plate above an arrow pointing down at the spot, raised by the height setting. Off
+-- screen: the arrow on the spot, with the distance under it.
 local function LayoutMarker(clamped)
 	local h = QA.holder
 	local c = cfg()
+	h:ClearAllPoints()
+	h:SetPoint("CENTER", _G.SuperTrackedFrame, "CENTER", 0, clamped and 0 or c.height)
 	h.Plate:SetShown(not clamped)
 	h.Name:SetShown(c.showName)
 	h.Plate:SetSize(c.showName and PLATE_WIDTH or PLATE_WIDTH_NO_NAME, c.textStyle.size + 8)
@@ -81,10 +83,6 @@ function QA.Update()
 	if not questID then
 		h:Hide()
 		return
-	end
-	if not QA.anchored then
-		QA.anchored = true
-		h:SetPoint("CENTER", f, "CENTER", 0, 0)
 	end
 	local clamped = C_Navigation.WasClampedToScreen() and true or false
 	h:SetAlpha(QA.MarkerAlpha(clamped))
