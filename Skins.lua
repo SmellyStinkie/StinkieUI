@@ -77,6 +77,9 @@ local function SkinTab(tab)
 	for _, k in ipairs({ "Left", "Middle", "Right", "LeftActive", "MiddleActive", "RightActive", "LeftHighlight", "MiddleHighlight", "RightHighlight" }) do Hide(tab[k]) end
 	local hl = tab.GetHighlightTexture and tab:GetHighlightTexture()
 	if hl then hl:SetAlpha(0) end
+	-- side tabs (WoW Forever's Collections) have no text: the icon is the tab
+	local sideTab = tab.Icon and tab.SelectedTexture
+	if sideTab then tab.Icon:SetAlpha(1) end
 	local f = CreateFrame("Frame", nil, tab)
 	f:SetPoint("TOPLEFT", 3, -2)
 	f:SetPoint("BOTTOMRIGHT", -3, 4)
@@ -87,6 +90,8 @@ local function SkinTab(tab)
 	tab.SUIFlat = f
 	-- tab-system tabs (Professions, Housing) report selection through SetTabSelected
 	if tab.SetTabSelected then hooksecurefunc(tab, "SetTabSelected", function(self, selected) PaintTab(self, selected) end) end
+	-- side tabs report it through SetChecked
+	if sideTab and tab.SetChecked then hooksecurefunc(tab, "SetChecked", function(self, checked) PaintTab(self, checked) end) end
 	local selected = tab.isSelected or (tab.GetID and PanelTemplates_GetSelectedTab and tab:GetParent()
 		and PanelTemplates_GetSelectedTab(tab:GetParent()) == tab:GetID())
 	PaintTab(tab, selected and true or false)

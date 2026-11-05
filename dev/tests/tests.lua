@@ -1344,6 +1344,42 @@ do
 	ReloadUI = old
 end
 
+-- window skins: side tabs keep their icon, text tabs lose all their art
+do
+	local SK = ns.Skins
+	local function Tab(name, parent, side)
+		local t = MOCK.NewObj("Button", name, parent)
+		_G[name] = t
+		t.Art = MOCK.NewObj("Texture", nil, t)
+		local regions = { t.Art }
+		if side then
+			t.Icon = MOCK.NewObj("Texture", nil, t)
+			t.SelectedTexture = MOCK.NewObj("Texture", nil, t)
+			regions[2], regions[3] = t.Icon, t.SelectedTexture
+			t.SetChecked = function() end
+		end
+		t.GetRegions = function() return unpack(regions) end
+		return t
+	end
+	local window = MOCK.NewObj("Frame", "SkinTestWindow", UIParent)
+	_G.SkinTestWindow = window
+	local side = Tab("SkinTestTab1", window, true)
+	local text = Tab("SkinTestTab2", window, false)
+	side.Icon:SetAlpha(1)
+	SK.SkinWindow({ key = "collections", frame = "SkinTestWindow", tabs = "SkinTestTab%d" })
+	check("side tab keeps its icon", side.Icon:GetAlpha() == 1, side.Icon:GetAlpha())
+	check("side tab art is hidden", side.Art:GetAlpha() == 0 and side.SelectedTexture:GetAlpha() == 0)
+	check("text tab art is hidden", text.Art:GetAlpha() == 0)
+	local painted
+	side.SUIFlat.tex.SetColorTexture = function(_, _, _, _, a) painted = a end
+	side:SetChecked(true)
+	check("selected side tab fills solid", painted == 1, painted)
+	side:SetChecked(false)
+	check("unselected side tab goes back", painted == ns.db.character.tabAlpha, painted)
+	_G.SkinTestWindow, _G.SkinTestTab1, _G.SkinTestTab2 = nil, nil, nil
+end
+flushErrors("side tabs")
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto
