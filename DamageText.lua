@@ -24,6 +24,17 @@ DT.CVARS = {
 	gravity = { "WorldTextGravity_v2", "WorldTextGravity" },        -- how fast they fall back down
 	directional = { "floatingCombatTextCombatDamageDirectionalScale_v2", "floatingCombatTextCombatDamageDirectionalScale" }, -- low = numbers rise straight up
 }
+-- Scrolling text over your character: this is what shows healing you receive, such as Cannibalize.
+-- The checkbox is the game's own setting, so it and the game's options always agree. It also shows
+-- the other things Blizzard scrolls there, like damage you take.
+function DT.ScrollingText()
+	return GetCVarBool("enableFloatingCombatText") and true or false
+end
+
+function DT.SetScrollingText(on)
+	SetCVar("enableFloatingCombatText", on and "1" or "0")
+end
+
 -- Your own healing numbers. On/off rather than a value, and Blizzard's settings have no box for it.
 DT.HEALING = { "floatingCombatTextCombatHealing_v2", "floatingCombatTextCombatHealing" }
 DT.ORDER = { "screenY", "height", "size", "critScreenY", "critSize", "spread", "gravity", "directional" }
@@ -106,6 +117,9 @@ function DT.Print()
 		local ok, v = pcall(C_CVar.GetCVar, name)
 		if ok and v ~= nil then ns:Print("Healing numbers: " .. name .. " = " .. tostring(v)) end
 	end
+	ns:Print("Healing you receive (scrolling text): enableFloatingCombatText = " .. tostring(DT.ScrollingText()))
+	local okp, periodic = pcall(C_CVar.GetCVar, "floatingCombatTextCombatLogPeriodicSpells_v2")
+	if okp and periodic ~= nil then ns:Print("Periodic spells: floatingCombatTextCombatLogPeriodicSpells_v2 = " .. tostring(periodic)) end
 	ns:Print("Font: " .. (ns.db.combatTextFont and "Stinkie UI (after a relog)" or "Blizzard's"))
 	ns:Print("Game's damage font: " .. tostring(DAMAGE_TEXT_FONT))
 	if ns.db.combatTextFont then

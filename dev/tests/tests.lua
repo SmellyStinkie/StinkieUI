@@ -1402,6 +1402,46 @@ do
 end
 flushErrors("side tabs")
 
+-- healing you receive: the game's scrolling text setting
+do
+	local DT = ns.DamageText
+	DT.SetScrollingText(true)
+	check("scrolling text on", DT.ScrollingText() == true and MOCK.cvars.enableFloatingCombatText == "1")
+	DT.SetScrollingText(false)
+	check("scrolling text off", DT.ScrollingText() == false and MOCK.cvars.enableFloatingCombatText == "0")
+end
+
+-- party targets sit on their own party frame
+do
+	local PT, c = ns.PartyTargets, ns.db.partyTargets
+	local oldParty = ns.Party.frames
+	local mine, first = { unit = "player" }, { unit = "party1" }
+	ns.Party.frames = { first, mine }
+	check("my target goes on my frame", PT.PartyFrameFor({ unit = "target" }) == mine)
+	check("a party target goes on that member", PT.PartyFrameFor({ unit = "party1target" }) == first)
+	check("no frame for that member", PT.PartyFrameFor({ unit = "party3target" }) == nil)
+	check("attaching is off by default", c.attachAbove == false)
+
+	local f = PT.frames[1]
+	local placed
+	local oldSet = f.SetPoint
+	f.SetPoint = function(_, p, rel, _, _, y) placed = { p, rel, y } end
+	local oldEnabled = c.enabled
+	c.attachAbove, c.attachGap = true, 5
+	ns.Party.frames = { { unit = f.unit:match("^(party%d)target$") } }
+	local partyFrame = ns.Party.frames[1]
+	PT:Refresh()
+	check("row sits on its party frame", placed[1] == "BOTTOMLEFT" and placed[2] == partyFrame and placed[3] == 5)
+	check("attached rows have no mover", PT.holder.SUIActive == false)
+	c.attachAbove, c.attachGap = false, 3
+	PT:Refresh()
+	check("back to its own position", placed[2] == PT.holder, placed[2])
+	check("mover back", PT.holder.SUIActive == true)
+	f.SetPoint = oldSet
+	c.enabled = oldEnabled
+	ns.Party.frames = oldParty
+end
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto

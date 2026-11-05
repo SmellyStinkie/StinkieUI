@@ -48,6 +48,14 @@ function PT.Unwatch(f)
 	if f.unit == "target" then UnregisterStateDriver(f, "visibility") else UnregisterUnitWatch(f) end
 end
 
+-- The party frame a target row belongs to: yours for your own target, partyN for partyNtarget.
+function PT.PartyFrameFor(f)
+	local unit = f.unit == "target" and "player" or f.unit:match("^(party%d)target$")
+	for _, frame in ipairs(ns.Party and ns.Party.frames or {}) do
+		if frame.unit == unit then return frame end
+	end
+end
+
 function PT:UpdateVisibility()
 	local h = PT.holder
 	if not h then return end
@@ -100,12 +108,16 @@ function PT:Refresh()
 	h:SetScale(ns.db.scale)
 	h:SetSize(c.width, math.max(c.height, n * step - ns.db.party.spacing))
 	ns:ApplyPoint(h, c.point)
+	h.SUIActive = not c.attachAbove -- attached rows follow the party frames: no mover box
 	for i, f in ipairs(PT.frames) do
 		UF.Layout(f, c)
 		f:ClearAllPoints()
 		-- centered on the party frame's health row
 		local y = (ns.db.party.height - c.height) / 2
-		if grow == "UP" then
+		local party = c.attachAbove and PT.PartyFrameFor(f)
+		if party then
+			f:SetPoint("BOTTOMLEFT", party, "TOPLEFT", 0, c.attachGap)
+		elseif grow == "UP" then
 			local _, castH = PartyStep()
 			f:SetPoint("BOTTOMLEFT", h, "BOTTOMLEFT", 0, (i - 1) * step + castH + y)
 		else

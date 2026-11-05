@@ -711,6 +711,7 @@ ns.defaults = {
 		nameFormat = "full", showLevel = false,
 		nameStyle = text(10, true), healthStyle = text(10),
 		hideInPvP = true,
+		attachAbove = false, attachGap = 3, -- each row on top of its own party frame
 		point = { "LEFT", 560, 120 },
 	},
 	-- Flag Cap Indicator (Warsong Gulch, Twin Peaks): who carries each flag, yards to their cap
