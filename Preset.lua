@@ -168,7 +168,6 @@ local PRESET = {
 			size = 13,
 		},
 		timestampColor = { 0.694118, 0.694118, 0.694118 },
-		whisperTabs = true,
 	},
 	classPower = {
 		height = 25,

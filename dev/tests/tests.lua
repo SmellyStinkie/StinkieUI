@@ -1484,6 +1484,63 @@ do
 end
 check("Omnium Folio follows the client", ns.HAS_FOLIO == not ns.IS_FOREVER)
 
+-- whispers: where they show, and that they aren't lost
+do
+	local CH, c = ns.Chat, ns.db.chat
+	check("whispers default to both", ns.defaults.chat.whisperDisplay == "both" and c.whisperDisplay == "both")
+	local oldGet, mode = GetCVar, "inline"
+	GetCVar = function(n) if n == "whisperMode" then return mode end return oldGet(n) end
+	local oldSet = SetCVar
+	SetCVar = function(n, v) if n == "whisperMode" then mode = v else oldSet(n, v) end end
+	CH.ApplyCVars()
+	check("both is the game's both mode", mode == "popout_and_inline", mode)
+	c.whisperDisplay = "tab"
+	CH.ApplyCVars()
+	check("own tab only", mode == "popout", mode)
+	c.whisperDisplay = "main"
+	CH.ApplyCVars()
+	check("main tab only", mode == "inline", mode)
+	c.whisperDisplay = "both"
+	CH.ApplyCVars()
+	check("both is left alone once set", mode == "popout_and_inline", mode)
+
+	-- temporary whisper tabs: nothing else holds tab-only whispers, so history goes to the main window
+	local tempTab = { isTemporary = true, chatType = "WHISPER", GetID = function() return 12 end }
+	local bnTab = { isTemporary = true, chatType = "BN_WHISPER", GetID = function() return 13 end }
+	local other = { isTemporary = true, chatType = "GUILD", GetID = function() return 14 end }
+	local normal = { GetID = function() return 4 end }
+	check("normal window keeps its own history", CH.HistoryID(normal) == 4)
+	check("both: main already has it, so no second copy", CH.HistoryID(tempTab) == nil)
+	mode = "popout"
+	check("tab only: character whisper kept", CH.HistoryID(tempTab) == 1, CH.HistoryID(tempTab))
+	check("tab only: Battle.net whisper kept", CH.HistoryID(bnTab) == 1, CH.HistoryID(bnTab))
+	check("other temporary windows aren't", CH.HistoryID(other) == nil)
+	GetCVar, SetCVar = oldGet, oldSet
+
+	-- the whisper that opens a new tab arrives right away, so the hook can't wait a frame
+	local name = "ChatFrame27"
+	local f = MOCK.NewObj("Frame", name, UIParent)
+	f.AddMessage = function() end
+	_G[name] = f
+	local before = f.AddMessage
+	local oldFrames, oldTextures = CHAT_FRAMES, CHAT_FRAME_TEXTURES
+	CHAT_FRAMES, CHAT_FRAME_TEXTURES = { name }, {}
+	CH.OnTemporaryWindow()
+	check("new whisper tab is hooked at once", f.AddMessage ~= before)
+	MOCK.Advance(0.1)
+	CHAT_FRAMES, CHAT_FRAME_TEXTURES = oldFrames, oldTextures
+	_G[name] = nil
+
+	-- older profiles
+	local kept = { version = 13, units = {}, chat = { whisperTabs = true, whisperDisplay = "both" } }
+	ns.Migrate(kept)
+	check("tab users move to both", kept.chat.whisperDisplay == "both" and kept.chat.whisperTabs == nil)
+	local off = { version = 13, units = {}, chat = { whisperTabs = false, whisperDisplay = "both" } }
+	ns.Migrate(off)
+	check("main tab users stay there", off.chat.whisperDisplay == "main" and off.chat.whisperTabs == nil)
+end
+flushErrors("whispers")
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto

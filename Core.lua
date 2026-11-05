@@ -289,7 +289,7 @@ local function unit(t)
 	return t
 end
 
-ns.DB_VERSION = 13
+ns.DB_VERSION = 14
 ns.defaults = {
 	version = ns.DB_VERSION,
 	scale = 1,
@@ -622,7 +622,8 @@ ns.defaults = {
 		classColors = true, showLevel = false, levelHideMax = true,
 		channelStyle = "short", -- full | short | name
 		removeBrackets = false, hideRealms = false, shortWhispers = false,
-		whisperTabs = false, flashTabs = true, flashPlayerOnly = true,
+		whisperDisplay = "both", -- both (own tab and main tab) | main | tab
+		flashTabs = true, flashPlayerOnly = true,
 		colors = {}, -- chat type -> { r, g, b }, only the ones changed here
 	},
 	misc = {
@@ -972,6 +973,15 @@ local function Migrate(db)
 		-- Nameplates: stacking off for enemies and friendlies (it used to copy the game's setting)
 		local st = db.nameplates and db.nameplates.stacking
 		if st then st.enemies, st.friendly = false, false end
+	end
+	if v < 14 then
+		-- Chat: whispers in their own tab (on / off) became a choice. The tab no longer means losing
+		-- the main tab's copy, so tab users move to Both.
+		local ch = db.chat
+		if ch then
+			if ch.whisperTabs == false then ch.whisperDisplay = "main" end
+			ch.whisperTabs = nil
+		end
 	end
 	db.version = ns.DB_VERSION
 end

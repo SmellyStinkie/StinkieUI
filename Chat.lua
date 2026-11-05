@@ -103,8 +103,10 @@ local function IsCombatLogFrame(f)
 	return true
 end
 
--- Whisper popouts are temporary; their history isn't kept.
 local function IsTemporary(f) return f.isTemporary == true end
+
+-- Where whispers show, as the game's own setting. It covers Battle.net whispers too.
+CH.WHISPER_MODES = { both = "popout_and_inline", main = "inline", tab = "popout" }
 
 ---------------------------------------------------------------------------
 -- History (per character: StinkieUIChatHistory)
@@ -124,10 +126,18 @@ local function Store()
 	return s
 end
 
+-- Which window's history a line belongs to. Whisper tabs are temporary, and the game closes them
+-- on a reload. When whispers only go there, nothing else holds them, so they're kept with the main
+-- window. In the other modes the main window has its own copy.
+function CH.HistoryID(f)
+	if not IsTemporary(f) then return f:GetID() end
+	if WHISPER_TYPES[f.chatType] and GetCVar("whisperMode") == CH.WHISPER_MODES.tab then return 1 end
+end
+
 local function Record(f, msg, r, g, b, event)
 	local c = cfg()
-	if c.history == "off" or IsTemporary(f) or IsCombatLogFrame(f) then return end
-	local id = f:GetID()
+	if c.history == "off" or IsCombatLogFrame(f) then return end
+	local id = CH.HistoryID(f)
 	if type(id) ~= "number" then return end
 	local line = { t = time(), m = msg, r = r, g = g, b = b, e = event }
 	if not sessionReady then
@@ -710,6 +720,13 @@ function CH.SetupAll()
 	ApplyButtons()
 end
 
+-- Right away: the game delivers the whisper that opened this window as soon as it returns, and
+-- that line needs the hook (tab flash, history). Then once more, when its tab has settled.
+function CH.OnTemporaryWindow()
+	CH.SetupAll()
+	C_Timer.After(0, CH.SetupAll)
+end
+
 ---------------------------------------------------------------------------
 -- Game settings this module manages
 ---------------------------------------------------------------------------
@@ -741,13 +758,10 @@ local function ApplyCVars()
 		c.blizzardTimestamps = GetCVar("showTimestamps")
 		SetCVar("showTimestamps", "none")
 	end
-	local mode = GetCVar("whisperMode")
-	if c.whisperTabs and mode ~= "popout" then
-		SetCVar("whisperMode", "popout")
-	elseif not c.whisperTabs and mode == "popout" then
-		SetCVar("whisperMode", "inline")
-	end
+	local mode = CH.WHISPER_MODES[c.whisperDisplay] or CH.WHISPER_MODES.both
+	if GetCVar("whisperMode") ~= mode then SetCVar("whisperMode", mode) end
 end
+CH.ApplyCVars = ApplyCVars
 
 -- Current color of a chat type (the saved override, else what the game uses now).
 function CH.GetColor(chatType)
@@ -865,7 +879,7 @@ function CH:Init()
 	ApplyClassColors()
 	CH.SetupAll()
 	if FCF_OpenTemporaryWindow then
-		hooksecurefunc("FCF_OpenTemporaryWindow", function() C_Timer.After(0, CH.SetupAll) end)
+		hooksecurefunc("FCF_OpenTemporaryWindow", CH.OnTemporaryWindow)
 	end
 	if FCF_SetChatWindowFontSize then
 		hooksecurefunc("FCF_SetChatWindowFontSize", function(_, chatFrame)
