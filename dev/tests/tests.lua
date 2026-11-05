@@ -973,123 +973,104 @@ do
 	_G.MultiBar7 = nil
 end
 
--- quest arrow
+-- quest marker: follows Blizzard's tracked spot, and stands in for its diamond
 do
 	local QA, c = ns.QuestArrow, ns.db.misc.questArrow
 	local pi = math.pi
 	local function near(a, b) return math.abs(a - b) < 0.0001 end
-	check("arrow off by default", c.enabled == false and not QA.holder:IsShown())
-	-- x runs north, y runs west; a positive result turns the arrow left
-	check("target ahead", near(QA.Bearing(0, 0, 10, 0, 0), 0))
-	check("target to the west is left when facing north", near(QA.Bearing(0, 0, 0, 10, 0), pi / 2))
-	check("target to the east is right when facing north", near(QA.Bearing(0, 0, 0, -10, 0), -pi / 2))
-	check("target to the north is right when facing west", near(QA.Bearing(0, 0, 10, 0, pi / 2), -pi / 2))
-	check("distance", QA.Distance(1, 1, 4, 5) == 5)
+	check("marker off by default", c.enabled == false and not QA.holder:IsShown())
+	-- textures rotate counter-clockwise from up
+	check("off screen above", near(QA.EdgeRotation(100, 200, 100, 100), 0))
+	check("off screen to the right", near(QA.EdgeRotation(200, 100, 100, 100), -pi / 2))
+	check("off screen to the left", near(QA.EdgeRotation(0, 100, 100, 100), pi / 2))
+	check("off screen below", near(math.abs(QA.EdgeRotation(100, 0, 100, 100)), pi))
 
 	local saved = {}
 	local function stub(name, v) saved[name] = _G[name] == nil and false or _G[name]; _G[name] = v end
-	local world = { [1] = { 1, 100, 200 }, [2] = { 1, 130, 240 } } -- continent, x, y per map
-	local nextWaypoint, onMap, playerMap, playerPos, facing, quest = nil, {}, 1, { x = 0.5, y = 0.5 }, 0, 77
-	local parents = { [1] = 2 }
-	stub("CreateVector2D", function(x, y) return { x = x, y = y } end)
-	stub("GetPlayerFacing", function() return facing end)
+	local nav, clamped, distance, kind, quest = true, false, 42.4, 1, 77
+	stub("C_Navigation", {
+		GetFrame = function() return nav end,
+		WasClampedToScreen = function() return clamped end,
+		GetDistance = function() return distance end,
+	})
 	stub("C_SuperTrack", {
+		GetHighestPrioritySuperTrackingType = function() return kind end,
 		GetSuperTrackedQuestID = function() return quest end,
-		GetHighestPrioritySuperTrackingType = function() return 1 end,
 	})
-	stub("C_Navigation", { GetFrame = function() return true end, GetDistance = function() return 321 end })
-	stub("C_QuestLog", {
-		GetNextWaypoint = function() return nextWaypoint and nextWaypoint[1], nextWaypoint and nextWaypoint[2], nextWaypoint and nextWaypoint[3] end,
-		GetNextWaypointText = function() return nextWaypoint and "Take the portal" or nil end,
-		GetTitleForQuestID = function() return "A Quest" end,
-		GetQuestsOnMap = function(m) return onMap[m] end,
-	})
-	stub("C_Map", {
-		GetBestMapForUnit = function() return playerMap end,
-		GetPlayerMapPosition = function() return playerPos end,
-		GetMapInfo = function(m) return { parentMapID = parents[m] or 0 } end,
-		GetWorldPosFromMapPos = function(m, pos)
-			local w = world[m]
-			if pos == playerPos then return w[1], { x = w[2], y = w[3] } end
-			return w[1], { x = pos.x, y = pos.y }
-		end,
-	})
+	stub("C_QuestLog", { GetTitleForQuestID = function(id) return "Quest " .. id end })
 	local oldType = Enum.SuperTrackingType
 	Enum.SuperTrackingType = { Quest = 1 }
-	local turned
-	QA.holder.Arrow.SetRotation = function(_, r) turned = r end
-	onMap[1] = { { questID = 5, x = 1, y = 1 }, { questID = 77, x = 130, y = 240 } }
-
-	QA.Retarget(); QA.Update()
+	local blizzard = MOCK.NewObj("Frame", "SuperTrackedFrame", UIParent)
+	blizzard.Icon = MOCK.NewObj("Texture", nil, blizzard)
+	blizzard.Arrow = MOCK.NewObj("Texture", nil, blizzard)
+	blizzard.DistanceText = MOCK.NewObj("FontString", nil, blizzard)
+	blizzard.GetCenter = function() return 900, 100 end
+	stub("SuperTrackedFrame", blizzard)
+	local oldWorld = WorldFrame
+	WorldFrame = { GetCenter = function() return 500, 100 end }
+	local oldScale = UIParent.GetEffectiveScale
+	UIParent.GetEffectiveScale = function() return 1 end
 	local h = QA.holder
-	check("arrow finds the quest on this map", QA.target and QA.target.x == 130 and h.Arrow:IsShown())
-	check("arrow shows yards", h.Distance:GetText() == "50 yd", h.Distance:GetText())
-	check("arrow names the quest", h.Name:GetText() == "A Quest", h.Name:GetText())
-	check("arrow turns with you", near(turned, math.atan2(40, 30)))
-	facing = 1
+	local turned
+	h.Arrow.SetRotation = function(_, r) turned = r end
+
 	QA.Update()
-	check("facing changes the arrow", near(turned, math.atan2(40, 30) - 1))
-	facing = 0
+	check("off: Blizzard's diamond stays", blizzard.Icon:GetAlpha() == 1 and not h:IsShown())
 
-	-- on a parent map
-	onMap[1], onMap[2] = {}, { { questID = 77, x = 130, y = 240 } }
-	QA.Retarget(); QA.Update()
-	check("arrow finds the quest on the parent map", QA.target ~= nil and h.Arrow:IsShown())
-
-	-- the way there goes through a portal
-	nextWaypoint = { 2, 9, 9 }
-	QA.Retarget(); QA.Update()
-	check("arrow points to the next step first", QA.target.x == 9 and h.Name:GetText() == "Take the portal", h.Name:GetText())
-	nextWaypoint = nil
-	QA.Retarget()
-
-	-- no name option
-	c.showName = false
-	QA.Update()
-	check("quest name can be hidden", h.Name:GetText() == "")
-	c.showName = true
-
-	-- position hidden (instances): Blizzard's distance, no arrow
-	playerPos = nil
-	QA.Update()
-	check("no position: no arrow", not h.Arrow:IsShown())
-	check("no position: Blizzard's distance", h.Distance:GetText() == "321 yd", h.Distance:GetText())
-	playerPos = { x = 0.5, y = 0.5 }
-
-	-- no facing
-	local oldFacing = facing
-	facing = nil
-	QA.Update()
-	check("no facing: distance without an arrow", not h.Arrow:IsShown() and h.Distance:GetText() == "50 yd")
-	facing = oldFacing
-
-	-- another continent
-	world[2] = { 9, 130, 240 }
-	QA.Retarget(); QA.Update()
-	check("other continent: no arrow", not h.Arrow:IsShown())
-	world[2] = { 1, 130, 240 }
-
-	-- nothing tracked
-	quest = 0
-	QA.Retarget(); QA.Update()
-	check("nothing tracked: nothing shown", not h.Arrow:IsShown() and h.Distance:GetText() == "" and h.Name:GetText() == "")
-	quest = 77
-
-	-- on and off, and the ticking
 	c.enabled = true
 	ns:Refresh(); MOCK.Advance(0.2)
-	check("arrow on", h:IsShown() and h:GetScript("OnUpdate") ~= nil)
-	QA.Retarget()
+	check("marker shows", h:IsShown())
+	check("Blizzard's diamond hidden", blizzard.Icon:GetAlpha() == 0 and blizzard.DistanceText:GetAlpha() == 0 and blizzard.Arrow:GetAlpha() == 0)
+	check("marker shows yards", h.Distance:GetText() == "42 yd", h.Distance:GetText())
+	check("marker names the quest", h.Name:GetText() == "Quest 77", h.Name:GetText())
+	check("on screen: plate with the arrow pointing down", h.Plate:IsShown() and near(turned, pi))
+
+	blizzard:SetAlpha(0.6)
+	QA.Update()
+	check("marker fades with Blizzard's", h:GetAlpha() == 0.6)
+	blizzard:SetAlpha(1)
+
+	clamped = true
+	QA.Update()
+	check("off screen: arrow only", not h.Plate:IsShown())
+	check("off screen: arrow points the way", near(turned, -pi / 2), turned)
+	check("off screen: yards stay", h.Distance:GetText() == "42 yd")
+	clamped = false
+	QA.Update()
+	check("back on screen", h.Plate:IsShown() and near(turned, pi))
+
 	quest = 88
-	onMap[1] = {}
-	MOCK.Fire("SUPER_TRACKING_CHANGED")
-	h:GetScript("OnUpdate")(h, 0.06)
-	check("a new tracked quest is picked up", QA.questID == 88, QA.questID)
+	QA.Update()
+	check("a new tracked quest is picked up", h.Name:GetText() == "Quest 88")
+
+	-- a map pin or anything else: Blizzard's own marker comes back
+	kind = 2
+	QA.Update()
+	check("not a quest: marker gone", not h:IsShown() and blizzard.Icon:GetAlpha() == 1)
+	kind = 1
+	nav = nil
+	QA.Update()
+	check("nothing to navigate to: marker gone", not h:IsShown() and blizzard.Icon:GetAlpha() == 1)
+	nav = true
+	quest = 0
+	QA.Update()
+	check("no quest tracked: marker gone", not h:IsShown())
+	quest = 77
+
 	c.enabled = false
 	ns:Refresh(); MOCK.Advance(0.2)
-	check("arrow off", not h:IsShown() and h:GetScript("OnUpdate") == nil)
+	check("turned off: Blizzard's diamond back", not h:IsShown() and blizzard.Icon:GetAlpha() == 1)
+
+	-- a client without Blizzard's frame
+	SuperTrackedFrame = nil
+	QA.Update()
+	check("no Blizzard frame: nothing breaks", true)
 
 	Enum.SuperTrackingType = oldType
+	WorldFrame = oldWorld
+	UIParent.GetEffectiveScale = oldScale
+	h.Arrow.SetRotation = nil
+	QA.blizzardShown, QA.anchored, QA.clamped, QA.questID = nil, nil, nil, nil
 	for k, v in pairs(saved) do _G[k] = v or nil end
 end
 flushErrors("quest arrow")

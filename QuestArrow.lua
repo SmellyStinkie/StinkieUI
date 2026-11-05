@@ -1,144 +1,116 @@
--- StinkieUI: quest arrow. Points at the objective of the quest you're actively tracking (the one
--- with the diamond on screen), relative to the way your character faces, with the distance in
--- yards. Blizzard's navigation gives a distance but no direction, so the direction comes from map
--- positions. The game hides your position in many instances: no position, no arrow.
+-- StinkieUI: quest marker. A small nameplate in the world on the quest you're actively tracking,
+-- with the distance in yards. When the spot is off screen it becomes an arrow at the edge of the
+-- screen, pointing the way. Blizzard's SuperTrackedFrame already sits on the spot, stays on screen
+-- and fades, so the marker follows it and Blizzard's own diamond is hidden while it does.
 local _, ns = ...
 
 local QA = {}
 ns.QuestArrow = QA
 
-local TICK, RETARGET = 0.05, 1 -- seconds between arrow updates / fresh looks at where the quest is
-local MAX_MAP_LEVELS = 4       -- this map and its parents (zone, then continent)
+local TICK = 0.05
+local PLATE_WIDTH, PLATE_WIDTH_NO_NAME = 200, 64
 
 local function cfg() return ns.db.misc.questArrow end
 
--- World x runs north and y runs west; facing is radians counter-clockwise from north, and textures
--- rotate counter-clockwise too, so this is the arrow's rotation.
-function QA.Bearing(fromX, fromY, toX, toY, facing)
-	return math.atan2(toY - fromY, toX - fromX) - facing
+-- Which way the arrow points when the spot is off screen. Textures rotate counter-clockwise.
+function QA.EdgeRotation(x, y, centerX, centerY)
+	return math.atan2(centerX - x, y - centerY)
 end
 
-function QA.Distance(fromX, fromY, toX, toY)
-	local dx, dy = toX - fromX, toY - fromY
-	return math.sqrt(dx * dx + dy * dy)
-end
-
--- The next step on the way (a portal or flight master) when the quest is elsewhere, otherwise the
--- quest's own spot on this map or one above it.
-function QA.FindTarget(questID)
-	local map, x, y = C_QuestLog.GetNextWaypoint(questID)
-	if map and x and y then return map, x, y end
-	local m = C_Map.GetBestMapForUnit("player")
-	for _ = 1, MAX_MAP_LEVELS do
-		if not m or m == 0 then return end
-		for _, q in ipairs(C_QuestLog.GetQuestsOnMap(m) or {}) do
-			if q.questID == questID and q.x and q.y then return m, q.x, q.y end
-		end
-		local info = C_Map.GetMapInfo(m)
-		m = info and info.parentMapID
-	end
-end
-
-function QA.Retarget()
-	QA.sinceRetarget = 0
-	QA.target, QA.questID, QA.label = nil, nil, nil
-	if not (C_SuperTrack and C_QuestLog and C_Map) then return end
+function QA.TrackedQuest()
+	if not (C_SuperTrack and C_Navigation and C_Navigation.GetFrame()) then return end
+	if C_SuperTrack.GetHighestPrioritySuperTrackingType() ~= Enum.SuperTrackingType.Quest then return end
 	local questID = C_SuperTrack.GetSuperTrackedQuestID()
-	if not questID or questID == 0 then return end
-	QA.questID = questID
-	local waypoint = C_QuestLog.GetNextWaypointText(questID)
-	QA.label = (waypoint and waypoint ~= "") and waypoint or C_QuestLog.GetTitleForQuestID(questID)
-	local map, x, y = QA.FindTarget(questID)
-	if not map then return end
-	local continent, world = C_Map.GetWorldPosFromMapPos(map, CreateVector2D(x, y))
-	if world then QA.target = { continent = continent, x = world.x, y = world.y } end
+	if questID and questID ~= 0 then return questID end
 end
 
-local function PlayerWorld()
-	local map = C_Map.GetBestMapForUnit("player")
-	local pos = map and C_Map.GetPlayerMapPosition(map, "player")
-	if not pos then return end
-	local continent, world = C_Map.GetWorldPosFromMapPos(map, pos)
-	if world then return continent, world.x, world.y end
+local function ShowBlizzardMarker(show)
+	local f = _G.SuperTrackedFrame
+	if not f or QA.blizzardShown == show then return end
+	QA.blizzardShown = show
+	local alpha = show and 1 or 0
+	f.Icon:SetAlpha(alpha)
+	f.Arrow:SetAlpha(alpha)
+	f.DistanceText:SetAlpha(alpha)
 end
 
--- Blizzard's own distance, only while its diamond is on this quest.
-local function NavigationDistance()
-	local N, S = C_Navigation, C_SuperTrack
-	if not (N and N.GetFrame and N.GetFrame()) then return end
-	if S.GetHighestPrioritySuperTrackingType() ~= Enum.SuperTrackingType.Quest then return end
-	local d = N.GetDistance()
-	if d and d > 0 then return d end
-end
-
-local function Paint(rotation, distance, label)
+-- On screen: plate above an arrow pointing down at the spot. Off screen: the arrow on the spot,
+-- with the distance under it.
+local function LayoutMarker(clamped)
 	local h = QA.holder
-	h.Arrow:SetShown(rotation ~= nil)
-	if rotation then h.Arrow:SetRotation(rotation) end
-	h.Distance:SetText(distance and (math.floor(distance + 0.5) .. " yd") or "")
-	h.Name:SetText(cfg().showName and label or "")
+	local c = cfg()
+	h.Plate:SetShown(not clamped)
+	h.Name:SetShown(c.showName)
+	h.Plate:SetSize(c.showName and PLATE_WIDTH or PLATE_WIDTH_NO_NAME, c.textStyle.size + 8)
+	h.Arrow:ClearAllPoints()
+	h.Distance:ClearAllPoints()
+	h.Plate:ClearAllPoints()
+	if clamped then
+		h.Arrow:SetPoint("CENTER", h, "CENTER", 0, 0)
+		h.Distance:SetPoint("TOP", h.Arrow, "BOTTOM", 0, -2)
+	else
+		h.Arrow:SetRotation(math.pi)
+		h.Arrow:SetPoint("BOTTOM", h, "CENTER", 0, 0)
+		h.Plate:SetPoint("BOTTOM", h.Arrow, "TOP", 0, 2)
+		h.Distance:SetPoint("RIGHT", h.Plate, "RIGHT", -6, 0)
+	end
 end
 
 function QA.Update()
-	local h = QA.holder
-	if not h then return end
-	if ns.unlocked then
-		Paint(0, 123, "Quest Arrow") -- so it can be seen while moving it
+	local h, f = QA.holder, _G.SuperTrackedFrame
+	if not (h and f and f.Icon and f.Arrow and f.DistanceText) then return end
+	local questID = cfg().enabled and QA.TrackedQuest()
+	ShowBlizzardMarker(not questID)
+	if not questID then
+		h:Hide()
 		return
 	end
-	local rotation, distance
-	if QA.questID then
-		local t = QA.target
-		if t then
-			local continent, x, y = PlayerWorld()
-			local facing = GetPlayerFacing()
-			if continent and continent == t.continent then
-				distance = QA.Distance(x, y, t.x, t.y)
-				if facing then rotation = QA.Bearing(x, y, t.x, t.y, facing) end
-			end
-		end
-		distance = distance or NavigationDistance()
+	if not QA.anchored then
+		QA.anchored = true
+		h:SetPoint("CENTER", f, "CENTER", 0, 0)
 	end
-	if rotation or distance then
-		Paint(rotation, distance, QA.label)
-	else
-		Paint(nil, nil, nil)
+	h:SetAlpha(f:GetAlpha())
+	local clamped = C_Navigation.WasClampedToScreen() and true or false
+	if clamped ~= QA.clamped then
+		QA.clamped = clamped
+		LayoutMarker(clamped)
 	end
+	if clamped then
+		local x, y = f:GetCenter()
+		local worldX, worldY = WorldFrame:GetCenter()
+		local scale = UIParent:GetEffectiveScale()
+		if x and worldX then h.Arrow:SetRotation(QA.EdgeRotation(x, y, worldX / scale, worldY / scale)) end
+	end
+	h.Distance:SetText(math.floor(C_Navigation.GetDistance() + 0.5) .. " yd")
+	if questID ~= QA.questID then
+		QA.questID = questID
+		h.Name:SetText(C_QuestLog.GetTitleForQuestID(questID) or "")
+	end
+	h:Show()
 end
 
 local function OnUpdate(_, elapsed)
 	QA.sinceUpdate = QA.sinceUpdate + elapsed
 	if QA.sinceUpdate < TICK then return end
-	QA.sinceRetarget = QA.sinceRetarget + QA.sinceUpdate
 	QA.sinceUpdate = 0
-	if QA.dirty or QA.sinceRetarget >= RETARGET then
-		QA.dirty = false
-		QA.Retarget()
-	end
 	QA.Update()
 end
 
-local function MarkDirty() QA.dirty = true end
-
 function QA:Init()
-	local h = CreateFrame("Frame", "StinkieUI_QuestArrow", UIParent)
+	local h = CreateFrame("Frame", "StinkieUI_QuestMarker", UIParent)
 	QA.holder = h
-	QA.sinceUpdate, QA.sinceRetarget, QA.dirty = 0, 0, true
-	h:SetFrameStrata("MEDIUM")
+	QA.sinceUpdate = 0
+	h:SetSize(1, 1)
+	h:SetFrameStrata("BACKGROUND")
+	h:Hide()
 	h.Arrow = h:CreateTexture(nil, "ARTWORK")
 	h.Arrow:SetTexture(ns.MEDIA.arrow, "CLAMP", "CLAMP", "TRILINEAR")
-	h.Arrow:Hide()
-	h.Distance = ns.CreateText(h, 13, "CENTER")
-	h.Name = ns.CreateText(h, 13, "CENTER")
-	QA.onUpdate = ns.Timed("Quest arrow", OnUpdate)
-	ns:RegisterMover("questArrow", h, "Quest Arrow",
-		function() return cfg().point end,
-		function(p) cfg().point = p end)
-	for _, event in ipairs({ "SUPER_TRACKING_CHANGED", "QUEST_LOG_UPDATE", "ZONE_CHANGED",
-		"ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD" }) do
-		ns:On(event, MarkDirty)
-	end
-	table.insert(ns.lockCallbacks, QA.Update)
+	h.Plate = CreateFrame("Frame", nil, h)
+	ns.CreateBackdrop(h.Plate)
+	h.Name = ns.CreateText(h.Plate, 13, "LEFT")
+	h.Distance = ns.CreateText(h, 13, "RIGHT")
+	QA.driver = CreateFrame("Frame")
+	QA.onUpdate = ns.Timed("Quest marker", OnUpdate)
 	QA:Refresh()
 end
 
@@ -146,23 +118,16 @@ function QA:Refresh()
 	local h = QA.holder
 	if not h then return end
 	local c = cfg()
-	h.SUIActive = c.enabled -- no mover box while it's off
-	h:SetSize(math.max(c.size, 160), c.size + 2 * c.textStyle.size + 12)
-	ns:ApplyPoint(h, c.point)
 	h.Arrow:SetSize(c.size, c.size)
-	h.Arrow:ClearAllPoints()
-	h.Arrow:SetPoint("TOP", h, "TOP", 0, 0)
 	h.Arrow:SetVertexColor(c.color[1], c.color[2], c.color[3], 1)
-	ns.ApplyText(h.Distance, c.textStyle)
 	ns.ApplyText(h.Name, c.textStyle)
-	h.Distance:ClearAllPoints()
-	h.Distance:SetPoint("TOP", h.Arrow, "BOTTOM", 0, -3)
+	ns.ApplyText(h.Distance, c.textStyle)
 	h.Name:ClearAllPoints()
-	h.Name:SetPoint("TOP", h.Distance, "BOTTOM", 0, -2)
-	h.Name:SetWidth(280)
-	h:SetShown(c.enabled)
-	h:SetScript("OnUpdate", c.enabled and QA.onUpdate or nil)
-	QA.dirty = true
+	h.Name:SetPoint("LEFT", h.Plate, "LEFT", 6, 0)
+	h.Name:SetPoint("RIGHT", h.Plate, "RIGHT", -58, 0)
+	QA.clamped = nil -- lay it out again on the next update
+	QA.driver:SetScript("OnUpdate", c.enabled and QA.onUpdate or nil)
+	QA.Update()
 end
 
 ns:RegisterModule("QuestArrow", QA)

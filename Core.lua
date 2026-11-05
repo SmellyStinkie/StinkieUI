@@ -638,13 +638,12 @@ ns.defaults = {
 			maxGold = 0, -- 0: no limit
 			announce = true,
 		},
-		-- points at the objective of the quest you're actively tracking
+		-- a small nameplate in the world on the quest you're actively tracking
 		questArrow = {
 			enabled = false,
-			size = 48, color = { 0.75, 0.80, 0.16 },
+			size = 24, color = { 0.75, 0.80, 0.16 },
 			showName = true,
 			textStyle = text(13),
-			point = { "TOP", 0, -170 },
 		},
 		-- errands done for you; each one is off until it's asked for
 		auto = {
