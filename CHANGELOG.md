@@ -1,5 +1,17 @@
 # Stinkie UI changelog
 
+## 0.40.0
+- Chat: whispers no longer get lost. New Whispers show in option: Both (a tab for each person plus the main tab, the new default), Main tab or Own tab. Covers character and Battle.net whispers. Tab-only whispers are kept in chat history, and the whisper that opens a new tab now flashes it.
+- Quest marker: also points to your corpse while you're dead.
+- Scrolling combat text: options for its look on the Damage Numbers page (size, crit size, crit pop, gap between lines, outline, direction), and heals and damage can scroll opposite ways, either way round.
+- Damage Numbers: a Show healing you receive option, for heals like Cannibalize. This is Blizzard's scrolling text, so it shows the other things Blizzard scrolls there too.
+- Party Targets: option to sit above each party frame and follow it.
+- Group leader icon option on party, player, target and focus frames.
+- Chat: the social button sits level with the chat tabs (option).
+- Minimap on WoW Forever: the zone bar can be hidden, Gap above the map now works on square maps and can go negative, the day / night icon goes in a corner of a square map (corner choice or hidden), and the Omnium Folio options are gone there.
+- New `/stinkie tooltip` reports what the game says about the tooltip under your mouse.
+- Fixed: tooltips on world objects like signs ignored your tooltip position.
+
 ## 0.39.1
 - Quest marker: the off-screen arrow now sits near the edge of the screen, with a slider for the gap.
 - Quest marker: hides while you're inside the quest's area with objectives left, and comes back to point at the turn-in once the quest is done.
