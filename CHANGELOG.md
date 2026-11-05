@@ -1,5 +1,20 @@
 # Stinkie UI changelog
 
+## 0.39.0
+- New Quest marker (Objectives page, off until you turn it on): a small nameplate in the world on the quest you're actively tracking, with the quest name and distance in yards, in place of Blizzard's diamond. It shows at long range, shrinks with distance and becomes an arrow at the edge of the screen when the spot is off screen. Works for quests ready to turn in. Height above the spot, arrow size, color and text options.
+- All unit frames (player, target, target of target, focus, pet, party, party targets, arena): choose whether names show first, last or both, and an option to show level. Nameplates get the same name choice.
+- Target markers: show above nameplates (on by default, with a size option), and optionally on party frames.
+- New swing timer look (Castbars page): flat melee, off-hand and ranged bars on WoW Forever, with colors and text options, and an option to show them only while you're attacking. Size and position stay in Edit Mode.
+- Battleground frames: option to show buffs beside each ally, or only the buffs you cast.
+- Miscellaneous: new options to accept and turn in quests, repair, sell junk and release in battlegrounds, all off by default. Hold Shift at an NPC to do quests yourself; reward choices and quests that cost gold, currency or flag you for PvP stay with you.
+- Miscellaneous: option to hide red error messages like Not enough mana, and their voice lines.
+- Action bars: Lock buttons option, and with keybinds off they can show on the bar under your mouse.
+- Damage Numbers: a Show your healing numbers option. `/stinkie dmg` also reports the font the game is using.
+- New `/rl` reloads the UI. New `/stinkie quest` reports what the Quest marker can see.
+- Fixed: Character Sheet window opacity did nothing with the whole-window background.
+- Fixed: hiding or showing action bars on mouseover now stays changed after a reload for bars the default layout hides.
+- Fixed: with Include me on, Party Targets showed your own target while you were solo.
+
 ## 0.38.0
 - Performance:
   - Cursor ring: only moves when the mouse moves (it was re-placed every frame), and shows only in combat by default.
