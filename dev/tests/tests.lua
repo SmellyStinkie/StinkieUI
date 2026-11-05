@@ -1453,6 +1453,37 @@ do
 	ns.Party.frames = oldParty
 end
 
+-- the bar behind the zone name, on either client
+do
+	local MM, c = ns.MinimapSkin, ns.db.minimap
+	local old, oldHide = MinimapCluster, c.hideHeaderArt
+	local function Tex() return MOCK.NewObj("Texture", nil, UIParent) end
+	-- retail: its own texture
+	MinimapCluster = { BorderTop = Tex() }
+	c.hideHeaderArt = true
+	MM.ApplyHeaderArt()
+	check("retail bar hidden", MinimapCluster.BorderTop:GetAlpha() == 0)
+	c.hideHeaderArt = false
+	MM.ApplyHeaderArt()
+	check("retail bar back", MinimapCluster.BorderTop:GetAlpha() == 1)
+	-- WoW Forever: the zone button's art, relit by Blizzard on hover
+	local zone = { StateTexture = Tex(), AddTexture = Tex() }
+	zone.OnButtonStateChanged = function(self) self.AddTexture:SetAlpha(0.1) end
+	MinimapCluster = { ZoneTextButton = zone }
+	c.hideHeaderArt = true
+	MM.ApplyHeaderArt()
+	check("Forever bar hidden", zone.StateTexture:GetAlpha() == 0)
+	zone:OnButtonStateChanged()
+	check("Forever bar stays hidden on hover", zone.AddTexture:GetAlpha() == 0)
+	c.hideHeaderArt = false
+	MM.ApplyHeaderArt()
+	check("Forever bar back", zone.StateTexture:GetAlpha() == 1)
+	zone:OnButtonStateChanged()
+	check("Forever hover works again", zone.AddTexture:GetAlpha() == 0.1)
+	MinimapCluster, c.hideHeaderArt = old, oldHide
+end
+check("Omnium Folio follows the client", ns.HAS_FOLIO == not ns.IS_FOREVER)
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto

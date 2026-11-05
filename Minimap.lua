@@ -146,6 +146,24 @@ function MM.PinSquare()
 	MM.pinning = nil
 end
 
+-- The bar behind the zone name. Retail: its own texture. WoW Forever: the zone button's art, which
+-- Blizzard lights up again on hover, so that's put back after each of its updates.
+function MM.ApplyHeaderArt()
+	local cluster = MinimapCluster
+	if not cluster then return end
+	local alpha = cfg().hideHeaderArt and 0 or 1
+	if cluster.BorderTop then cluster.BorderTop:SetAlpha(alpha) end
+	local zone = cluster.ZoneTextButton
+	if not (zone and zone.StateTexture) then return end
+	zone.StateTexture:SetAlpha(alpha)
+	if zone.OnButtonStateChanged and not zone.SUIHeaderHook then
+		zone.SUIHeaderHook = true
+		hooksecurefunc(zone, "OnButtonStateChanged", function(self)
+			if cfg().hideHeaderArt and self.AddTexture then self.AddTexture:SetAlpha(0) end
+		end)
+	end
+end
+
 local function ApplyShape()
 	local c = cfg()
 	local square = c.shape == "SQUARE"
@@ -177,9 +195,7 @@ local function ApplyShape()
 	if hybrid and hybrid.CircleMask then
 		hybrid.CircleMask:SetTexture(square and SQUARE_MASK or ROUND_MASK)
 	end
-	if MinimapCluster and MinimapCluster.BorderTop then
-		MinimapCluster.BorderTop:SetAlpha(c.hideHeaderArt and 0 or 1)
-	end
+	MM.ApplyHeaderArt()
 	MM.PinSquare()
 end
 

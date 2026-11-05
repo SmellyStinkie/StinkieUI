@@ -98,6 +98,7 @@ if not ns.IS_FOREVER and GetBuildInfo then
 	if type(toc) == "number" and toc >= 10000 and toc < 20000 then ns.IS_FOREVER = true end
 end
 ns.HAS_ARENA = not ns.IS_FOREVER
+ns.HAS_FOLIO = not ns.IS_FOREVER -- Omnium Folio (expansion button)
 ns.HEALER_GREEN = { 0.15, 0.95, 0.25 }
 ns.HEALER_RED = { 0.95, 0.15, 0.15 }
 -- Brand colors, taken from the Stinkie logo (Media/logo.tga)

@@ -830,15 +830,18 @@ local function BuildMinimapPage(page)
 	page:Dropdown("Mail icon (square)", { { "TOPRIGHT", "Top right corner" }, { "TOPLEFT", "Top left corner" },
 		{ "BOTTOMRIGHT", "Bottom right corner" }, { "BOTTOMLEFT", "Bottom left corner" }, { "DEFAULT", "Blizzard's spot" } },
 		Getter(cfg, "mailCorner"), Setter(cfg, "mailCorner"))
-	page:Check("Omnium Folio button", Getter(cfg, "folio"), Setter(cfg, "folio"))
-	page:Dropdown("Omnium Folio corner (square)", { { "BOTTOMLEFT", "Bottom left" }, { "BOTTOMRIGHT", "Bottom right" },
-		{ "TOPLEFT", "Top left" }, { "TOPRIGHT", "Top right" } }, Getter(cfg, "folioCorner"), Setter(cfg, "folioCorner"))
-	page:Slider("Omnium Folio size", 0.4, 1.2, 0.05, Getter(cfg, "folioScale"), Setter(cfg, "folioScale"))
-	page:Slider("Omnium Folio distance from corner", 0, 40, 1, Getter(cfg, "folioInset"), Setter(cfg, "folioInset"))
-	page:Slider("Omnium Folio X nudge", -30, 30, 1, Getter(cfg, "folioX"), Setter(cfg, "folioX"))
-	page:Slider("Omnium Folio Y nudge", -30, 30, 1, Getter(cfg, "folioY"), Setter(cfg, "folioY"))
+	if ns.HAS_FOLIO then
+		page:Check("Omnium Folio button", Getter(cfg, "folio"), Setter(cfg, "folio"))
+		page:Dropdown("Omnium Folio corner (square)", { { "BOTTOMLEFT", "Bottom left" }, { "BOTTOMRIGHT", "Bottom right" },
+			{ "TOPLEFT", "Top left" }, { "TOPRIGHT", "Top right" } }, Getter(cfg, "folioCorner"), Setter(cfg, "folioCorner"))
+		page:Slider("Omnium Folio size", 0.4, 1.2, 0.05, Getter(cfg, "folioScale"), Setter(cfg, "folioScale"))
+		page:Slider("Omnium Folio distance from corner", 0, 40, 1, Getter(cfg, "folioInset"), Setter(cfg, "folioInset"))
+		page:Slider("Omnium Folio X nudge", -30, 30, 1, Getter(cfg, "folioX"), Setter(cfg, "folioX"))
+		page:Slider("Omnium Folio Y nudge", -30, 30, 1, Getter(cfg, "folioY"), Setter(cfg, "folioY"))
+	end
 	page:Choice("Buttons", { { "show", "Show" }, { "mouseover", "Mouseover" }, { "hide", "Hide" } }, Getter(cfg, "buttons"), Setter(cfg, "buttons"))
-	page:Note("Tracking, addon list, zoom and addon minimap buttons. Mail and the Omnium Folio have their own options.", 36)
+	page:Note(ns.HAS_FOLIO and "Tracking, addon list, zoom and addon minimap buttons. Mail and the Omnium Folio have their own options."
+		or "Tracking, addon list, zoom and addon minimap buttons. Mail has its own option.", 36)
 	page:Check("Calendar button", Getter(cfg, "calendar"), Setter(cfg, "calendar"))
 	page:Slider("Calendar size", 0.5, 2, 0.05, Getter(cfg, "calendarScale"), Setter(cfg, "calendarScale"))
 	page:Header("Hide automatically in")
