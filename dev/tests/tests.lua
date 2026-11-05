@@ -1061,7 +1061,10 @@ do
 	clamped = false
 	navState = 0
 	QA.Update()
-	check("invalid spot: hidden", h:GetAlpha() == 0)
+	check("too far for the diamond: still shown", h:GetAlpha() == 1)
+	navState = 3
+	QA.Update()
+	check("disabled: hidden", h:GetAlpha() == 0)
 	navState = 2
 	validScreen = false
 	QA.Update()

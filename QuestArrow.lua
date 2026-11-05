@@ -63,12 +63,13 @@ local function LayoutMarker(clamped)
 	end
 end
 
--- Blizzard's frame also fades near the mouse, so its alpha can't be borrowed: the game's own state
--- says whether the spot can be shown, and dims it when something is in the way.
+-- Blizzard's frame also fades near the mouse and hides far targets, so its alpha can't be borrowed.
+-- The "Invalid" state only means too far for Blizzard's diamond (seen at 618 yards with a real
+-- distance and screen position), and showing those far targets is the point of this marker.
 function QA.MarkerAlpha(clamped)
 	if not C_Navigation.HasValidScreenPosition() then return 0 end
 	local state, N = C_Navigation.GetTargetState(), Enum.NavigationState
-	if state == N.Invalid or state == N.Disabled then return 0 end
+	if state == N.Disabled then return 0 end
 	return (state == N.Occluded and not clamped) and 0.6 or 1
 end
 
