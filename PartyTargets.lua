@@ -34,6 +34,20 @@ local function PartyStep()
 	return p.height + castH + p.spacing, castH
 end
 
+-- A party member's target shows while it exists. Your own row ("Include me") also needs a group,
+-- like your own party frame: alone, there's no party to line up with.
+function PT.Watch(f)
+	if f.unit == "target" then
+		RegisterStateDriver(f, "visibility", "[group,@target,exists] show; hide")
+	else
+		RegisterUnitWatch(f)
+	end
+end
+
+function PT.Unwatch(f)
+	if f.unit == "target" then UnregisterStateDriver(f, "visibility") else UnregisterUnitWatch(f) end
+end
+
 function PT:UpdateVisibility()
 	local h = PT.holder
 	if not h then return end
@@ -56,7 +70,8 @@ function PT:Init()
 		function() return cfg().point end,
 		function(p) cfg().point = p end)
 	for i, unit in ipairs(PartyUnits()) do
-		local f = UF.CreateFrame(unit, "StinkieUI_PartyTarget" .. i)
+		local f = UF.CreateFrame(unit, "StinkieUI_PartyTarget" .. i, true)
+		PT.Watch(f)
 		f.forceClassColor = true
 		f:SetParent(h)
 		PT.frames[i] = f
@@ -118,13 +133,13 @@ function PT:SetTestMode(on)
 	PT.testMode = on or nil
 	for i, f in ipairs(PT.frames) do
 		if on then
-			UnregisterUnitWatch(f)
+			PT.Unwatch(f)
 			f.preview = true
 			f:Show()
 			PT.FillPreview(f, i)
 		else
 			f.preview = nil
-			RegisterUnitWatch(f)
+			PT.Watch(f)
 			UF.SafeUpdateAll(f)
 		end
 	end

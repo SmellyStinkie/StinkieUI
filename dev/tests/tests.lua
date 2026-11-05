@@ -260,6 +260,20 @@ ns.db.partyTargets.enabled = true
 ns.PartyTargets:Init()
 ns.PartyTargets:Refresh()
 check("party target frames", #ns.PartyTargets.frames == 4)
+do
+	-- your own row needs a group; party members' rows don't change
+	local PT, driver, watched = ns.PartyTargets, nil, nil
+	local oldDriver, oldWatch = RegisterStateDriver, RegisterUnitWatch
+	RegisterStateDriver = function(_, state, rule) driver = state .. " " .. rule end
+	RegisterUnitWatch = function(f) watched = f end
+	local own, member = { unit = "target" }, { unit = "party1target" }
+	PT.Watch(own)
+	check("own target row only in a group", driver == "visibility [group,@target,exists] show; hide" and watched == nil, driver)
+	driver = nil
+	PT.Watch(member)
+	check("party member row follows its unit", watched == member and driver == nil)
+	RegisterStateDriver, RegisterUnitWatch = oldDriver, oldWatch
+end
 ns.PartyTargets:SetTestMode(true)
 check("party target preview", ns.PartyTargets.frames[2].Name._text == "Pinkie")
 ns.PartyTargets:SetTestMode(false)
