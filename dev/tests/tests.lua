@@ -1955,6 +1955,46 @@ do
 	np.threatSide, np.threatStyle.size = "RIGHT", 14
 	f.Threat.SetPoint, f.Threat.SetFont = setPoint, setFont
 
+	-- a bigger target border pushes what's around the bar out of its way
+	do
+		local oldPixel, oldOutset, y = ns.Pixel, np.highlight.outset, {}
+		ns.Pixel = function() return 1 end
+		local function Watch(region, key)
+			region.SetPoint = function(_, p, _, _, _, py)
+				if p ~= "TOPRIGHT" then y[key] = py end
+			end
+		end
+		Watch(f.Auras, "auras"); Watch(f.Castbar, "cast"); Watch(f.Threat, "threat")
+		np.highlight.outset = 4
+		f.auraY = 10
+		targeted = true
+		NP.PlaceAroundBar(f)
+		check("auras clear the target border", y.auras == 14, y.auras)
+		check("castbar clears it", y.cast == -6, y.cast)
+		check("threat clears it", y.threat == 6, y.threat)
+		targeted = false
+		NP.PlaceAroundBar(f)
+		check("other plates stay put", y.auras == 10 and y.cast == -2 and y.threat == 2, y.auras)
+		targeted = true
+		np.highlight.outset = 0
+		NP.PlaceAroundBar(f)
+		check("no outer border: nothing moves", y.auras == 10 and y.cast == -2)
+		f.Highlight:Hide()
+		np.highlight.outset = 4
+		NP.PlaceAroundBar(f)
+		check("a plate without the border stays put", y.auras == 10)
+		f.Highlight:Show()
+		local nameY
+		local name = MOCK.NewObj("FontString", nil, UIParent)
+		name.SetPoint = function(_, _, _, _, _, py) nameY = py end
+		f.aboveBar = name
+		NP.PlaceAroundBar(f)
+		check("a name above the bar clears it too", nameY == 7, nameY)
+		f.aboveBar = nil
+		f.Auras.SetPoint, f.Castbar.SetPoint, f.Threat.SetPoint = nil, nil, nil
+		ns.Pixel, np.highlight.outset = oldPixel, oldOutset
+	end
+
 	rawset(C_NamePlate, "GetNamePlateForUnit", oldGet)
 	UnitCanAttack, UnitName, UnitDetailedThreatSituation, GetThreatStatusColor = oldCan, oldName, oldThreat, oldColor
 end

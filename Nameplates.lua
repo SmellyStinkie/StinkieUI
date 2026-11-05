@@ -325,17 +325,41 @@ function NP.IsTargetPlate(f)
 	return nil -- unknown
 end
 
+-- How far the target border reaches past the bar. Only the target has it, so only that plate moves
+-- what sits around the bar. If the game won't say which plate is the target, nothing moves.
+function NP.BorderReach(f)
+	if not (f.Highlight:IsShown() and NP.IsTargetPlate(f)) then return 0 end
+	return (ns.db.nameplates.highlight.outset or 0) * ns.Pixel(f)
+end
+
+local THREAT_SPOTS = { LEFT = { "BOTTOMLEFT", "TOPLEFT" }, CENTER = { "BOTTOM", "TOP" }, RIGHT = { "BOTTOMRIGHT", "TOPRIGHT" } }
+
+-- Everything just above and below the bar, kept clear of the target border.
+function NP.PlaceAroundBar(f)
+	local reach = NP.BorderReach(f)
+	local gap = ns.Pixel(f) * 2
+	f.Castbar:ClearAllPoints()
+	f.Castbar:SetPoint("TOPLEFT", f.Health, "BOTTOMLEFT", 0, -gap - reach)
+	f.Castbar:SetPoint("TOPRIGHT", f.Health, "BOTTOMRIGHT", 0, -gap - reach)
+	f.Auras:ClearAllPoints()
+	f.Auras:SetPoint("BOTTOMLEFT", f.Health, "TOPLEFT", 0, (f.auraY or 4) + reach)
+	local spot = THREAT_SPOTS[ns.db.nameplates.threatSide] or THREAT_SPOTS.RIGHT
+	f.Threat:ClearAllPoints()
+	f.Threat:SetPoint(spot[1], f.HealthFrame, spot[2], 0, 2 + reach)
+	-- the name, when it sits above the bar
+	if f.aboveBar then f.aboveBar:SetPoint("BOTTOMLEFT", f.Health, "TOPLEFT", 0, 3 + reach) end
+end
+
 local function UpdateTarget(f)
 	if not f.unit then return end
 	local is = NP.IsTargetPlate(f)
+	NP.PlaceAroundBar(f)
 	if is ~= nil then
 		f.Highlight:SetAlpha(is and 1 or 0)
 		return
 	end
 	f.Highlight:SetAlphaFromBoolean(UnitIsUnit(f.unit, "target"), 1, 0)
 end
-
-local THREAT_SPOTS = { LEFT = { "BOTTOMLEFT", "TOPLEFT" }, CENTER = { "BOTTOM", "TOP" }, RIGHT = { "BOTTOMRIGHT", "TOPRIGHT" } }
 
 -- Threat % on your target's plate. It can be hidden from addons: a hidden number can't be
 -- compared, so it goes straight to the text, and the plate stays clean if the game refuses it.
@@ -650,10 +674,8 @@ local function LayoutPlate(f)
 	f.HealthText:ClearAllPoints()
 	f.HealthText:SetPoint("RIGHT", f.Health, "RIGHT", -2, 0)
 	ns.ApplyText(f.Threat, cfg.threatStyle)
-	-- just above the bar, where it can't be mistaken for health percent inside it
-	local threatSpot = THREAT_SPOTS[cfg.threatSide] or THREAT_SPOTS.RIGHT
-	f.Threat:ClearAllPoints()
-	f.Threat:SetPoint(threatSpot[1], f.HealthFrame, threatSpot[2], 0, 2)
+	f.aboveBar = nil -- placed with the rest in NP.PlaceAroundBar; threat goes above the bar there too,
+	-- where it can't be mistaken for health percent inside it
 	local showHP = cfg.showHealthText
 	if friendly then showHP = cfg.friendlyHealthText end
 	f.HealthText:SetShown(showHP)
@@ -693,10 +715,10 @@ local function LayoutPlate(f)
 			end
 		else
 			if showLevel then
-				f.Level:SetPoint("BOTTOMLEFT", f.Health, "TOPLEFT", 0, 3)
+				f.aboveBar = f.Level
 				f.Name:SetPoint("LEFT", f.Level, "RIGHT", 0, 0)
 			else
-				f.Name:SetPoint("BOTTOMLEFT", f.Health, "TOPLEFT", 0, 3)
+				f.aboveBar = f.Name
 			end
 			f.Name:SetPoint("RIGHT", f.Health, "RIGHT", 0, 0)
 		end
@@ -789,15 +811,11 @@ local function LayoutPlate(f)
 	f.Elite:ClearAllPoints()
 	f.Elite:SetPoint("CENTER", f.HealthFrame, "TOPLEFT", 0, 0)
 
-	f.Castbar:ClearAllPoints()
-	f.Castbar:SetPoint("TOPLEFT", f.Health, "BOTTOMLEFT", 0, -px * 2)
-	f.Castbar:SetPoint("TOPRIGHT", f.Health, "BOTTOMRIGHT", 0, -px * 2)
 	f.Castbar:SetHeight(cfg.castHeight)
 	f.Castbar:ApplyConfig({ height = cfg.castHeight, showText = true, showTime = true, textStyle = cfg.castStyle })
 
-	f.Auras:ClearAllPoints()
-	local auraY = nameInBar and 4 or (fontSize + 6)
-	f.Auras:SetPoint("BOTTOMLEFT", f.Health, "TOPLEFT", 0, auraY)
+	f.auraY = nameInBar and 4 or (fontSize + 6)
+	NP.PlaceAroundBar(f)
 
 	-- Big Debuffs beside the bar, clear of the target > < arrows. Each row grows away from the bar.
 	-- Our code can't anchor to an aura container, so when both rows share a side the outer one
