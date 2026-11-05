@@ -652,6 +652,7 @@ ns.defaults = {
 			size = 24, color = { 0.75, 0.80, 0.16 },
 			height = 60, -- raised off the spot, so it clears the target's own nameplate
 			edgeMargin = 60, -- how far the off-screen arrow stays from the edge of the screen
+			hideYards = 30, -- up close to an unfinished objective it swings around, so it hides
 			showName = true,
 			textStyle = text(13),
 		},
@@ -1608,6 +1609,20 @@ function ns.ShortenName(name, format)
 	local beforeComma = name:match("^[^,]+") or name
 	if format == "first" then return beforeComma:match("^ *([^ ]+)") or name end
 	return beforeComma:match("([^ ]+) *$") or name
+end
+
+-- A unit's name for display. WoW Forever characters have surnames: its UnitName hands back the
+-- surname where retail has the realm, so "Both" joins them with the game's own separator. Everything
+-- else (NPCs, and retail) has one name to split into words. A hidden name is left whole.
+function ns.UnitDisplayName(unit, format)
+	local name, surname = UnitName(unit)
+	if ns.IS_FOREVER and not ns.issecret(name) and not ns.issecret(surname) and surname and surname ~= "" then
+		if format == "first" then return name end
+		if format == "last" then return surname end
+		local c = Constants and Constants.CharacterNameSeparatorConsts
+		return name .. (c and c.CHARACTERNAME_SURNAME_SEPARATOR or " ") .. surname
+	end
+	return ns.ShortenName(name, format)
 end
 
 -- Re-apply sizes, fonts, colors and positions after an options change.

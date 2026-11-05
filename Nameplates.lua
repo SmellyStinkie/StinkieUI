@@ -124,8 +124,7 @@ local function UpdateName(f)
 	else
 		f.Level:Hide()
 	end
-	local name = UnitName(u)
-	name = ns.ShortenName(name, cfg.nameFormat)
+	local name = ns.UnitDisplayName(u, cfg.nameFormat)
 	local limit = cfg.nameMaxChars or 0
 	-- hidden (secret) names can't be shortened; they're clipped to the plate width instead
 	if limit > 0 and not ns.issecret(name) and type(name) == "string" then

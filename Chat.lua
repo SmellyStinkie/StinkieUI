@@ -349,6 +349,10 @@ local function StartFlash(f, chatType)
 	flashing[f] = true
 end
 
+-- Blizzard stops a whisper tab's flash when you reply, as you've seen it in the main tab.
+function CH.StopFlash(f) flashing[f] = nil end
+function CH.IsFlashing(f) return flashing[f] == true end
+
 local function OnAddMessage(f, msg, r, g, b, id, accessID, typeID, event, eventArgs)
 	if CH.busy then return end
 	local secret = issecret(msg)
@@ -900,6 +904,7 @@ function CH:Init()
 	if FCF_OpenTemporaryWindow then
 		hooksecurefunc("FCF_OpenTemporaryWindow", CH.OnTemporaryWindow)
 	end
+	if FCF_StopAlertFlash then hooksecurefunc("FCF_StopAlertFlash", CH.StopFlash) end
 	if FCF_SetChatWindowFontSize then
 		hooksecurefunc("FCF_SetChatWindowFontSize", function(_, chatFrame)
 			if cfg().fontSize > 0 and chatFrame then ApplyFont(chatFrame) end

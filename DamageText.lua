@@ -36,21 +36,58 @@ function DT.SetScrollingText(on)
 end
 
 -- How that scrolling text looks. Blizzard draws a large font shrunk down to size, which spaces a
--- narrow font oddly, so each new line is set to a real size instead. Blizzard's own tables stay
--- untouched: this is a post-hook on the lines it makes, and its gap between lines on its frame.
+-- narrow font oddly, so each new line is set to a real size instead.
+-- Hooks only, and only widget calls on Blizzard's lines. Never write a value into its frame or
+-- lines, or call its methods: its code does sums on secret numbers, which it may only do untainted,
+-- so one value written from here breaks it (seen as "secret number value" at CombatText.lua:360).
+-- What this needs to remember lives in its own tables.
 DT.FLOAT_MODE = "floatingCombatTextFloatMode_v2"
-local BLIZZARD_SPACING = 10
+local LANE_X, LINE_HEIGHT = 40, 16
+local lineSize = setmetatable({}, { __mode = "k" }) -- line -> the height it keeps
+local lineLane = setmetatable({}, { __mode = "k" }) -- line -> its place in a heal / damage lane
+local hookedLine = setmetatable({}, { __mode = "k" })
+local placing = false
+
+local function LaneY(s, now)
+	local t = math.min(1, (now - s.born) / CombatTextConstants.MessageScrollSpeed)
+	return s.startY + s.lane * s.distance * t
+end
+
+-- Blizzard moves each line every frame; these put it back where it belongs straight after.
+local function KeepPlace(fs)
+	local s = lineLane[fs]
+	if placing or not s then return end
+	placing = true
+	fs:SetPoint("TOP", WorldFrame, "BOTTOM", s.x, LaneY(s, GetTime()))
+	placing = false
+end
+
+local function KeepSize(fs)
+	local size = lineSize[fs]
+	if placing or not size then return end
+	placing = true
+	fs:SetTextHeight(size)
+	placing = false
+end
 
 local function ScrollFont(fs, size)
 	local c = cfg().scroll
+	placing = true
 	fs:SetFont(ns.GetFontPath(), size, ns.OutlineFlags(c.outline) or "")
 	fs:SetTextHeight(size)
+	placing = false
+	lineSize[fs] = size
 end
 
--- Heal or damage, from what Blizzard made: damage reads -123, heals +123 in green. Mana gains also
--- start with + but aren't green. A hidden (secret) line can't be read, so it scrolls as usual.
+-- Heal or damage. Readable lines by their text: damage reads -123, heals +123 in green (mana gains
+-- also start with + but aren't green). Hidden (secret) numbers can't be read, but their color can.
 function DT.ScrollKind(message, r, g)
-	if ns.issecret(message) or type(message) ~= "string" then return nil end
+	if ns.issecret(message) then
+		if r == 0.1 and g == 1 then return "heal" end
+		if (r == 1 and g == 0.1) or (r == 0.79 and g == 0.3) then return "damage" end
+		return nil
+	end
+	if type(message) ~= "string" then return nil end
 	local first = message:sub(1, 1)
 	if first == "-" then return "damage" end
 	if first == "+" and r == 0.1 and g == 1 then return "heal" end
@@ -63,28 +100,26 @@ function DT.ScrollLane(split, kind)
 	return kind == "heal" and -1 or 1
 end
 
--- Blizzard stacks every new line under all the others, so a line going the other way would drag
--- the rest after it. Each direction gets its own lane beside the middle, stacked on its own.
-local LANE_X, LINE_HEIGHT = 40, 16
-
-local function PlaceInLane(frame, fs, lane)
+-- Each direction has its own lane beside the middle, stacked on its own: Blizzard's stacking puts a
+-- new line under all the others, so a line going the other way would drag the rest after it.
+local function JoinLane(frame, fs, lane)
+	local now = GetTime()
 	local spot = frame.textLocations
-	local step = LINE_HEIGHT + frame.textSpacing
+	local step = LINE_HEIGHT + cfg().scroll.spacing * frame.textScaleY
 	local y = spot.startY
-	for _, line in ipairs(frame.activeFontStrings) do
-		if line ~= fs and line.SUILane == lane then
-			local below = line.yPos - lane * step
+	for line, s in pairs(lineLane) do
+		if line ~= fs and s.lane == lane and now - s.born < CombatTextConstants.MessageScrollSpeed then
+			local below = LaneY(s, now) - lane * step
 			if lane * (y - below) > 0 then y = below end
 		end
 	end
 	if lane * (spot.startY - y) > frame.textOffsetMax then y = spot.startY - lane * frame.textOffsetMax end
-	fs.SUILane = lane
-	fs.startX = spot.startX + lane * LANE_X * frame.textScaleX
-	fs.startY, fs.yPos = y, y
-	fs.endY = spot.startY + lane * math.abs(spot.endY - spot.startY)
-	fs.scrollFunction = CombatTextUtil.StandardScroll -- Arc doesn't use the end point
-	fs:ClearAllPoints()
-	fs:SetPoint("TOP", WorldFrame, "BOTTOM", fs.startX, y)
+	lineLane[fs] = {
+		lane = lane, born = now, startY = y,
+		x = spot.startX + lane * LANE_X * frame.textScaleX,
+		distance = math.abs(spot.endY - spot.startY),
+	}
+	KeepPlace(fs)
 end
 
 function DT.StyleScrollLine(_, message, _, r, g)
@@ -92,44 +127,52 @@ function DT.StyleScrollLine(_, message, _, r, g)
 	local c = cfg().scroll
 	local list = frame and frame.activeFontStrings
 	local fs = list and list[#list]
-	if not (c.enabled and fs) then return end
+	if not fs then return end
+	lineLane[fs], lineSize[fs] = nil, nil
+	if not c.enabled then return end
+	if not hookedLine[fs] then
+		hookedLine[fs] = true
+		hooksecurefunc(fs, "SetPoint", KeepPlace)
+		hooksecurefunc(fs, "SetTextHeight", KeepSize)
+	end
 	local lane = DT.ScrollLane(c.split, DT.ScrollKind(message, r, g))
-	if lane then PlaceInLane(frame, fs, lane) else fs.SUILane = nil end
-	if fs.isCrit then
-		if c.critPop then return end -- Blizzard grows and shrinks it
-		fs.isCrit = nil
-		ScrollFont(fs, c.critSize)
-	else
+	if lane then JoinLane(frame, fs, lane) end
+	if not fs.isCrit then
 		ScrollFont(fs, c.size)
+	elseif not c.critPop then
+		ScrollFont(fs, c.critSize)
 	end
 end
-
--- Blizzard works its gap out again whenever the screen or a setting changes.
-function DT.ApplyScrollSpacing()
-	local frame = _G.CombatText
-	if not (frame and frame.textScaleY) then return end
-	local c = cfg().scroll
-	frame.textSpacing = (c.enabled and c.spacing or BLIZZARD_SPACING) * frame.textScaleY
-end
+DT.LaneOf = function(fs) return lineLane[fs] end
+DT.SizeOf = function(fs) return lineSize[fs] end
+DT.ForgetLines = function() lineLane, lineSize = setmetatable({}, { __mode = "k" }), setmetatable({}, { __mode = "k" }) end
 
 -- Blizzard's scrolling text is its own addon, loaded when it's first needed.
 function DT.HookScrollingText()
 	local frame = _G.CombatText
-	if DT.scrollHooked or not (frame and frame.AddMessage and frame.UpdateDisplayedMessages) then return end
+	if DT.scrollHooked or not (frame and frame.AddMessage) then return end
 	DT.scrollHooked = true
 	hooksecurefunc(frame, "AddMessage", DT.StyleScrollLine)
-	hooksecurefunc(frame, "UpdateDisplayedMessages", DT.ApplyScrollSpacing)
-	DT.ApplyScrollSpacing()
 end
 
-function DT.ScrollDirection()
+-- One choice, so the directions can't disagree: the game's own Up, Down or Arc, or heals and damage
+-- going opposite ways (then everything else scrolls up). The game reads its setting when the UI
+-- loads, and calling Blizzard's update from here would taint it, so this needs a reload.
+function DT.ScrollMode()
+	local split = cfg().scroll.split
+	if split ~= "same" then return split end
 	return GetCVar(DT.FLOAT_MODE)
 end
 
-function DT.SetScrollDirection(mode)
-	SetCVar(DT.FLOAT_MODE, mode)
-	local frame = _G.CombatText
-	if frame and frame.UpdateDisplayedMessages then frame:UpdateDisplayedMessages() end
+function DT.SetScrollMode(mode)
+	local c = cfg().scroll
+	if mode == "healsUp" or mode == "healsDown" then
+		c.split = mode
+		SetCVar(DT.FLOAT_MODE, "1")
+	else
+		c.split = "same"
+		SetCVar(DT.FLOAT_MODE, mode)
+	end
 end
 
 -- Your own healing numbers. On/off rather than a value, and Blizzard's settings have no box for it.
@@ -234,7 +277,6 @@ end
 
 function DT:Refresh()
 	DT.Apply()
-	DT.ApplyScrollSpacing()
 end
 
 ns:RegisterModule("DamageText", DT)

@@ -45,14 +45,14 @@ function QA.TrackedTarget()
 	if questID and questID ~= 0 then return questID end
 end
 
--- Inside the quest's shaded map area with objectives left, you're already there: the things to
--- find are spread around, so there's no one spot to point at. A finished quest still points at
--- wherever it's turned in.
+-- With objectives left there's no one spot to point at once you're there: inside the quest's shaded
+-- map area the things to find are spread around, and close to it Blizzard's point swings about as
+-- you move. A finished quest still points at wherever it's turned in.
 function QA.InQuestArea(questID)
+	if questID == CORPSE or C_QuestLog.IsComplete(questID) then return false end
+	if C_Navigation.GetDistance() < cfg().hideYards then return true end
 	local M = C_Minimap
-	if questID == CORPSE then return false end
-	if not (M and M.IsInsideQuestBlob and M.IsInsideQuestBlob(questID)) then return false end
-	return not C_QuestLog.IsComplete(questID)
+	return (M and M.IsInsideQuestBlob and M.IsInsideQuestBlob(questID)) and true or false
 end
 
 local function ShowBlizzardMarker(show)

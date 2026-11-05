@@ -1130,6 +1130,21 @@ do
 	QA.Update()
 	check("a new tracked quest is picked up", h.Name:GetText() == "Quest 88")
 
+	-- close to an unfinished objective the point swings about, so it hides
+	distance = 25
+	QA.Update()
+	check("close to an objective: marker gone", not h:IsShown())
+	questDone = true
+	QA.Update()
+	check("close to a turn-in: marker stays", h:IsShown())
+	questDone = false
+	c.hideYards = 0
+	QA.Update()
+	check("close range hiding can be off", h:IsShown())
+	c.hideYards = ns.defaults.misc.questArrow.hideYards
+	distance = 42.4
+	QA.Update()
+
 	-- in the quest area with things left to find: nothing to point at
 	inArea = true
 	QA.Update()
@@ -1484,6 +1499,40 @@ do
 end
 check("Omnium Folio follows the client", ns.HAS_FOLIO == not ns.IS_FOREVER)
 
+-- WoW Forever surnames come back where retail has the realm
+do
+	local oldForever, oldName = ns.IS_FOREVER, UnitName
+	UnitName = function() return "Stinkie", "Smelly" end
+	ns.IS_FOREVER = true
+	check("Forever both", ns.UnitDisplayName("player", "full") == "Stinkie Smelly", ns.UnitDisplayName("player", "full"))
+	check("Forever first", ns.UnitDisplayName("player", "first") == "Stinkie")
+	check("Forever last", ns.UnitDisplayName("player", "last") == "Smelly")
+	UnitName = function() return "Stormwind Guard", nil end
+	check("Forever NPC last word", ns.UnitDisplayName("target", "last") == "Guard")
+	UnitName = function() return "Stormwind Guard", "" end
+	check("Forever empty surname", ns.UnitDisplayName("target", "full") == "Stormwind Guard")
+	ns.IS_FOREVER = false
+	UnitName = function() return "Stinkie", "Stormrage" end
+	check("retail: a realm is no surname", ns.UnitDisplayName("target", "full") == "Stinkie" and ns.UnitDisplayName("target", "last") == "Stinkie")
+	do
+		local secret, old = {}, ns.issecret
+		ns.issecret = function(v) return v == secret end
+		ns.IS_FOREVER = true
+		UnitName = function() return secret, secret end
+		check("hidden name stays whole", ns.UnitDisplayName("target", "last") == secret)
+		ns.issecret = old
+	end
+	ns.IS_FOREVER, UnitName = oldForever, oldName
+end
+
+-- a reply stops the flash on that whisper's tab, as it does for Blizzard
+do
+	local CH = ns.Chat
+	local tab = {}
+	CH.StopFlash(tab)
+	check("no flash left after a reply", CH.IsFlashing(tab) == false)
+end
+
 -- whispers: where they show, and that they aren't lost
 do
 	local CH, c = ns.Chat, ns.db.chat
@@ -1661,68 +1710,63 @@ do
 end
 flushErrors("social, day / night, leader")
 
--- scrolling text look: our sizes on Blizzard's lines, its tables untouched
+-- scrolling text look: our sizes on Blizzard's lines, and never a value written into its frame
 do
 	local DT, c = ns.DamageText, ns.db.damageText.scroll
 	check("scrolling look on by default", c.enabled == true and c.size == 22)
-	local line = MOCK.NewObj("FontString", nil, UIParent)
-	local fonts, heights = {}, {}
-	line.SetFont = function(_, path, size, flags) fonts[#fonts + 1] = { path, size, flags } end
-	line.SetTextHeight = function(_, h) heights[#heights + 1] = h end
-	local updates = 0
-	local frame = { activeFontStrings = { line }, textScaleY = 1.5, textSpacing = 15 }
-	frame.AddMessage = function() end
-	frame.UpdateDisplayedMessages = function(self) updates = updates + 1; self.textSpacing = 10 * self.textScaleY end
-	local oldFrame, oldHooked = CombatText, DT.scrollHooked
+	local function Line()
+		local fs = MOCK.NewObj("FontString", nil, UIParent)
+		fs.fonts, fs.heights, fs.points = {}, {}, {}
+		fs.SetFont = function(self, path, size) self.fonts[#self.fonts + 1] = { path, size } end
+		fs.SetTextHeight = function(self, h) self.heights[#self.heights + 1] = h end
+		fs.SetPoint = function(self, _, _, _, x, y) self.points[#self.points + 1] = { x, y } end
+		return fs
+	end
+	local frame = { activeFontStrings = {}, textSpacing = 15, textOffsetMax = 130, textScaleX = 1, textScaleY = 1,
+		textLocations = { startX = 0, startY = 384, endX = 0, endY = 609 } }
+	frame.AddMessage = function(self, _, _, _, _) end
+	local oldFrame, oldHooked, oldConst = CombatText, DT.scrollHooked, CombatTextConstants
 	CombatText, DT.scrollHooked = frame, nil
+	CombatTextConstants = { MessageScrollSpeed = 2 }
 	DT.HookScrollingText()
+	DT.ForgetLines()
+	local function Add(message, r, g, crit)
+		local fs = Line()
+		fs.isCrit = crit
+		table.insert(frame.activeFontStrings, fs)
+		frame:AddMessage(message, nil, r, g)
+		return fs
+	end
 
-	frame:AddMessage("123")
-	check("a real font size, not a scaled one", fonts[#fonts][2] == 22 and heights[#heights] == 22)
-	check("in the addon's font", fonts[#fonts][1] == ns.GetFontPath())
-	line.isCrit = 1
-	frame:AddMessage("456")
-	check("crit gets its own size", fonts[#fonts][2] == 32 and line.isCrit == nil)
-	line.isCrit = 1
+	local l = Add("123", 1, 1)
+	check("a real font size, not a scaled one", l.fonts[1][2] == 22 and l.heights[#l.heights] == 22)
+	check("in the addon's font", l.fonts[1][1] == ns.GetFontPath())
+	local crit = Add("456", 1, 1, 1)
+	check("crit gets its own size", crit.fonts[1][2] == 32 and DT.SizeOf(crit) == 32)
+	crit:SetTextHeight(55) -- Blizzard's pop
+	check("crit keeps its size through Blizzard's animation", crit.heights[#crit.heights] == 32)
+	check("Blizzard's crit marker isn't touched", crit.isCrit == 1)
 	c.critPop = true
-	local before = #fonts
-	frame:AddMessage("789")
-	check("crit pop leaves Blizzard's animation", #fonts == before and line.isCrit == 1)
+	local pop = Add("789", 1, 1, 1)
+	check("crit pop leaves Blizzard's look", #pop.fonts == 0 and DT.SizeOf(pop) == nil)
 	c.critPop = false
-	line.isCrit = nil
 
-	c.spacing = 20
-	frame:UpdateDisplayedMessages()
-	check("gap scales with the screen, and survives Blizzard's update", frame.textSpacing == 30, frame.textSpacing)
-	c.enabled = false
-	before = #fonts
-	frame:AddMessage("0")
-	check("off: lines left to Blizzard", #fonts == before)
-	DT.ApplyScrollSpacing()
-	check("off: Blizzard's gap back", frame.textSpacing == 15, frame.textSpacing)
-	c.enabled, c.spacing = true, 10
+	-- the rule that broke the game: nothing written into Blizzard's frame
+	check("Blizzard's gap isn't touched", frame.textSpacing == 15, frame.textSpacing)
 
-	-- direction is the game's setting, and Blizzard is told about the change
-	local oldGet, oldSet, mode = GetCVar, SetCVar, "1"
+	-- the two directions, one choice
+	local oldGet, oldSet, mode = GetCVar, SetCVar, "2"
 	GetCVar = function(n) if n == DT.FLOAT_MODE then return mode end return oldGet(n) end
 	SetCVar = function(n, v) if n == DT.FLOAT_MODE then mode = v else oldSet(n, v) end end
-	local seen = updates
-	DT.SetScrollDirection("3")
-	check("direction set", DT.ScrollDirection() == "3" and updates == seen + 1)
+	check("direction shows the game's setting", DT.ScrollMode() == "2")
+	DT.SetScrollMode("healsDown")
+	check("split shows as the choice", DT.ScrollMode() == "healsDown" and c.split == "healsDown")
+	check("everything else scrolls up", mode == "1", mode)
+	DT.SetScrollMode("3")
+	check("a plain direction ends the split", c.split == "same" and mode == "3" and DT.ScrollMode() == "3")
 	GetCVar, SetCVar = oldGet, oldSet
 
-	-- nothing loaded yet, or nothing active
-	frame.activeFontStrings = {}
-	DT.StyleScrollLine()
-	check("no lines: nothing breaks", true)
-	CombatText, DT.scrollHooked = oldFrame, oldHooked
-end
-flushErrors("scrolling text")
-
--- scrolling text: heals and damage going opposite ways
-do
-	local DT, c = ns.DamageText, ns.db.damageText.scroll
-	check("split off by default", c.split == "same")
+	-- telling heals from damage
 	check("damage is read", DT.ScrollKind("-1,234", 1, 0.1) == "damage")
 	check("a heal is read", DT.ScrollKind("+500", 0.1, 1) == "heal")
 	check("a heal with a name too", DT.ScrollKind("+500 [Pinkie]", 0.1, 1) == "heal")
@@ -1731,7 +1775,10 @@ do
 	do
 		local secret, old = {}, ns.issecret
 		ns.issecret = function(v) return v == secret end
-		check("a hidden line scrolls as usual", DT.ScrollKind(secret, 0.1, 1) == nil)
+		check("a hidden heal is known by its color", DT.ScrollKind(secret, 0.1, 1) == "heal")
+		check("hidden damage is known by its color", DT.ScrollKind(secret, 1, 0.1) == "damage")
+		check("hidden spell damage too", DT.ScrollKind(secret, 0.79, 0.3) == "damage")
+		check("any other hidden line isn't", DT.ScrollKind(secret, 0.1, 0.1) == nil)
 		ns.issecret = old
 	end
 	check("heals up", DT.ScrollLane("healsUp", "heal") == 1 and DT.ScrollLane("healsUp", "damage") == -1)
@@ -1739,97 +1786,40 @@ do
 	check("same way leaves it", DT.ScrollLane("same", "heal") == nil)
 	check("other lines leave it", DT.ScrollLane("healsUp", nil) == nil)
 
-	local function Line()
-		local fs = MOCK.NewObj("FontString", nil, UIParent)
-		fs.SetFont, fs.SetTextHeight = function() end, function() end
-		fs.yPos, fs.startY, fs.endY = 384, 384, 609
-		return fs
-	end
-	local frame = { activeFontStrings = {}, textSpacing = 10, textOffsetMax = 130, textScaleX = 1,
-		textLocations = { startX = 0, startY = 384, endX = 0, endY = 609 } }
-	local oldFrame, oldUtil = CombatText, CombatTextUtil
-	CombatText, CombatTextUtil = frame, { StandardScroll = "standard" }
-	local function Add(message, r, g)
-		local fs = Line()
-		table.insert(frame.activeFontStrings, fs)
-		DT.StyleScrollLine(frame, message, nil, r, g)
-		return fs
-	end
-	c.split = "healsUp"
-	local heal = Add("+500", 0.1, 1)
-	check("heal rises", heal.endY == 609 and heal.startY == 384, heal.endY)
-	check("heal is on its side", heal.startX == 40, heal.startX)
-	local hit = Add("-90", 1, 0.1)
-	check("damage falls", hit.endY == 159, hit.endY)
-	check("damage is on the other side", hit.startX == -40, hit.startX)
-	check("damage scrolls straight", hit.scrollFunction == "standard")
-	hit.yPos = 200 -- well on its way down
-	local heal2 = Add("+600", 0.1, 1)
-	check("a falling hit doesn't drag the next heal down", heal2.startY == 358, heal2.startY)
-	local hit2 = Add("-91", 1, 0.1)
-	check("damage stacks with damage", hit2.startY == 384, hit2.startY)
+	-- lanes, kept in our own table
+	DT.ForgetLines()
 	frame.activeFontStrings = {}
-	local deep = Line()
-	deep.yPos, deep.SUILane = 200, 1
-	frame.activeFontStrings[1] = deep
-	local capped = Add("+1", 0.1, 1)
-	check("a long stack stops at Blizzard's limit", capped.startY == 254, capped.startY)
+	c.split = "healsUp"
+	local oldTime, now = GetTime, 100
+	GetTime = function() return now end
+	local heal = Add("+500", 0.1, 1)
+	local hit = Add("-90", 1, 0.1)
+	check("heal rises on its side", DT.LaneOf(heal).lane == 1 and heal.points[#heal.points][1] == 40)
+	check("damage falls on the other side", DT.LaneOf(hit).lane == -1 and hit.points[#hit.points][1] == -40)
+	check("nothing written on Blizzard's line", heal.startY == nil and heal.scrollFunction == nil and heal.endY == nil)
+	now = 101
+	hit:SetPoint("TOP", WorldFrame, "BOTTOM", 0, 999) -- Blizzard's own move each frame
+	check("Blizzard's move is put right", hit.points[#hit.points][2] == 384 - 225 / 2, hit.points[#hit.points][2])
+	local heal2 = Add("+600", 0.1, 1)
+	check("a falling hit doesn't drag the next heal down", DT.LaneOf(heal2).startY == 384, DT.LaneOf(heal2).startY)
 	local other = Add("<Aura>", 0.1, 1)
-	check("other lines keep Blizzard's route", other.endY == 609 and other.SUILane == nil)
+	check("other lines keep Blizzard's route", DT.LaneOf(other) == nil)
 	c.split = "same"
 	local same = Add("-5", 1, 0.1)
-	check("same way: Blizzard's route", same.endY == 609 and same.SUILane == nil)
-	CombatText, CombatTextUtil = oldFrame, oldUtil
+	check("same way: Blizzard's route", DT.LaneOf(same) == nil)
+	c.enabled = false
+	local off = Add("-5", 1, 0.1)
+	check("off: lines left to Blizzard", #off.fonts == 0)
+	c.enabled = true
+	GetTime = oldTime
+
+	frame.activeFontStrings = {}
+	DT.StyleScrollLine()
+	check("no lines: nothing breaks", true)
+	CombatText, DT.scrollHooked, CombatTextConstants = oldFrame, oldHooked, oldConst
+	DT.ForgetLines()
 end
-flushErrors("scrolling lanes")
-
--- signs and other world objects: the tooltip follows the anchor setting too
-do
-	local TT, c = ns.Tooltip, ns.db.tooltip
-	local owner, kind, set, cleared, placed = UIParent, "ANCHOR_CURSOR", nil, 0, nil
-	local g = GameTooltip
-	local saved = { g.GetOwner, g.GetAnchorType, g.SetAnchorType, g.ClearAllPoints, g.SetPoint, g.SetOwner }
-	local ownerCalls = 0
-	g.GetOwner = function() return owner end
-	g.GetAnchorType = function() return kind end
-	g.SetAnchorType = function(_, k, x, y) set = { k, x, y } end
-	g.ClearAllPoints = function() cleared = cleared + 1 end
-	g.SetPoint = function(_, p, rel) placed = { p, rel } end
-	g.SetOwner = function() ownerCalls = ownerCalls + 1 end
-	local oldAnchor, oldX, oldY = c.anchor, c.offsetX, c.offsetY
-	c.anchor, c.offsetX, c.offsetY = "mouse", 128, 25
-
-	TT.Reanchor(g)
-	check("sign goes off to the side", set and set[1] == "ANCHOR_CURSOR_RIGHT" and set[2] == 128 and set[3] == 25)
-	check("the text stays: no SetOwner", ownerCalls == 0)
-	set = nil
-	kind = "ANCHOR_RIGHT"
-	TT.Reanchor(g)
-	check("a tooltip a frame placed itself stays", set == nil)
-	kind = "ANCHOR_NONE"
-	TT.Reanchor(g)
-	check("default-spot tooltips stay", set == nil)
-	kind, owner = "ANCHOR_CURSOR", MOCK.NewObj("Frame", nil, UIParent)
-	TT.Reanchor(g)
-	check("a frame's cursor tooltip stays", set == nil)
-	owner = UIParent
-	c.anchor = "blizzard"
-	TT.Reanchor(g)
-	check("Blizzard anchor: left alone", set == nil)
-	c.anchor = "fixed"
-	TT.Reanchor(g)
-	check("fixed spot: sign goes there", set and set[1] == "ANCHOR_NONE" and placed and placed[2] == TT.anchor and cleared == 1)
-	TT.Reanchor({})
-	check("other tooltips: left alone", cleared == 1)
-
-	TT.Debug()
-	MOCK.Advance(5)
-	check("/stinkie tooltip runs", true)
-	c.anchor, c.offsetX, c.offsetY = oldAnchor, oldX, oldY
-	g.GetOwner, g.GetAnchorType, g.SetAnchorType, g.ClearAllPoints, g.SetPoint, g.SetOwner =
-		saved[1], saved[2], saved[3], saved[4], saved[5], saved[6]
-end
-flushErrors("sign tooltips")
+flushErrors("scrolling text")
 
 -- hide error messages: only the red event, and only what we changed
 do

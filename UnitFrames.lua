@@ -46,7 +46,7 @@ end
 
 function UF.UpdateName(f)
 	if f.Name:IsShown() then
-		f.Name:SetText(ns.ShortenName((UnitName(f.unit)), f.nameFormat))
+		f.Name:SetText(ns.UnitDisplayName(f.unit, f.nameFormat))
 		local style = f.nameStyle
 		if style and style.classColor then
 			f.Name:SetTextColor(ns.GetHealthColor(f.unit, true):GetRGB())
