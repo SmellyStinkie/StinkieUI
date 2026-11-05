@@ -932,6 +932,27 @@ do
 	check("marker defaults", ns.db.nameplates.marker == true and ns.db.party.marker == false)
 end
 
+-- hide error messages: only the red event, and only what we changed
+do
+	local M, A = ns.Misc, ns.db.misc.auto
+	local oldFrame, log = UIErrorsFrame, {}
+	UIErrorsFrame = {
+		UnregisterEvent = function(_, e) log[#log + 1] = "off " .. e end,
+		RegisterEvent = function(_, e) log[#log + 1] = "on " .. e end,
+	}
+	check("errors shown by default", A.hideErrors == false)
+	M.ApplyHideErrors()
+	check("off does nothing, so another addon's choice stands", #log == 0)
+	A.hideErrors = true
+	M.ApplyHideErrors()
+	M.ApplyHideErrors()
+	check("hides red errors once", #log == 1 and log[1] == "off UI_ERROR_MESSAGE", log[1])
+	A.hideErrors = false
+	M:Refresh()
+	check("turning it off brings them back", #log == 2 and log[2] == "on UI_ERROR_MESSAGE", log[2])
+	UIErrorsFrame = oldFrame
+end
+
 -- automation: nothing happens until it's switched on, and decisions stay with the player
 do
 	local M, A = ns.Misc, ns.db.misc.auto

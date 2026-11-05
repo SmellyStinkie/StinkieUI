@@ -632,6 +632,7 @@ ns.defaults = {
 			repair = false, repairGuild = false,
 			sellJunk = false,
 			releasePvP = false,
+			hideErrors = false, -- red messages like "Not enough mana"
 			announce = true,
 		},
 	},

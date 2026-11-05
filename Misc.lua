@@ -400,6 +400,24 @@ function MISC.OnDead()
 	RepopMe()
 end
 
+---------------------------------------------------------------------------
+-- Hide error messages. Red errors reach Blizzard's message frame on their own event, which also
+-- plays their voice line. Yellow messages (quest progress) use another event and stay. We only
+-- undo what we did, so another addon doing the same is left alone.
+---------------------------------------------------------------------------
+function MISC.ApplyHideErrors()
+	local frame = _G.UIErrorsFrame
+	if not frame then return end
+	local hide = acfg().hideErrors and true or false
+	if hide == (MISC.errorsHidden or false) then return end
+	MISC.errorsHidden = hide
+	if hide then
+		frame:UnregisterEvent("UI_ERROR_MESSAGE")
+	else
+		frame:RegisterEvent("UI_ERROR_MESSAGE")
+	end
+end
+
 local function InitAuto()
 	ns:On("GOSSIP_SHOW", MISC.OnGossip)
 	ns:On("QUEST_GREETING", MISC.OnQuestGreeting)
@@ -408,6 +426,7 @@ local function InitAuto()
 	ns:On("QUEST_COMPLETE", MISC.OnQuestComplete)
 	ns:On("MERCHANT_SHOW", MISC.OnMerchant)
 	ns:On("PLAYER_DEAD", MISC.OnDead)
+	MISC.ApplyHideErrors()
 end
 
 ---------------------------------------------------------------------------
@@ -418,6 +437,7 @@ function MISC:Init()
 end
 
 function MISC:Refresh()
+	MISC.ApplyHideErrors()
 	if not holder then return end
 	LayoutHolder()
 	for _, e in ipairs(icons) do
