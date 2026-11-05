@@ -1,5 +1,14 @@
 # Stinkie UI changelog
 
+## 0.41.0
+- Nameplates: the options are now a group of pages: General, Enemy, Friendly, Target, Icons, and Auras & Units.
+- Nameplates: friendly plates have their own settings for name (first, last or both), name length, level, health percent and its text, target marker and healer cross size. Your existing plates look the same as before.
+- Nameplates: friendly health bars can go up to 40 tall and 300 wide.
+- Nameplates: new option to show threat % on your enemy target, above the bar on the left, center or right. Its color runs green, yellow, orange, red, with sliders for where yellow and orange start.
+- Nameplates: with a target border outside the bar, the auras, threat, castbar and a name above the bar now move clear of it.
+- Quest marker: no more flashing in the middle of the screen, and changes hold for a moment so brief blips don't show.
+- New default layout for new profiles. Existing profiles keep their settings. Auto sell junk is on for new players; the other automation stays off.
+
 ## 0.40.1
 - Fixed: scrolling combat text errors ("secret number value" in CombatText.lua), caused by the scrolling text options in 0.40.0.
 - Fixed: on WoW Forever, unit frames and nameplates now show last names: Name shows First, Last and Both all work for characters with a surname.
