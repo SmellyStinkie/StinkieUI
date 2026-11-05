@@ -8,6 +8,7 @@ local QA = {}
 ns.QuestArrow = QA
 
 local TICK = 0.05
+local SETTLE = 0.4 -- how long a change has to hold before the marker or Blizzard's diamond switches
 local CORPSE = "corpse" -- what the marker follows while you're dead, in place of a quest ID
 local PLATE_WIDTH, PLATE_WIDTH_NO_NAME = 200, 64
 local NEAR_YARDS, FAR_YARDS, FAR_SCALE = 50, 1000, 0.6 -- full size up to NEAR, smallest from FAR
@@ -116,12 +117,34 @@ function QA.UpdateEdge()
 	h.Arrow:SetRotation(QA.EdgeRotation(x, y, centerX, centerY))
 end
 
-function QA.Update()
+-- The game can report nothing tracked, or the edge of a quest area, for a moment (a quest update,
+-- walking along the edge). Reacting at once would flash the marker or Blizzard's diamond for a
+-- frame, so a new state only counts once it has held for a moment. Returns the state to act on.
+function QA.Settled(state, now)
+	if state == QA.state or QA.state == nil then
+		QA.state, QA.pending = state, nil
+		return state
+	end
+	if state ~= QA.pending then QA.pending, QA.pendingAt = state, now end
+	if now - QA.pendingAt < SETTLE then return nil end -- still waiting: nothing changes
+	QA.state, QA.pending = state, nil
+	return state
+end
+
+-- settle: from the regular ticks. Other callers (a setting changed) want the answer now.
+function QA.Update(settle)
 	local h, f = QA.holder, _G.SuperTrackedFrame
 	if not (h and f and f.Icon and f.Arrow and f.DistanceText) then return end
 	local target = cfg().enabled and QA.TrackedTarget()
-	ShowBlizzardMarker(not target)
-	if not target or QA.InQuestArea(target) then
+	local state = not target and "none" or QA.InQuestArea(target) and "hidden" or "shown"
+	if settle then
+		state = QA.Settled(state, GetTime())
+		if not state then return end
+	else
+		QA.state, QA.pending = state, nil
+	end
+	ShowBlizzardMarker(state == "none")
+	if state ~= "shown" then
 		h:Hide()
 		return
 	end
@@ -183,7 +206,7 @@ local function OnUpdate(_, elapsed)
 	QA.sinceUpdate = QA.sinceUpdate + elapsed
 	if QA.sinceUpdate < TICK then return end
 	QA.sinceUpdate = 0
-	QA.Update()
+	QA.Update(true)
 end
 
 function QA:Init()

@@ -1150,6 +1150,39 @@ do
 	distance = 42.4
 	QA.Update()
 
+	-- a blip from the game doesn't flash anything: a change has to hold first
+	do
+		local oldTime, t = GetTime, 500
+		GetTime = function() return t end
+		QA.Update()
+		check("settle: marker up to start", h:IsShown() and blizzard.Icon:GetAlpha() == 0)
+		nav = nil
+		QA.Update(true)
+		check("a blip leaves the marker up", h:IsShown())
+		check("a blip doesn't show Blizzard's diamond", blizzard.Icon:GetAlpha() == 0)
+		nav = true
+		t = 500.2
+		QA.Update(true)
+		check("after the blip nothing changed", h:IsShown() and blizzard.Icon:GetAlpha() == 0)
+		nav = nil
+		t = 500.3
+		QA.Update(true)
+		t = 500.6
+		QA.Update(true)
+		check("still early", h:IsShown())
+		t = 500.8
+		QA.Update(true)
+		check("a change that holds goes through", not h:IsShown() and blizzard.Icon:GetAlpha() == 1)
+		nav = true
+		t = 501
+		QA.Update(true)
+		check("coming back holds too", not h:IsShown())
+		t = 501.5
+		QA.Update(true)
+		check("back once it holds", h:IsShown() and blizzard.Icon:GetAlpha() == 0)
+		GetTime = oldTime
+	end
+
 	-- in the quest area with things left to find: nothing to point at
 	inArea = true
 	QA.Update()
@@ -1220,7 +1253,7 @@ do
 	UIParent.GetEffectiveScale = oldScale
 	UIParent.GetWidth, UIParent.GetHeight = oldWidth, oldHeight
 	h.Arrow.SetRotation = nil
-	QA.blizzardShown, QA.clamped, QA.target = nil, nil, nil
+	QA.blizzardShown, QA.clamped, QA.target, QA.state, QA.pending = nil, nil, nil, nil, nil
 	for k, v in pairs(saved) do _G[k] = v or nil end
 end
 flushErrors("quest arrow")
