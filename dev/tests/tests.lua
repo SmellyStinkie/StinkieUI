@@ -1936,22 +1936,22 @@ do
 	f.Threat.SetFormattedText = nil
 	np.threatText = false
 
-	-- threat sits inside the health bar, in the size you set
+	-- threat sits above the bar, so it can't pass for health percent, in the size you set
 	hostile, percent = true, 87.4
 	local spot, sized
 	local setPoint, setFont = f.Threat.SetPoint, f.Threat.SetFont
-	f.Threat.SetPoint = function(_, p, rel, rp, x) spot = { p, rel, rp, x } end
+	f.Threat.SetPoint = function(_, p, rel, rp, x, y) spot = { p, rel, rp, x, y } end
 	f.Threat.SetFont = function(_, _, size) sized = size end
 	np.threatSide, np.threatStyle.size = "RIGHT", 22
 	NP.SetupPlate("nameplate8")
-	check("threat inside the right of the bar", spot[1] == "RIGHT" and spot[2] == f.Health and spot[3] == "RIGHT" and spot[4] < 0)
+	check("threat at the top right of the plate", spot[1] == "BOTTOMRIGHT" and spot[2] == f.HealthFrame and spot[3] == "TOPRIGHT" and spot[5] > 0)
 	check("threat text can be resized", sized == 22, sized)
 	np.threatSide = "LEFT"
 	NP.SetupPlate("nameplate8")
-	check("threat inside the left of the bar", spot[1] == "LEFT" and spot[2] == f.Health and spot[4] > 0)
+	check("threat at the top left", spot[1] == "BOTTOMLEFT" and spot[3] == "TOPLEFT")
 	np.threatSide = "CENTER"
 	NP.SetupPlate("nameplate8")
-	check("threat in the middle of the bar", spot[1] == "CENTER" and spot[3] == "CENTER" and spot[4] == 0)
+	check("threat at the top middle", spot[1] == "BOTTOM" and spot[3] == "TOP")
 	np.threatSide, np.threatStyle.size = "RIGHT", 14
 	f.Threat.SetPoint, f.Threat.SetFont = setPoint, setFont
 
