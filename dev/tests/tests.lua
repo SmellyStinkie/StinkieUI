@@ -932,6 +932,69 @@ do
 	check("marker defaults", ns.db.nameplates.marker == true and ns.db.party.marker == false)
 end
 
+-- swing timers: Blizzard's bars restyled, and clients without them are fine
+do
+	local ST = ns.SwingTimers
+	ST.SkinAll() -- no such frames here: nothing to do, nothing breaks
+	check("no swing timers: no error", true)
+	local function Tex(parent) return MOCK.NewObj("Texture", nil, parent) end
+	local function Bar(name)
+		local f = MOCK.NewObj("Frame", name, UIParent)
+		f.Background, f.Border = Tex(f), Tex(f)
+		f.StatusBar = MOCK.NewObj("StatusBar", nil, f)
+		local b = f.StatusBar
+		b.Pip, b.TypeLabelShadow = Tex(b), Tex(b)
+		b.TypeLabel, b.TimeLabel = MOCK.NewObj("FontString", nil, b), MOCK.NewObj("FontString", nil, b)
+		local colors = {}
+		b.TimeLabel.SetTextColor = function(_, r, g, bl) colors.time = { r, g, bl } end
+		b.SetStatusBarColor = function(_, r, g, bl) colors.bar = { r, g, bl } end
+		b.GetStatusBarTexture = function() return b.fill end
+		b.fill = Tex(b)
+		f.colors = colors
+		f.outOfRange = false
+		f.IsOutOfRange = function(self) return self.outOfRange end
+		f.ApplyRangePresentation = function() end
+		return f
+	end
+	local main, off, ranged = Bar("SwingTimerMainHandFrame"), Bar("SwingTimerOffHandFrame"), Bar("SwingTimerRangedFrame")
+	_G.SwingTimerMainHandFrame, _G.SwingTimerOffHandFrame, _G.SwingTimerRangedFrame = main, off, ranged
+	local cfg = ns.db.swingTimers
+	cfg.enabled = false
+	ST.SkinAll()
+	check("swing timers: off leaves Blizzard's look", main.SUISwingSkin == nil)
+	cfg.enabled = true
+	ST.SkinAll()
+	check("all three skinned", main.SUISwingSkin and off.SUISwingSkin and ranged.SUISwingSkin)
+	check("melee color", main.colors.bar[1] == cfg.mainColor[1] and main.colors.bar[3] == cfg.mainColor[3])
+	check("off-hand color", off.colors.bar[1] == cfg.offColor[1])
+	check("ranged color", ranged.colors.bar[1] == cfg.rangedColor[1])
+	check("flat border", main.SUIBorder ~= nil)
+	check("label shadow gone", main.StatusBar.TypeLabelShadow:GetAlpha() == 0)
+	-- Blizzard's own range update can't undo the look: text color follows, red stays red
+	cfg.textStyle.color = { 0.1, 0.2, 0.3 }
+	main.colors.time = nil
+	main:ApplyRangePresentation()
+	check("text color survives Blizzard's update", main.colors.time and main.colors.time[1] == 0.1, main.colors.time)
+	main.outOfRange = true
+	main.colors.time = nil
+	main:ApplyRangePresentation()
+	check("out of range keeps Blizzard's red", main.colors.time == nil)
+	main.outOfRange = false
+	cfg.textStyle.color = { 1, 1, 1 }
+	cfg.showTime = false
+	ST:Refresh()
+	check("time can be hidden", main.StatusBar.TimeLabel:GetAlpha() == 0)
+	cfg.showTime = true
+	ST:Refresh()
+	check("time comes back", main.StatusBar.TimeLabel:GetAlpha() == 1)
+	-- Blizzard's addon loading after ours is picked up
+	local late = Bar("SwingTimerRangedFrame")
+	_G.SwingTimerRangedFrame = late
+	ST.SkinAll()
+	check("late bar skinned", late.SUISwingSkin == true)
+	_G.SwingTimerMainHandFrame, _G.SwingTimerOffHandFrame, _G.SwingTimerRangedFrame = nil, nil, nil
+end
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto

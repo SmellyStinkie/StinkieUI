@@ -570,6 +570,15 @@ ns.defaults = {
 		leaveColor = { 0.35, 1.00, 0.45 },
 		textPoint = { "CENTER", 0, 160 },
 	},
+	-- flat look for Blizzard's swing timers, on clients that have them
+	swingTimers = {
+		enabled = true,
+		mainColor = { 0.75, 0.80, 0.16 },
+		offColor = { 0.55, 0.36, 0.70 },
+		rangedColor = { 0.30, 0.65, 0.90 },
+		showLabel = true, showTime = true,
+		textStyle = text(11),
+	},
 	actionBars = {
 		enabled = true,
 		hideArt = true,

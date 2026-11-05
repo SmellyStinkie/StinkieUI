@@ -667,6 +667,16 @@ local function BuildCastbarPage(page)
 	page:Color("Interruptible", Getter(colors, "castInterruptible"), Setter(colors, "castInterruptible"))
 	page:Color("Can't be interrupted", Getter(colors, "castNotInterruptible"), Setter(colors, "castNotInterruptible"))
 	page:Color("Interrupted / failed", Getter(colors, "castFailed"), Setter(colors, "castFailed"))
+	local function swing() return ns.db.swingTimers end
+	page:Header("Swing timers")
+	page:Check("Flat look", Getter(swing, "enabled"), Setter(swing, "enabled"), true)
+	page:Note("Restyles Blizzard's melee, off-hand and ranged swing timers, on clients that have them. Size and position stay in Edit Mode.", 48)
+	page:Color("Melee", Getter(swing, "mainColor"), Setter(swing, "mainColor"))
+	page:Color("Off-hand", Getter(swing, "offColor"), Setter(swing, "offColor"))
+	page:Color("Ranged", Getter(swing, "rangedColor"), Setter(swing, "rangedColor"))
+	page:Check("Show weapon name", Getter(swing, "showLabel"), Setter(swing, "showLabel"))
+	page:Check("Show time", Getter(swing, "showTime"), Setter(swing, "showTime"))
+	page:TextStyle("Swing timer text", function() return swing().textStyle end)
 end
 
 local function BuildPartyPage(page)

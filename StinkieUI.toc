@@ -16,6 +16,7 @@ Preset.lua
 Fonts.lua
 Widgets.lua
 Castbar.lua
+SwingTimers.lua
 Auras.lua
 Roles.lua
 UnitFrames.lua
