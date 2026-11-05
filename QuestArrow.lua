@@ -41,6 +41,15 @@ function QA.TrackedQuest()
 	if questID and questID ~= 0 then return questID end
 end
 
+-- Inside the quest's shaded map area with objectives left, you're already there: the things to
+-- find are spread around, so there's no one spot to point at. A finished quest still points at
+-- wherever it's turned in.
+function QA.InQuestArea(questID)
+	local M = C_Minimap
+	if not (M and M.IsInsideQuestBlob and M.IsInsideQuestBlob(questID)) then return false end
+	return not C_QuestLog.IsComplete(questID)
+end
+
 local function ShowBlizzardMarker(show)
 	local f = _G.SuperTrackedFrame
 	if not f or QA.blizzardShown == show then return end
@@ -107,7 +116,7 @@ function QA.Update()
 	if not (h and f and f.Icon and f.Arrow and f.DistanceText) then return end
 	local questID = cfg().enabled and QA.TrackedQuest()
 	ShowBlizzardMarker(not questID)
-	if not questID then
+	if not questID or QA.InQuestArea(questID) then
 		h:Hide()
 		return
 	end
@@ -149,6 +158,7 @@ function QA.Debug()
 	if questID and questID ~= 0 and C_QuestLog then
 		show("quest name", C_QuestLog.GetTitleForQuestID(questID))
 		show("quest complete", C_QuestLog.IsComplete and C_QuestLog.IsComplete(questID))
+		show("inside the quest area", C_Minimap and C_Minimap.IsInsideQuestBlob and C_Minimap.IsInsideQuestBlob(questID))
 	end
 	show("navigation frame", N.GetFrame() ~= nil)
 	show("valid screen position", N.HasValidScreenPosition())

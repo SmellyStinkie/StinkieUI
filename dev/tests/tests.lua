@@ -1016,7 +1016,12 @@ do
 		GetHighestPrioritySuperTrackingType = function() return kind end,
 		GetSuperTrackedQuestID = function() return quest end,
 	})
-	stub("C_QuestLog", { GetTitleForQuestID = function(id) return "Quest " .. id end })
+	local inArea, questDone = false, false
+	stub("C_QuestLog", {
+		GetTitleForQuestID = function(id) return "Quest " .. id end,
+		IsComplete = function() return questDone end,
+	})
+	stub("C_Minimap", { IsInsideQuestBlob = function() return inArea end })
 	local oldType = Enum.SuperTrackingType
 	Enum.SuperTrackingType = { Quest = 1 }
 	local oldState = Enum.NavigationState
@@ -1124,6 +1129,23 @@ do
 	quest = 88
 	QA.Update()
 	check("a new tracked quest is picked up", h.Name:GetText() == "Quest 88")
+
+	-- in the quest area with things left to find: nothing to point at
+	inArea = true
+	QA.Update()
+	check("in the quest area: marker gone", not h:IsShown())
+	check("in the quest area: Blizzard's diamond stays hidden too", blizzard.Icon:GetAlpha() == 0)
+	questDone = true
+	QA.Update()
+	check("finished quest: still points at the turn-in", h:IsShown())
+	questDone = false
+	inArea = false
+	QA.Update()
+	check("leaving the area: marker back", h:IsShown())
+	C_Minimap = {}
+	QA.Update()
+	check("a client without the area check: marker stays", h:IsShown())
+	C_Minimap = { IsInsideQuestBlob = function() return inArea end }
 
 	-- a map pin or anything else: Blizzard's own marker comes back
 	kind = 2
