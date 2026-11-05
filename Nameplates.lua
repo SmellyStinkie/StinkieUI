@@ -361,8 +361,24 @@ local function UpdateTarget(f)
 	f.Highlight:SetAlphaFromBoolean(UnitIsUnit(f.unit, "target"), 1, 0)
 end
 
+-- Green while you're safe, red once you have aggro.
+local THREAT_LEVELS = {
+	{ 100, { 1.00, 0.15, 0.15 } }, -- red
+	{ 80, { 1.00, 0.55, 0.00 } },  -- orange
+	{ 50, { 1.00, 1.00, 0.00 } },  -- yellow
+	{ 0, { 0.25, 1.00, 0.25 } },   -- green
+}
+
+function NP.ThreatColor(percent)
+	for _, level in ipairs(THREAT_LEVELS) do
+		if percent >= level[1] then return level[2] end
+	end
+	return THREAT_LEVELS[#THREAT_LEVELS][2]
+end
+
 -- Threat % on your target's plate. It can be hidden from addons: a hidden number can't be
 -- compared, so it goes straight to the text, and the plate stays clean if the game refuses it.
+-- Its color then comes from the game's threat level, or your text color if that's hidden too.
 function NP.UpdateThreat(f)
 	local cfg = ns.db.nameplates
 	if not (cfg.threatText and f.unit and not f.friendly and NP.IsTargetPlate(f)) then
@@ -379,7 +395,10 @@ function NP.UpdateThreat(f)
 		f.Threat:Show()
 	end
 	local style = cfg.threatStyle
-	if not issecret(status) and status and GetThreatStatusColor then
+	if not issecret(percent) and percent then
+		local c = NP.ThreatColor(percent)
+		f.Threat:SetTextColor(c[1], c[2], c[3])
+	elseif not issecret(status) and status and GetThreatStatusColor then
 		f.Threat:SetTextColor(GetThreatStatusColor(status))
 	else
 		f.Threat:SetTextColor(style.color[1], style.color[2], style.color[3])

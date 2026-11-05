@@ -951,7 +951,7 @@ local function BuildPlateTargetPage(page)
 	page:Header("Threat")
 	page:Check("Threat % on your enemy target", Getter(cfg, "threatText"), Setter(cfg, "threatText"))
 	page:Choice("Spot above the health bar", { { "LEFT", "Left" }, { "CENTER", "Center" }, { "RIGHT", "Right" } }, Getter(cfg, "threatSide"), Setter(cfg, "threatSide"))
-	page:Note("100% means you have aggro. It takes Blizzard's threat colors, and only shows while the game gives a number.", 36)
+	page:Note("Green under 50%, yellow from 50%, orange from 80%, red at 100%, when you have aggro. It only shows while the game gives a number.", 48)
 	page:TextStyle("Threat text", function() return cfg().threatStyle end)
 end
 

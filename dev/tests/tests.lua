@@ -1936,6 +1936,30 @@ do
 	f.Threat.SetFormattedText = nil
 	np.threatText = false
 
+	-- threat color climbs with the number
+	do
+		local function near(a, b) return math.abs(a - b) < 0.001 end
+		local function isColor(percent, r, g, b)
+			local c = NP.ThreatColor(percent)
+			return near(c[1], r) and near(c[2], g) and near(c[3], b)
+		end
+		check("threat green", isColor(0, 0.25, 1, 0.25) and isColor(49.9, 0.25, 1, 0.25))
+		check("threat yellow", isColor(50, 1, 1, 0) and isColor(79.9, 1, 1, 0))
+		check("threat orange", isColor(80, 1, 0.55, 0) and isColor(99.9, 1, 0.55, 0))
+		check("threat red", isColor(100, 1, 0.15, 0.15) and isColor(130, 1, 0.15, 0.15))
+		local tinted
+		local oldColor = f.Threat.SetTextColor
+		f.Threat.SetTextColor = function(_, r, g, b) tinted = { r, g, b } end
+		f.Threat.SetFormattedText = function() end
+		hostile, targeted, percent, status = true, true, 60, 3
+		np.threatText = true
+		NP.SetupPlate("nameplate8")
+		NP.UpdateThreat(f)
+		check("the percent sets the color, not the game's status", tinted[1] == 1 and tinted[2] == 1 and tinted[3] == 0, tinted[2])
+		f.Threat.SetTextColor, f.Threat.SetFormattedText = oldColor, nil
+		np.threatText = false
+	end
+
 	-- threat sits above the bar, so it can't pass for health percent, in the size you set
 	hostile, percent = true, 87.4
 	local spot, sized
