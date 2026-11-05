@@ -1623,6 +1623,9 @@ local function BuildDamageTextPage(page)
 	local function scroll() return ns.db.damageText.scroll end
 	page:Check("Stinkie UI look for scrolling text", Getter(scroll, "enabled"), Setter(scroll, "enabled"))
 	page:Choice("Direction", { { "1", "Up" }, { "2", "Down" }, { "3", "Arc" } }, DT.ScrollDirection, DT.SetScrollDirection)
+	page:Dropdown("Heals and damage", { { "same", "Same direction" }, { "healsUp", "Heals up, damage down" }, { "healsDown", "Heals down, damage up" } },
+		Getter(scroll, "split"), Setter(scroll, "split"))
+	page:Note("Split sends heals and damage opposite ways, side by side. Other lines still follow Direction.", 36)
 	page:Slider("Text size", 10, 48, 1, Getter(scroll, "size"), Setter(scroll, "size"))
 	page:Slider("Crit size", 10, 64, 1, Getter(scroll, "critSize"), Setter(scroll, "critSize"))
 	page:Check("Crits pop (Blizzard's size)", Getter(scroll, "critPop"), Setter(scroll, "critPop"))

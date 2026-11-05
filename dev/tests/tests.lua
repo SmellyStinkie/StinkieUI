@@ -1719,6 +1719,70 @@ do
 end
 flushErrors("scrolling text")
 
+-- scrolling text: heals and damage going opposite ways
+do
+	local DT, c = ns.DamageText, ns.db.damageText.scroll
+	check("split off by default", c.split == "same")
+	check("damage is read", DT.ScrollKind("-1,234", 1, 0.1) == "damage")
+	check("a heal is read", DT.ScrollKind("+500", 0.1, 1) == "heal")
+	check("a heal with a name too", DT.ScrollKind("+500 [Pinkie]", 0.1, 1) == "heal")
+	check("mana gain isn't a heal", DT.ScrollKind("+50 Mana", 0.1, 0.1) == nil)
+	check("other lines aren't", DT.ScrollKind("<Shadow Bolt>", 0.1, 1) == nil)
+	do
+		local secret, old = {}, ns.issecret
+		ns.issecret = function(v) return v == secret end
+		check("a hidden line scrolls as usual", DT.ScrollKind(secret, 0.1, 1) == nil)
+		ns.issecret = old
+	end
+	check("heals up", DT.ScrollLane("healsUp", "heal") == 1 and DT.ScrollLane("healsUp", "damage") == -1)
+	check("heals down", DT.ScrollLane("healsDown", "heal") == -1 and DT.ScrollLane("healsDown", "damage") == 1)
+	check("same way leaves it", DT.ScrollLane("same", "heal") == nil)
+	check("other lines leave it", DT.ScrollLane("healsUp", nil) == nil)
+
+	local function Line()
+		local fs = MOCK.NewObj("FontString", nil, UIParent)
+		fs.SetFont, fs.SetTextHeight = function() end, function() end
+		fs.yPos, fs.startY, fs.endY = 384, 384, 609
+		return fs
+	end
+	local frame = { activeFontStrings = {}, textSpacing = 10, textOffsetMax = 130, textScaleX = 1,
+		textLocations = { startX = 0, startY = 384, endX = 0, endY = 609 } }
+	local oldFrame, oldUtil = CombatText, CombatTextUtil
+	CombatText, CombatTextUtil = frame, { StandardScroll = "standard" }
+	local function Add(message, r, g)
+		local fs = Line()
+		table.insert(frame.activeFontStrings, fs)
+		DT.StyleScrollLine(frame, message, nil, r, g)
+		return fs
+	end
+	c.split = "healsUp"
+	local heal = Add("+500", 0.1, 1)
+	check("heal rises", heal.endY == 609 and heal.startY == 384, heal.endY)
+	check("heal is on its side", heal.startX == 40, heal.startX)
+	local hit = Add("-90", 1, 0.1)
+	check("damage falls", hit.endY == 159, hit.endY)
+	check("damage is on the other side", hit.startX == -40, hit.startX)
+	check("damage scrolls straight", hit.scrollFunction == "standard")
+	hit.yPos = 200 -- well on its way down
+	local heal2 = Add("+600", 0.1, 1)
+	check("a falling hit doesn't drag the next heal down", heal2.startY == 358, heal2.startY)
+	local hit2 = Add("-91", 1, 0.1)
+	check("damage stacks with damage", hit2.startY == 384, hit2.startY)
+	frame.activeFontStrings = {}
+	local deep = Line()
+	deep.yPos, deep.SUILane = 200, 1
+	frame.activeFontStrings[1] = deep
+	local capped = Add("+1", 0.1, 1)
+	check("a long stack stops at Blizzard's limit", capped.startY == 254, capped.startY)
+	local other = Add("<Aura>", 0.1, 1)
+	check("other lines keep Blizzard's route", other.endY == 609 and other.SUILane == nil)
+	c.split = "same"
+	local same = Add("-5", 1, 0.1)
+	check("same way: Blizzard's route", same.endY == 609 and same.SUILane == nil)
+	CombatText, CombatTextUtil = oldFrame, oldUtil
+end
+flushErrors("scrolling lanes")
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto

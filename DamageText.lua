@@ -47,12 +47,54 @@ local function ScrollFont(fs, size)
 	fs:SetTextHeight(size)
 end
 
-function DT.StyleScrollLine()
+-- Heal or damage, from what Blizzard made: damage reads -123, heals +123 in green. Mana gains also
+-- start with + but aren't green. A hidden (secret) line can't be read, so it scrolls as usual.
+function DT.ScrollKind(message, r, g)
+	if ns.issecret(message) or type(message) ~= "string" then return nil end
+	local first = message:sub(1, 1)
+	if first == "-" then return "damage" end
+	if first == "+" and r == 0.1 and g == 1 then return "heal" end
+end
+
+-- Which way a line goes: 1 up, -1 down, nil for Blizzard's own direction.
+function DT.ScrollLane(split, kind)
+	if not kind or split == "same" then return nil end
+	if split == "healsUp" then return kind == "heal" and 1 or -1 end
+	return kind == "heal" and -1 or 1
+end
+
+-- Blizzard stacks every new line under all the others, so a line going the other way would drag
+-- the rest after it. Each direction gets its own lane beside the middle, stacked on its own.
+local LANE_X, LINE_HEIGHT = 40, 16
+
+local function PlaceInLane(frame, fs, lane)
+	local spot = frame.textLocations
+	local step = LINE_HEIGHT + frame.textSpacing
+	local y = spot.startY
+	for _, line in ipairs(frame.activeFontStrings) do
+		if line ~= fs and line.SUILane == lane then
+			local below = line.yPos - lane * step
+			if lane * (y - below) > 0 then y = below end
+		end
+	end
+	if lane * (spot.startY - y) > frame.textOffsetMax then y = spot.startY - lane * frame.textOffsetMax end
+	fs.SUILane = lane
+	fs.startX = spot.startX + lane * LANE_X * frame.textScaleX
+	fs.startY, fs.yPos = y, y
+	fs.endY = spot.startY + lane * math.abs(spot.endY - spot.startY)
+	fs.scrollFunction = CombatTextUtil.StandardScroll -- Arc doesn't use the end point
+	fs:ClearAllPoints()
+	fs:SetPoint("TOP", WorldFrame, "BOTTOM", fs.startX, y)
+end
+
+function DT.StyleScrollLine(_, message, _, r, g)
 	local frame = _G.CombatText
 	local c = cfg().scroll
 	local list = frame and frame.activeFontStrings
 	local fs = list and list[#list]
 	if not (c.enabled and fs) then return end
+	local lane = DT.ScrollLane(c.split, DT.ScrollKind(message, r, g))
+	if lane then PlaceInLane(frame, fs, lane) else fs.SUILane = nil end
 	if fs.isCrit then
 		if c.critPop then return end -- Blizzard grows and shrinks it
 		fs.isCrit = nil

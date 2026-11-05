@@ -804,7 +804,8 @@ ns.defaults = {
 		hideArena = true, hideBG = true, hideRaid = true, hideMPlus = false, hideDungeon = false,
 	},
 	-- Damage Numbers: floating combat text over targets (0 = the game's default for each)
-	damageText = { scroll = { enabled = true, size = 22, critSize = 32, critPop = false, outline = "OUTLINE", spacing = 10 },
+	damageText = { scroll = { enabled = true, size = 22, critSize = 32, critPop = false, outline = "OUTLINE", spacing = 10,
+			split = "same" }, -- same | healsUp | healsDown: heals and damage scrolling opposite ways
 		healing = true, enabled = true, size = 0, height = 0, screenY = 0, critScreenY = 0, critSize = 0, spread = 0, gravity = 0, directional = 0 },
 	-- Window Skins: the Character Sheet's flat look on other Blizzard windows (safe set only)
 	skins = {
