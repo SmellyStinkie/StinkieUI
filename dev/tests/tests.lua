@@ -1971,6 +1971,11 @@ do
 		NP.SetupPlate("nameplate8")
 		NP.UpdateThreat(f)
 		check("the percent sets the color, not the game's status", tinted[1] == 1 and tinted[2] == 1 and tinted[3] == 0, tinted[2])
+		-- a layout paints the text plain; the threat color has to come back with no new threat event
+		percent = 41.5
+		tinted = nil
+		NP.SetupPlate("nameplate8")
+		check("a layout keeps the threat color", tinted and near(tinted[1], 0.25) and near(tinted[2], 1), tinted and tinted[1])
 		f.Threat.SetTextColor, f.Threat.SetFormattedText = oldColor, nil
 		np.threatText = false
 	end

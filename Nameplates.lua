@@ -834,6 +834,7 @@ local function LayoutPlate(f)
 
 	f.auraY = nameInBar and 4 or (fontSize + 6)
 	NP.PlaceAroundBar(f)
+	NP.UpdateThreat(f) -- the style above painted the text plain, and threat may not change again soon
 
 	-- Big Debuffs beside the bar, clear of the target > < arrows. Each row grows away from the bar.
 	-- Our code can't anchor to an aura container, so when both rows share a side the outer one
