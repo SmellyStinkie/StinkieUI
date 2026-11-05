@@ -276,6 +276,7 @@ end
 local function unit(t)
 	t.enabled = true
 	t.showName = t.showName ~= false
+	t.lastName = false -- only the last word of the name
 	t.nameAbove = false
 	t.healthText = "percent"
 	t.shields = true -- absorb shield and overshield on the health bar
@@ -307,6 +308,7 @@ ns.defaults = {
 	units = {
 		player = unit({
 			width = 150, height = 24, showPower = false, powerHeight = 6,
+			showLevel = false,
 			point = { "BOTTOM", -230, 240 },
 			castbar = castbar(true, 220, 18, { "BOTTOM", 0, 190 }, 12),
 		}),
@@ -461,6 +463,7 @@ ns.defaults = {
 		specIcons = false, specIconsFriendly = false, specIconSize = 20,
 		specAnchor = "LEFT", -- LEFT / RIGHT of the cross, CENTER (cross to its right) or ABOVE (centered, cross on top)
 		nameMaxChars = 0, nameEllipsis = true, -- 0 = full names
+		lastName = false, -- only the last word of the name
 		specX = 0, specY = 0,
 		softIconScale = 1.5, softIconY = 4, -- Blizzard's soft-target (quest / interact) icon
 		friendlyLower = 0, -- push friendly plates down to make room above them
@@ -1535,6 +1538,14 @@ ns:On("PLAYER_LOGIN", function()
 		end
 	end
 end)
+
+-- "Stormwind Guard" -> "Guard". A title after a comma isn't part of the name ("Thrall, Warchief of
+-- the Horde" -> "Thrall"). A hidden (secret) name can't be read, so it's returned whole.
+function ns.LastName(name)
+	if ns.issecret(name) or type(name) ~= "string" then return name end
+	local beforeComma = name:match("^[^,]+") or name
+	return beforeComma:match("([^ ]+) *$") or name
+end
 
 -- Re-apply sizes, fonts, colors and positions after an options change.
 function ns:Refresh()

@@ -677,6 +677,19 @@ CS.SetAtlasCropped = SetAtlasCropped
 -- The chosen background across the whole window (name bar, item columns, stat sheet), darker
 -- outside the character area so text stays readable: one picture, five dark panes over it.
 local PANEL_OF = {}
+
+-- The window's flat fill. The whole-window picture is opaque and sits on top of it, so while the
+-- picture shows, the fill is clear and the picture itself takes the window opacity.
+local function PaintWindowFill(panel)
+	local flat = panel and panel.SUIFlat
+	if not flat then return end
+	local c = cfg()
+	local col = c.frameColor
+	local wide = panel.SUIWide and panel.SUIWide:IsShown()
+	flat.tex:SetColorTexture(col[1], col[2], col[3], wide and 0 or c.frameAlpha)
+end
+CS.PaintWindowFill = PaintWindowFill
+
 local function WideBackground(model, panel)
 	local c = cfg()
 	local w = panel.SUIWide
@@ -690,6 +703,8 @@ local function WideBackground(model, panel)
 			t:SetColorTexture(0, 0, 0, 1)
 			w.panes[i] = t
 		end
+		w:SetScript("OnShow", function() PaintWindowFill(panel) end)
+		w:SetScript("OnHide", function() PaintWindowFill(panel) end)
 		panel.SUIWide = w
 	end
 	local flat = panel.SUIFlat or panel
@@ -722,7 +737,9 @@ local function WideBackground(model, panel)
 	p[3]:SetShown(split < (R - L) - 1)
 	p[5]:SetShown(inner > 0)
 	p[2]:Hide(); p[4]:Hide()
+	w:SetAlpha(c.frameAlpha)
 	w:Show()
+	PaintWindowFill(panel)
 	return w.bg, w:GetWidth(), w:GetHeight()
 end
 CS.WideBackground = WideBackground
@@ -807,8 +824,12 @@ local function FlatBackdrop(frame, alphaKey)
 		ns.CreateBackdrop(f, 0)
 		frame.SUIFlat = f
 	end
-	local col = c.frameColor
-	frame.SUIFlat.tex:SetColorTexture(col[1], col[2], col[3], c[alphaKey or "frameAlpha"])
+	if alphaKey then
+		local col = c.frameColor
+		frame.SUIFlat.tex:SetColorTexture(col[1], col[2], col[3], c[alphaKey])
+	else
+		PaintWindowFill(frame)
+	end
 	frame.SUIFlat:Show()
 	return frame.SUIFlat
 end

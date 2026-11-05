@@ -46,7 +46,9 @@ end
 
 function UF.UpdateName(f)
 	if f.Name:IsShown() then
-		f.Name:SetText((UnitName(f.unit)))
+		local name = UnitName(f.unit)
+		if f.lastName then name = ns.LastName(name) end
+		f.Name:SetText(name)
 		local style = f.nameStyle
 		if style and style.classColor then
 			f.Name:SetTextColor(ns.GetHealthColor(f.unit, true):GetRGB())
@@ -54,6 +56,20 @@ function UF.UpdateName(f)
 			local c = style.color
 			f.Name:SetTextColor(c[1], c[2], c[3])
 		end
+	end
+end
+
+-- Level on the player frame, in the name's color.
+function UF.UpdateLevel(f)
+	local level = f.Level
+	if not (level and level:IsShown()) then return end
+	level:SetText(UnitLevel(f.unit))
+	local style = f.nameStyle
+	if style and style.classColor then
+		level:SetTextColor(ns.GetHealthColor(f.unit, true):GetRGB())
+	elseif style then
+		local c = style.color
+		level:SetTextColor(c[1], c[2], c[3])
 	end
 end
 
@@ -83,6 +99,7 @@ function UF.UpdateAll(f)
 	UF.UpdateHealth(f, true) -- full refresh (new target, focus, roster): snap, don't animate
 	UF.UpdatePower(f, true)
 	UF.UpdateName(f)
+	UF.UpdateLevel(f)
 	if f.PostUpdate then f:PostUpdate() end
 	if f.Auras then ns.SetAuraUnit(f.Auras, f.unit) end
 	if f.CCIcon then ns.SetAuraUnit(f.CCIcon, f.unit) end
@@ -112,6 +129,8 @@ local function OnEvent(f, event, unit)
 		UF.UpdatePower(f)
 	elseif event == "UNIT_NAME_UPDATE" then
 		UF.UpdateName(f)
+	elseif event == "UNIT_LEVEL" then
+		UF.UpdateLevel(f)
 	elseif event == "UNIT_CLASSIFICATION_CHANGED" then
 		UF.UpdateElite(f)
 	elseif event == "UNIT_CONNECTION" or event == "UNIT_FACTION" or event == "UNIT_FLAGS" then
@@ -140,6 +159,7 @@ function UF.RegisterUnitEvents(f)
 	if u == "focus" then f:RegisterEvent("PLAYER_FOCUS_CHANGED") end
 	if u == "target" or u == "focus" then f:RegisterUnitEvent("UNIT_CLASSIFICATION_CHANGED", u) end
 	if u == "pet" then f:RegisterUnitEvent("UNIT_PET", "player") end
+	if u == "player" then f:RegisterUnitEvent("UNIT_LEVEL", u) end
 end
 
 ---------------------------------------------------------------------------
@@ -202,6 +222,7 @@ function UF.CreateFrame(unit, name, noUnitWatch)
 	f.TextLayer = textLayer
 	f.Name = ns.CreateText(textLayer, 12, "LEFT")
 	f.HealthText = ns.CreateText(textLayer, 12, "RIGHT")
+	if unit == "player" then f.Level = ns.CreateText(textLayer, 12, "LEFT") end
 	if unit == "target" or unit == "focus" then
 		f.Elite = textLayer:CreateTexture(nil, "OVERLAY", nil, 7)
 		f.Elite:SetTexture(ns.MEDIA.star, "CLAMP", "CLAMP", "TRILINEAR")
@@ -265,8 +286,18 @@ function UF.Layout(f, cfg)
 	end
 
 	f.nameStyle = cfg.nameStyle
+	f.lastName = cfg.lastName
 	ns.ApplyText(f.Name, cfg.nameStyle)
 	ns.ApplyText(f.HealthText, cfg.healthStyle)
+
+	-- the level sits at the left of the bar; a name on the bar starts after it
+	local showLevel = f.Level ~= nil and cfg.showLevel == true
+	if f.Level then
+		ns.ApplyText(f.Level, cfg.nameStyle)
+		f.Level:SetShown(showLevel)
+		f.Level:ClearAllPoints()
+		f.Level:SetPoint("LEFT", f.Health, "LEFT", 4, 0)
+	end
 
 	f.Name:SetShown(cfg.showName ~= false)
 	f.Name:ClearAllPoints()
@@ -276,7 +307,11 @@ function UF.Layout(f, cfg)
 		f.Name:SetWidth(w + 40)
 	else
 		f.Name:SetJustifyH("LEFT")
-		f.Name:SetPoint("LEFT", f.Health, "LEFT", 4, 0)
+		if showLevel then
+			f.Name:SetPoint("LEFT", f.Level, "RIGHT", 4, 0)
+		else
+			f.Name:SetPoint("LEFT", f.Health, "LEFT", 4, 0)
+		end
 		f.Name:SetPoint("RIGHT", f.Health, "RIGHT", -44, 0)
 	end
 

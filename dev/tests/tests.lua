@@ -792,6 +792,89 @@ MainMenuBarVehicleLeaveButton.SetIgnoreParentAlpha = function(_, v) ign = v end
 ns.ActionBars.KeepVehicleExit()
 check("vehicle exit ignores bar fade", ign == true)
 
+-- unticking a bar the preset hides: the choice survives a reload
+do
+	local db = ns.CopyDefaults(ns.defaults, { actionBars = { mouseover = { MainActionBar = false } } })
+	check("preset hides Action Bar 1", ns.defaults.actionBars.mouseover.MainActionBar == true)
+	check("unticked bar stays unticked after reload", db.actionBars.mouseover.MainActionBar == false)
+	check("other preset bars keep their default", db.actionBars.mouseover.MultiBarLeft == true)
+end
+
+-- lock buttons: the game's own setting
+ns.ActionBars.SetButtonsLocked(true)
+check("lock buttons on", ns.ActionBars.ButtonsLocked() == true and MOCK.cvars.lockActionBars == "1")
+ns.ActionBars.SetButtonsLocked(false)
+check("lock buttons off", ns.ActionBars.ButtonsLocked() == false and MOCK.cvars.lockActionBars == "0")
+
+-- last names
+check("last name: two words", ns.LastName("Stormwind Guard") == "Guard")
+check("last name: one word", ns.LastName("Stinkie") == "Stinkie")
+check("last name: title after comma", ns.LastName("Thrall, Warchief of the Horde") == "Thrall")
+check("last name: trailing space", ns.LastName("Lady Liadrin ") == "Liadrin")
+check("last name: accents", ns.LastName("Élan Vitàl") == "Vitàl")
+check("last name: nothing to shorten", ns.LastName(nil) == nil and ns.LastName("") == "")
+do
+	local secret, old = {}, ns.issecret
+	ns.issecret = function(v) return v == secret end
+	check("last name: secret passes through untouched", ns.LastName(secret) == secret)
+	ns.issecret = old
+end
+do
+	local f = ns.UF.frames.player
+	local oldUnitName, oldShown = UnitName, f.Name:IsShown()
+	UnitName = function(u) if u == f.unit then return "Stormwind Guard" end return oldUnitName(u) end
+	f.Name:SetShown(true)
+	f.lastName = false
+	ns.UF.UpdateName(f)
+	check("unit frame: full name by default", f.Name:GetText() == "Stormwind Guard", f.Name:GetText())
+	f.lastName = true
+	ns.UF.UpdateName(f)
+	check("unit frame: last name only", f.Name:GetText() == "Guard", f.Name:GetText())
+	f.lastName = false
+	UnitName = oldUnitName
+	f.Name:SetShown(oldShown)
+end
+
+-- player frame level
+do
+	local f = ns.UF.frames.player
+	local cfg = ns.db.units.player
+	MOCK.unitLevels = { player = 90 }
+	check("level off by default", cfg.showLevel == false and not f.Level:IsShown())
+	cfg.showLevel = true
+	ns.UF.Layout(f, cfg)
+	ns.UF.UpdateLevel(f)
+	check("level shows", f.Level:IsShown() and tostring(f.Level:GetText()) == "90", f.Level:GetText())
+	MOCK.unitLevels.player = 91
+	f:GetScript("OnEvent")(f, "UNIT_LEVEL", "player")
+	check("level updates on ding", tostring(f.Level:GetText()) == "91", f.Level:GetText())
+	cfg.showLevel = false
+	ns.UF.Layout(f, cfg)
+	check("level hides again", not f.Level:IsShown())
+	check("only the player frame has a level", ns.UF.frames.target.Level == nil)
+end
+
+-- Character Sheet: window opacity reaches what's on screen
+do
+	local CS = ns.CharacterSheet
+	local panel = MOCK.NewObj("Frame", "OpacityPanel", UIParent)
+	local fill = {}
+	panel.SUIFlat = { tex = { SetColorTexture = function(_, _, _, _, a) fill.a = a end } }
+	local model = MOCK.NewObj("Frame", "OpacityModel", panel)
+	local ch = ns.db.character
+	local oldAlpha = ch.frameAlpha
+	ch.frameAlpha = 0.4
+	local tex = CS.WideBackground(model, panel)
+	check("wide background built", tex ~= nil and tex ~= false, tex)
+	check("window opacity reaches the picture", panel.SUIWide:GetAlpha() == 0.4, panel.SUIWide:GetAlpha())
+	check("no second layer under the picture", fill.a == 0, fill.a)
+	panel.SUIWide:Hide()
+	CS.PaintWindowFill(panel)
+	check("other tabs use the fill", fill.a == 0.4, fill.a)
+	ch.frameAlpha = oldAlpha
+end
+flushErrors("new options")
+
 -- options search finds pages
 ns:ToggleOptions()
 ns.Options.search:SetText("buff")

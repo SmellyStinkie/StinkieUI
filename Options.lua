@@ -635,7 +635,11 @@ local function BuildUnitPage(page, unit)
 	page:Column(2)
 	page:Header("Text")
 	page:Check("Show name", Getter(cfg, "showName"), Setter(cfg, "showName"))
+	page:Check("Last name only", Getter(cfg, "lastName"), Setter(cfg, "lastName"))
 	page:Check("Name above frame", Getter(cfg, "nameAbove"), Setter(cfg, "nameAbove"))
+	if unit == "player" then
+		page:Check("Show level", Getter(cfg, "showLevel"), Setter(cfg, "showLevel"))
+	end
 	page:Choice("Health text", healthTextChoices, Getter(cfg, "healthText"), Setter(cfg, "healthText"))
 	page:TextStyle("Name text", function() return cfg().nameStyle end, { classColor = true })
 	page:TextStyle("Health text", function() return cfg().healthStyle end)
@@ -884,6 +888,8 @@ local function BuildNameplatePage(page)
 	page:Check("Your target gets the full plate and target border", Getter(cfg, "friendlyTargetFull"), Setter(cfg, "friendlyTargetFull"))
 	page:Check("Name on the health bar", Getter(cfg, "friendlyNameInBar"), Setter(cfg, "friendlyNameInBar"))
 	page:Header("Names (all nameplates)")
+	page:Check("Last name only", Getter(cfg, "lastName"), Setter(cfg, "lastName"))
+	page:Note("Stormwind Guard shows as Guard. Names the game hides in PvP stay whole.", 36)
 	page:Slider("Max name length (0 = full)", 0, 40, 1, Getter(cfg, "nameMaxChars"), Setter(cfg, "nameMaxChars"))
 	page:Check("Add … when shortened", Getter(cfg, "nameEllipsis"), Setter(cfg, "nameEllipsis"))
 	page:Header("Healers and elites")
@@ -980,6 +986,8 @@ local function BuildActionBarPage(page)
 	page:Check("Hide Blizzard bar art", Getter(cfg, "hideArt"), Setter(cfg, "hideArt"), true)
 	page:Check("Show macro names", Getter(cfg, "macroText"), Setter(cfg, "macroText"))
 	page:Check("Show keybinds", Getter(cfg, "hotkeys"), Setter(cfg, "hotkeys"))
+	page:Check("Lock buttons", ns.ActionBars.ButtonsLocked, ns.ActionBars.SetButtonsLocked)
+	page:Note("Stops buttons being dragged off the bars. This is the game's own Lock Action Bars setting. Shift still moves them while locked.", 48)
 	page:Slider("Icon zoom (shared with cooldowns)", 0, 0.2, 0.01, function() return ns.db.cooldowns.iconZoom end,
 		function(v) ns.db.cooldowns.iconZoom = v end)
 	page:Check("Show cooldown numbers", Getter(cfg, "cooldownNumbers"), Setter(cfg, "cooldownNumbers"))
@@ -987,7 +995,7 @@ local function BuildActionBarPage(page)
 	page:Header("Show only on mouseover")
 	for _, def in ipairs(ns.ActionBars.BARS) do
 		page:Check(def[2], function() return cfg().mouseover[def[1]] and true or false end,
-			function(v) cfg().mouseover[def[1]] = v or nil end)
+			function(v) cfg().mouseover[def[1]] = v and true or false end) -- nil would bring the default back on reload
 	end
 	page:Slider("Faded opacity", 0, 0.5, 0.05, Getter(cfg, "fadeAlpha"), Setter(cfg, "fadeAlpha"))
 	page:Column(2)

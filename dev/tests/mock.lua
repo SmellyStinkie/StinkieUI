@@ -219,8 +219,9 @@ function GetSpecializationInfo(i) return 267, "Destruction" end
 function GetPvpTalentInfoByID(id) return id, "Talent" .. id end
 function LoggingCombat() return false end
 function GetCVar() return "0" end
-function GetCVarBool() return false end
-function SetCVar() end
+function GetCVarBool(name) return MOCK.cvars ~= nil and MOCK.cvars[name] == "1" end
+function SetCVar(name, value) MOCK.cvars = MOCK.cvars or {}; MOCK.cvars[name] = value end
+function UnitLevel(u) return MOCK.unitLevels and MOCK.unitLevels[u] end
 function GetBuildInfo() return "12.1.5", "70688", "", 120105 end
 function ReloadUI() end
 function PlaySound() end

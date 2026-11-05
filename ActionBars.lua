@@ -252,6 +252,16 @@ function AB.KeepVehicleExit()
 	end)
 end
 
+-- Blizzard's own "Lock Action Bars" setting, so this and the game's options always agree. It works
+-- with or without the skin. The pick-up key (Shift by default) still moves buttons while locked.
+function AB.ButtonsLocked()
+	return GetCVarBool("lockActionBars") and true or false
+end
+
+function AB.SetButtonsLocked(locked)
+	ns:RunOOC(function() SetCVar("lockActionBars", locked and "1" or "0") end)
+end
+
 function AB:Refresh()
 	if not AB.active then return end
 	SkinAll()
