@@ -985,13 +985,20 @@ do
 	check("off screen to the left", near(QA.EdgeRotation(0, 100, 100, 100), pi / 2))
 	check("off screen below", near(math.abs(QA.EdgeRotation(100, 0, 100, 100)), pi))
 
+	check("close up: full size", near(QA.DistanceScale(0), 1) and near(QA.DistanceScale(50), 1))
+	check("far away: smallest", near(QA.DistanceScale(1000), 0.6) and near(QA.DistanceScale(5000), 0.6))
+	check("in between: on the way down", near(QA.DistanceScale(525), 0.8))
+
 	local saved = {}
 	local function stub(name, v) saved[name] = _G[name] == nil and false or _G[name]; _G[name] = v end
 	local nav, clamped, distance, kind, quest = true, false, 42.4, 1, 77
+	local validScreen, navState = true, 2
 	stub("C_Navigation", {
 		GetFrame = function() return nav end,
 		WasClampedToScreen = function() return clamped end,
 		GetDistance = function() return distance end,
+		HasValidScreenPosition = function() return validScreen end,
+		GetTargetState = function() return navState end,
 	})
 	stub("C_SuperTrack", {
 		GetHighestPrioritySuperTrackingType = function() return kind end,
@@ -1000,6 +1007,8 @@ do
 	stub("C_QuestLog", { GetTitleForQuestID = function(id) return "Quest " .. id end })
 	local oldType = Enum.SuperTrackingType
 	Enum.SuperTrackingType = { Quest = 1 }
+	local oldState = Enum.NavigationState
+	Enum.NavigationState = { Invalid = 0, Occluded = 1, InRange = 2, Disabled = 3 }
 	local blizzard = MOCK.NewObj("Frame", "SuperTrackedFrame", UIParent)
 	blizzard.Icon = MOCK.NewObj("Texture", nil, blizzard)
 	blizzard.Arrow = MOCK.NewObj("Texture", nil, blizzard)
@@ -1022,13 +1031,43 @@ do
 	check("marker shows", h:IsShown())
 	check("Blizzard's diamond hidden", blizzard.Icon:GetAlpha() == 0 and blizzard.DistanceText:GetAlpha() == 0 and blizzard.Arrow:GetAlpha() == 0)
 	check("marker shows yards", h.Distance:GetText() == "42 yd", h.Distance:GetText())
+	local scaled
+	h.SetScale = function(_, s) scaled = s end
+	distance = 1000
+	QA.Update()
+	check("far away: the marker shrinks", near(scaled, 0.6), scaled)
+	clamped = true
+	QA.Update()
+	check("off screen: the arrow stays full size", scaled == 1, scaled)
+	clamped = false
+	distance = 42.4
+	QA.Update()
+	check("close up: full size again", near(scaled, 1), scaled)
+	h.SetScale = nil
 	check("marker names the quest", h.Name:GetText() == "Quest 77", h.Name:GetText())
 	check("on screen: plate with the arrow pointing down", h.Plate:IsShown() and near(turned, pi))
 
-	blizzard:SetAlpha(0.6)
+	check("yards draw above the plate", h.Distance:GetParent() == h.TextLayer)
+	blizzard:SetAlpha(0.2) -- Blizzard's fade near the mouse
 	QA.Update()
-	check("marker fades with Blizzard's", h:GetAlpha() == 0.6)
+	check("the mouse doesn't fade the marker", h:GetAlpha() == 1)
 	blizzard:SetAlpha(1)
+	navState = 1
+	QA.Update()
+	check("something in the way dims it", h:GetAlpha() == 0.6)
+	clamped = true
+	QA.Update()
+	check("the edge arrow stays bright", h:GetAlpha() == 1)
+	clamped = false
+	navState = 0
+	QA.Update()
+	check("invalid spot: hidden", h:GetAlpha() == 0)
+	navState = 2
+	validScreen = false
+	QA.Update()
+	check("no screen position: hidden", h:GetAlpha() == 0)
+	validScreen = true
+	QA.Update()
 
 	clamped = true
 	QA.Update()
@@ -1067,6 +1106,7 @@ do
 	check("no Blizzard frame: nothing breaks", true)
 
 	Enum.SuperTrackingType = oldType
+	Enum.NavigationState = oldState
 	WorldFrame = oldWorld
 	UIParent.GetEffectiveScale = oldScale
 	h.Arrow.SetRotation = nil

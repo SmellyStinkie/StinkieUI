@@ -9,12 +9,19 @@ ns.QuestArrow = QA
 
 local TICK = 0.05
 local PLATE_WIDTH, PLATE_WIDTH_NO_NAME = 200, 64
+local NEAR_YARDS, FAR_YARDS, FAR_SCALE = 50, 1000, 0.6 -- full size up to NEAR, smallest from FAR
 
 local function cfg() return ns.db.misc.questArrow end
 
 -- Which way the arrow points when the spot is off screen. Textures rotate counter-clockwise.
 function QA.EdgeRotation(x, y, centerX, centerY)
 	return math.atan2(centerX - x, y - centerY)
+end
+
+-- Smaller the further away, like a distant nameplate. A straight line between the two sizes.
+function QA.DistanceScale(yards)
+	local t = math.max(0, math.min(1, (yards - NEAR_YARDS) / (FAR_YARDS - NEAR_YARDS)))
+	return 1 - t * (1 - FAR_SCALE)
 end
 
 function QA.TrackedQuest()
@@ -56,6 +63,15 @@ local function LayoutMarker(clamped)
 	end
 end
 
+-- Blizzard's frame also fades near the mouse, so its alpha can't be borrowed: the game's own state
+-- says whether the spot can be shown, and dims it when something is in the way.
+function QA.MarkerAlpha(clamped)
+	if not C_Navigation.HasValidScreenPosition() then return 0 end
+	local state, N = C_Navigation.GetTargetState(), Enum.NavigationState
+	if state == N.Invalid or state == N.Disabled then return 0 end
+	return (state == N.Occluded and not clamped) and 0.6 or 1
+end
+
 function QA.Update()
 	local h, f = QA.holder, _G.SuperTrackedFrame
 	if not (h and f and f.Icon and f.Arrow and f.DistanceText) then return end
@@ -69,8 +85,8 @@ function QA.Update()
 		QA.anchored = true
 		h:SetPoint("CENTER", f, "CENTER", 0, 0)
 	end
-	h:SetAlpha(f:GetAlpha())
 	local clamped = C_Navigation.WasClampedToScreen() and true or false
+	h:SetAlpha(QA.MarkerAlpha(clamped))
 	if clamped ~= QA.clamped then
 		QA.clamped = clamped
 		LayoutMarker(clamped)
@@ -81,7 +97,9 @@ function QA.Update()
 		local scale = UIParent:GetEffectiveScale()
 		if x and worldX then h.Arrow:SetRotation(QA.EdgeRotation(x, y, worldX / scale, worldY / scale)) end
 	end
-	h.Distance:SetText(math.floor(C_Navigation.GetDistance() + 0.5) .. " yd")
+	local yards = C_Navigation.GetDistance()
+	h.Distance:SetText(math.floor(yards + 0.5) .. " yd")
+	h:SetScale(clamped and 1 or QA.DistanceScale(yards)) -- the edge arrow stays easy to see
 	if questID ~= QA.questID then
 		QA.questID = questID
 		h.Name:SetText(C_QuestLog.GetTitleForQuestID(questID) or "")
@@ -108,7 +126,10 @@ function QA:Init()
 	h.Plate = CreateFrame("Frame", nil, h)
 	ns.CreateBackdrop(h.Plate)
 	h.Name = ns.CreateText(h.Plate, 13, "LEFT")
-	h.Distance = ns.CreateText(h, 13, "RIGHT")
+	-- on its own layer: the plate is a child frame, so it would draw over text on the holder
+	h.TextLayer = CreateFrame("Frame", nil, h)
+	h.TextLayer:SetFrameLevel(h.Plate:GetFrameLevel() + 2)
+	h.Distance = ns.CreateText(h.TextLayer, 13, "RIGHT")
 	QA.driver = CreateFrame("Frame")
 	QA.onUpdate = ns.Timed("Quest marker", OnUpdate)
 	QA:Refresh()
