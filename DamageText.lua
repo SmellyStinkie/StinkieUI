@@ -35,6 +35,61 @@ function DT.SetScrollingText(on)
 	SetCVar("enableFloatingCombatText", on and "1" or "0")
 end
 
+-- How that scrolling text looks. Blizzard draws a large font shrunk down to size, which spaces a
+-- narrow font oddly, so each new line is set to a real size instead. Blizzard's own tables stay
+-- untouched: this is a post-hook on the lines it makes, and its gap between lines on its frame.
+DT.FLOAT_MODE = "floatingCombatTextFloatMode_v2"
+local BLIZZARD_SPACING = 10
+
+local function ScrollFont(fs, size)
+	local c = cfg().scroll
+	fs:SetFont(ns.GetFontPath(), size, ns.OutlineFlags(c.outline) or "")
+	fs:SetTextHeight(size)
+end
+
+function DT.StyleScrollLine()
+	local frame = _G.CombatText
+	local c = cfg().scroll
+	local list = frame and frame.activeFontStrings
+	local fs = list and list[#list]
+	if not (c.enabled and fs) then return end
+	if fs.isCrit then
+		if c.critPop then return end -- Blizzard grows and shrinks it
+		fs.isCrit = nil
+		ScrollFont(fs, c.critSize)
+	else
+		ScrollFont(fs, c.size)
+	end
+end
+
+-- Blizzard works its gap out again whenever the screen or a setting changes.
+function DT.ApplyScrollSpacing()
+	local frame = _G.CombatText
+	if not (frame and frame.textScaleY) then return end
+	local c = cfg().scroll
+	frame.textSpacing = (c.enabled and c.spacing or BLIZZARD_SPACING) * frame.textScaleY
+end
+
+-- Blizzard's scrolling text is its own addon, loaded when it's first needed.
+function DT.HookScrollingText()
+	local frame = _G.CombatText
+	if DT.scrollHooked or not (frame and frame.AddMessage and frame.UpdateDisplayedMessages) then return end
+	DT.scrollHooked = true
+	hooksecurefunc(frame, "AddMessage", DT.StyleScrollLine)
+	hooksecurefunc(frame, "UpdateDisplayedMessages", DT.ApplyScrollSpacing)
+	DT.ApplyScrollSpacing()
+end
+
+function DT.ScrollDirection()
+	return GetCVar(DT.FLOAT_MODE)
+end
+
+function DT.SetScrollDirection(mode)
+	SetCVar(DT.FLOAT_MODE, mode)
+	local frame = _G.CombatText
+	if frame and frame.UpdateDisplayedMessages then frame:UpdateDisplayedMessages() end
+end
+
 -- Your own healing numbers. On/off rather than a value, and Blizzard's settings have no box for it.
 DT.HEALING = { "floatingCombatTextCombatHealing_v2", "floatingCombatTextCombatHealing" }
 DT.ORDER = { "screenY", "height", "size", "critScreenY", "critSize", "spread", "gravity", "directional" }
@@ -129,10 +184,15 @@ end
 
 function DT:Init()
 	ns:On("PLAYER_ENTERING_WORLD", function() DT.Apply() end)
+	DT.HookScrollingText()
+	ns:On("ADDON_LOADED", function(_, name)
+		if name == "Blizzard_CombatText" then DT.HookScrollingText() end
+	end)
 end
 
 function DT:Refresh()
 	DT.Apply()
+	DT.ApplyScrollSpacing()
 end
 
 ns:RegisterModule("DamageText", DT)

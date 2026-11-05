@@ -1633,6 +1633,64 @@ do
 end
 flushErrors("social, day / night, leader")
 
+-- scrolling text look: our sizes on Blizzard's lines, its tables untouched
+do
+	local DT, c = ns.DamageText, ns.db.damageText.scroll
+	check("scrolling look on by default", c.enabled == true and c.size == 22)
+	local line = MOCK.NewObj("FontString", nil, UIParent)
+	local fonts, heights = {}, {}
+	line.SetFont = function(_, path, size, flags) fonts[#fonts + 1] = { path, size, flags } end
+	line.SetTextHeight = function(_, h) heights[#heights + 1] = h end
+	local updates = 0
+	local frame = { activeFontStrings = { line }, textScaleY = 1.5, textSpacing = 15 }
+	frame.AddMessage = function() end
+	frame.UpdateDisplayedMessages = function(self) updates = updates + 1; self.textSpacing = 10 * self.textScaleY end
+	local oldFrame, oldHooked = CombatText, DT.scrollHooked
+	CombatText, DT.scrollHooked = frame, nil
+	DT.HookScrollingText()
+
+	frame:AddMessage("123")
+	check("a real font size, not a scaled one", fonts[#fonts][2] == 22 and heights[#heights] == 22)
+	check("in the addon's font", fonts[#fonts][1] == ns.GetFontPath())
+	line.isCrit = 1
+	frame:AddMessage("456")
+	check("crit gets its own size", fonts[#fonts][2] == 32 and line.isCrit == nil)
+	line.isCrit = 1
+	c.critPop = true
+	local before = #fonts
+	frame:AddMessage("789")
+	check("crit pop leaves Blizzard's animation", #fonts == before and line.isCrit == 1)
+	c.critPop = false
+	line.isCrit = nil
+
+	c.spacing = 20
+	frame:UpdateDisplayedMessages()
+	check("gap scales with the screen, and survives Blizzard's update", frame.textSpacing == 30, frame.textSpacing)
+	c.enabled = false
+	before = #fonts
+	frame:AddMessage("0")
+	check("off: lines left to Blizzard", #fonts == before)
+	DT.ApplyScrollSpacing()
+	check("off: Blizzard's gap back", frame.textSpacing == 15, frame.textSpacing)
+	c.enabled, c.spacing = true, 10
+
+	-- direction is the game's setting, and Blizzard is told about the change
+	local oldGet, oldSet, mode = GetCVar, SetCVar, "1"
+	GetCVar = function(n) if n == DT.FLOAT_MODE then return mode end return oldGet(n) end
+	SetCVar = function(n, v) if n == DT.FLOAT_MODE then mode = v else oldSet(n, v) end end
+	local seen = updates
+	DT.SetScrollDirection("3")
+	check("direction set", DT.ScrollDirection() == "3" and updates == seen + 1)
+	GetCVar, SetCVar = oldGet, oldSet
+
+	-- nothing loaded yet, or nothing active
+	frame.activeFontStrings = {}
+	DT.StyleScrollLine()
+	check("no lines: nothing breaks", true)
+	CombatText, DT.scrollHooked = oldFrame, oldHooked
+end
+flushErrors("scrolling text")
+
 -- hide error messages: only the red event, and only what we changed
 do
 	local M, A = ns.Misc, ns.db.misc.auto
