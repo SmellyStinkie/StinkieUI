@@ -362,30 +362,36 @@ local function UpdateTarget(f)
 end
 
 -- Green while you're safe, red once you have aggro.
-local THREAT_LEVELS = {
-	{ 100, { 1.00, 0.15, 0.15 } }, -- red
-	{ 80, { 1.00, 0.55, 0.00 } },  -- orange
-	{ 50, { 1.00, 1.00, 0.00 } },  -- yellow
-	{ 0, { 0.25, 1.00, 0.25 } },   -- green
-}
+local THREAT_RED, THREAT_ORANGE = { 1.00, 0.15, 0.15 }, { 1.00, 0.55, 0.00 }
+local THREAT_YELLOW, THREAT_GREEN = { 1.00, 1.00, 0.00 }, { 0.25, 1.00, 0.25 }
+local THREAT_NEUTRAL = { 1, 1, 1 }
+-- the game's own threat levels, 0 to 3, for when the percent is hidden
+local THREAT_BY_STATUS = { [0] = THREAT_GREEN, [1] = THREAT_YELLOW, [2] = THREAT_ORANGE, [3] = THREAT_RED }
 
 function NP.ThreatColor(percent)
-	for _, level in ipairs(THREAT_LEVELS) do
-		if percent >= level[1] then return level[2] end
-	end
-	return THREAT_LEVELS[#THREAT_LEVELS][2]
+	if percent >= 100 then return THREAT_RED end
+	if percent >= 80 then return THREAT_ORANGE end
+	if percent >= 50 then return THREAT_YELLOW end
+	return THREAT_GREEN
+end
+
+-- A hidden percent can't be compared, and the game's color curves refuse it from addons. The threat
+-- level is restricted separately, so it can still be readable then.
+function NP.ThreatColorFor(percent, status)
+	if percent ~= nil and not ns.issecret(percent) then return NP.ThreatColor(percent) end
+	if status ~= nil and not ns.issecret(status) then return THREAT_BY_STATUS[status] or THREAT_NEUTRAL end
+	return THREAT_NEUTRAL
 end
 
 -- Threat % on your target's plate. It can be hidden from addons: a hidden number can't be
 -- compared, so it goes straight to the text, and the plate stays clean if the game refuses it.
--- Its color then comes from the game's threat level, or your text color if that's hidden too.
 function NP.UpdateThreat(f)
 	local cfg = ns.db.nameplates
 	if not (cfg.threatText and f.unit and not f.friendly and NP.IsTargetPlate(f)) then
 		f.Threat:Hide()
 		return
 	end
-	local _, status, percent = UnitDetailedThreatSituation("player", f.unit)
+	local _, _, percent = UnitDetailedThreatSituation("player", f.unit)
 	if issecret(percent) then
 		f.Threat:SetShown(pcall(f.Threat.SetFormattedText, f.Threat, "%.0f%%", percent))
 	elseif percent == nil then
@@ -394,15 +400,8 @@ function NP.UpdateThreat(f)
 		f.Threat:SetFormattedText("%.0f%%", percent)
 		f.Threat:Show()
 	end
-	local style = cfg.threatStyle
-	if not issecret(percent) and percent then
-		local c = NP.ThreatColor(percent)
-		f.Threat:SetTextColor(c[1], c[2], c[3])
-	elseif not issecret(status) and status and GetThreatStatusColor then
-		f.Threat:SetTextColor(GetThreatStatusColor(status))
-	else
-		f.Threat:SetTextColor(style.color[1], style.color[2], style.color[3])
-	end
+	local c = NP.ThreatColorFor(percent, UnitThreatSituation("player", f.unit))
+	f.Threat:SetTextColor(c[1], c[2], c[3])
 end
 
 -- Clickable area: our health bar plus padding (more for important units). Blizzard decides
@@ -1027,6 +1026,10 @@ function NP.DebugTarget()
 	show("NPC ID (secret = hidden by the game)", UnitCreatureID and UnitCreatureID("target"))
 	show("minion (pet / totem / guardian)", UnitIsMinion and UnitIsMinion("target"))
 	show("target marker (secret = hidden by the game)", GetRaidTargetIndex("target"))
+	local _, detailedStatus, threatPercent = UnitDetailedThreatSituation("player", "target")
+	show("threat % (secret = hidden by the game)", threatPercent)
+	show("threat level from the same call", detailedStatus)
+	show("threat level on its own", UnitThreatSituation("player", "target"))
 	show("important unit", f.important)
 	show("UnitCanAttack now", UnitCanAttack("player", "target"))
 	local c = f.Auras

@@ -1899,6 +1899,8 @@ do
 	UnitName = function() return "Stormwind Guard" end
 	local percent, status = 87.4, 1
 	UnitDetailedThreatSituation = function() return false, status, percent, 90, 1000 end
+	local oldSituation = UnitThreatSituation
+	UnitThreatSituation = function() return status end
 	GetThreatStatusColor = function() return 1, 1, 0 end
 	NP.SetupPlate("nameplate8")
 	local f = plate.SUIFrame
@@ -1951,6 +1953,19 @@ do
 		local oldColor = f.Threat.SetTextColor
 		f.Threat.SetTextColor = function(_, r, g, b) tinted = { r, g, b } end
 		f.Threat.SetFormattedText = function() end
+		-- a hidden percent falls back on the game's threat level, then on plain white
+		do
+			local secret, old = {}, ns.issecret
+			ns.issecret = function(v) return v == secret end
+			local function nearColor(c, r, g) return near(c[1], r) and near(c[2], g) end
+			check("hidden %: level 0 green", nearColor(NP.ThreatColorFor(secret, 0), 0.25, 1))
+			check("hidden %: level 1 yellow", nearColor(NP.ThreatColorFor(secret, 1), 1, 1))
+			check("hidden %: level 2 orange", nearColor(NP.ThreatColorFor(secret, 2), 1, 0.55))
+			check("hidden %: level 3 red", nearColor(NP.ThreatColorFor(secret, 3), 1, 0.15))
+			check("both hidden: white", nearColor(NP.ThreatColorFor(secret, secret), 1, 1) and NP.ThreatColorFor(secret, secret)[3] == 1)
+			check("readable % wins over the level", nearColor(NP.ThreatColorFor(60, 3), 1, 1))
+			ns.issecret = old
+		end
 		hostile, targeted, percent, status = true, true, 60, 3
 		np.threatText = true
 		NP.SetupPlate("nameplate8")
@@ -2021,6 +2036,7 @@ do
 
 	rawset(C_NamePlate, "GetNamePlateForUnit", oldGet)
 	UnitCanAttack, UnitName, UnitDetailedThreatSituation, GetThreatStatusColor = oldCan, oldName, oldThreat, oldColor
+	UnitThreatSituation = oldSituation
 end
 flushErrors("nameplate options")
 

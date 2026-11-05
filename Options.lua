@@ -403,7 +403,9 @@ function PageMixin:TextStyle(title, getStyle, opts)
 	self:Slider("Size", 6, 32, 1, function() return getStyle().size end, function(v) getStyle().size = v end)
 	self:Choice("Outline", { { "NONE", "None" }, { "OUTLINE", "Thin" }, { "THICKOUTLINE", "Thick" } },
 		function() return getStyle().outline end, function(v) getStyle().outline = v end)
-	self:Color("Color", function() return getStyle().color end, function(c) getStyle().color = c end)
+	if not opts.noColor then
+		self:Color("Color", function() return getStyle().color end, function(c) getStyle().color = c end)
+	end
 	if opts.classColor then
 		self:Check("Use class color instead", function() return getStyle().classColor end, function(v) getStyle().classColor = v end)
 	end
@@ -951,8 +953,8 @@ local function BuildPlateTargetPage(page)
 	page:Header("Threat")
 	page:Check("Threat % on your enemy target", Getter(cfg, "threatText"), Setter(cfg, "threatText"))
 	page:Choice("Spot above the health bar", { { "LEFT", "Left" }, { "CENTER", "Center" }, { "RIGHT", "Right" } }, Getter(cfg, "threatSide"), Setter(cfg, "threatSide"))
-	page:Note("Green under 50%, yellow from 50%, orange from 80%, red at 100%, when you have aggro. It only shows while the game gives a number.", 48)
-	page:TextStyle("Threat text", function() return cfg().threatStyle end)
+	page:Note("Green under 50%, yellow from 50%, orange from 80%, red at 100%, when you have aggro. It only shows while the game gives a number. Where the game hides the number, the color follows its threat level instead.", 62)
+	page:TextStyle("Threat text", function() return cfg().threatStyle end, { noColor = true })
 end
 
 local function BuildPlateIconsPage(page)
