@@ -145,11 +145,12 @@ local function CategoryKey(category)
 end
 
 function A.StyleDRItem(item, info)
+	if issecret(item) then return end -- in a match the game can hide the item itself
 	local tray = item:GetParent()
 	local f = tray and trays[tray]
 	if not f then return end
 	local c = cfg()
-	if info then
+	if info and not issecret(info) then
 		drKey[item] = CategoryKey(info.category) or false
 	end
 	if not styled[item] then
@@ -173,7 +174,7 @@ function A.LayoutDR(tray)
 	local c = cfg()
 	local items = {}
 	for _, child in ipairs({ tray:GetChildren() }) do
-		if child:IsShown() and child.Icon then
+		if not issecret(child) and child:IsShown() and child.Icon then
 			A.StyleDRItem(child)
 			if child:GetAlpha() > 0 then table.insert(items, child) end
 		end

@@ -296,6 +296,8 @@ function CD.DescribeEntry(entry)
 		return "Racial" .. (id and (": " .. (C_Spell.GetSpellName(id) or id)) or " (none found)")
 	elseif kind == "spell" then
 		return (C_Spell.GetSpellName(id) or "Spell") .. "  |cff888888" .. id .. "|r"
+	elseif kind == "proc" then
+		return (C_Spell.GetSpellName(id) or "Spell") .. ", only when upgraded  |cff888888" .. id .. "|r"
 	elseif kind == "item" then
 		return (C_Item.GetItemNameByID(id) or "Item") .. "  |cff888888" .. id .. "|r"
 	elseif kind == "slot" then
@@ -306,7 +308,7 @@ end
 
 function CD.EntryTexture(entry)
 	local kind, id = ParseEntry(entry)
-	if kind == "spell" and id then
+	if (kind == "spell" or kind == "proc") and id then
 		return C_Spell.GetSpellTexture(id)
 	elseif kind == "item" and id then
 		return C_Item.GetItemIconByID(id)
@@ -329,6 +331,11 @@ function CD.EntryFromInput(text)
 	text = strtrim(text or "")
 	if text == "" then return end
 	if text:match("^%a+:%d+$") or text == "racial" then return text end
+	local procName = text:match("^[Pp]roc:%s*(.+)$")
+	if procName then
+		local procID = ResolveSpell(procName)
+		return procID and ("proc:" .. procID) or nil
+	end
 	local spellID = ResolveSpell(text)
 	if spellID then return "spell:" .. spellID end
 	local itemID = C_Item.GetItemInfoInstant(tonumber(text) or text)
@@ -427,6 +434,14 @@ end
 
 local function UpdateButton(b)
 	local kind, id = b.kind, b.id
+	-- "proc:" entries: only seen while a proc has turned the spell into another one (Slam into
+	-- Heroic Strike). It keeps its place in the bar, so nothing moves and it works in combat.
+	if kind == "proc" then
+		local upgraded = CurrentSpell(id) ~= id
+		b:SetAlpha(upgraded and 1 or 0)
+		if not upgraded then return end
+		kind = "spell"
+	end
 	if kind == "spell" then
 		id = CurrentSpell(id)
 		local tex = C_Spell.GetSpellTexture(id)
@@ -488,10 +503,10 @@ local function SetupButton(b, entry)
 	local kind, id = ParseEntry(entry)
 	b.kind, b.id, b.itemID = nil, nil, nil
 	b:SetAlpha(1)
-	if kind == "spell" and id then
+	if (kind == "spell" or kind == "proc") and id then
 		local tex = C_Spell.GetSpellTexture(CurrentSpell(id)) or C_Spell.GetSpellTexture(id)
 		if not tex or not SpellKnown(id) then return false end -- not learned / not this spec
-		b.kind, b.id = "spell", id
+		b.kind, b.id = kind, id
 		b.Icon:SetTexture(tex)
 	elseif kind == "slot" and id then
 		local itemID = GetInventoryItemID("player", id)
@@ -507,6 +522,8 @@ local function SetupButton(b, entry)
 	end
 	return true
 end
+
+CD.SetupButton, CD.UpdateButton = SetupButton, UpdateButton
 
 ---------------------------------------------------------------------------
 -- Bars
@@ -592,7 +609,8 @@ function CD:Init()
 
 	local f = CreateFrame("Frame")
 	for _, e in ipairs({ "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "ACTIONBAR_UPDATE_COOLDOWN",
-		"PET_BAR_UPDATE_COOLDOWN", "SPELL_UPDATE_ICON", "SPELL_UPDATE_USABLE" }) do
+		"PET_BAR_UPDATE_COOLDOWN", "SPELL_UPDATE_ICON", "SPELL_UPDATE_USABLE",
+		"SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" }) do
 		f:RegisterEvent(e)
 	end
 	f:SetScript("OnEvent", UpdateAllButtons)

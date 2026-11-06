@@ -1,5 +1,9 @@
 # Stinkie UI changelog
 
+## 0.42.5
+- Cooldowns: custom bars can now show a spell only while a proc upgrades it. Add `proc:Slam` to a bar and it appears as Heroic Strike when Master of Warfare procs, and stays out of sight the rest of the time. It works for any spell that turns into another one.
+- Fixed: an error in Arena.lua during matches.
+
 ## 0.42.4
 - Flag Cap Indicator: the yards now count down to the base where the carrier can cap, not the one they picked the flag up from, on Warsong Gulch and Twin Peaks.
 - `/stinkie flags` now shows where each flag caps.

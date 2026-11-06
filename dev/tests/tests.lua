@@ -3042,6 +3042,48 @@ do
 	CD.WatchUsable(buff)
 	check("buff icons are skipped", buff.RefreshIconColor == nil)
 	check("custom bars ask the same check", CD.Unusable(nil) == false)
+	do
+		-- proc: entries show only while the spell has turned into another one
+		check("proc entry parses", select(2, CD.ParseEntry("proc:1464")) == 1464 and CD.ParseEntry("proc:1464") == "proc")
+		check("proc by id is kept", CD.EntryFromInput("proc:1464") == "proc:1464")
+		local oldInfo, oldOver, oldKnown = C_Spell.GetSpellInfo, C_Spell.GetOverrideSpell, IsPlayerSpell
+		local oldTex, oldDur, oldCD, oldCh = C_Spell.GetSpellTexture, C_Spell.GetSpellCooldownDuration, C_Spell.GetSpellCooldown, C_Spell.GetSpellCharges
+		rawset(C_Spell, "GetSpellInfo", function(s) return (s == "Slam" or s == 1464) and { spellID = 1464 } or nil end)
+		check("proc by name finds the spell", CD.EntryFromInput("proc:Slam") == "proc:1464")
+		check("proc with an unknown name is refused", CD.EntryFromInput("proc:Nothing") == nil)
+		local over = 1464
+		rawset(C_Spell, "GetOverrideSpell", function() return over end)
+		rawset(C_Spell, "GetSpellTexture", function(id) return id end)
+		rawset(C_Spell, "GetSpellCooldownDuration", function() return nil end)
+		rawset(C_Spell, "GetSpellCooldown", function() return nil end)
+		rawset(C_Spell, "GetSpellCharges", function() return nil end)
+		IsPlayerSpell = function(id) return id == 1464 end
+		local b = CreateFrame("Frame")
+		b.Icon, b.Cooldown, b.Count = b:CreateTexture(), CreateFrame("Frame"), b:CreateFontString()
+		check("proc entry takes a place in the bar", CD.SetupButton(b, "proc:1464") == true)
+		CD.UpdateButton(b)
+		check("no proc, not seen", b:GetAlpha() == 0, b:GetAlpha())
+		over = 1269383
+		CD.UpdateButton(b)
+		check("proc up, seen", b:GetAlpha() == 1, b:GetAlpha())
+		check("and shows the upgraded spell", b.Icon._tex == 1269383, tostring(b.Icon._tex))
+		over = { __secret = true }
+		CD.UpdateButton(b)
+		check("hidden answer, not seen", b:GetAlpha() == 0, b:GetAlpha())
+		check("a proc entry stays in the list text", CD.DescribeEntry("proc:1464"):find("only when upgraded", 1, true))
+		IsPlayerSpell = function() return false end
+		check("proc entry for a spell you don't have is hidden", CD.SetupButton(b, "proc:1464") == false)
+		rawset(C_Spell, "GetSpellInfo", oldInfo); rawset(C_Spell, "GetOverrideSpell", oldOver)
+		rawset(C_Spell, "GetSpellTexture", oldTex); rawset(C_Spell, "GetSpellCooldownDuration", oldDur)
+		rawset(C_Spell, "GetSpellCooldown", oldCD); rawset(C_Spell, "GetSpellCharges", oldCh)
+		IsPlayerSpell = oldKnown
+	end
+	do
+		-- the game can hand the DR tray a hidden item in a match
+		local secret = setmetatable({ __secret = true }, { __index = function() error("indexed a secret") end })
+		local ok, err = pcall(ns.Arena.StyleDRItem, secret, secret)
+		check("a hidden DR item is left alone", ok, tostring(err))
+	end
 	rawset(C_Spell, "IsSpellUsable", oldUsable)
 end
 flushErrors("gray unusable")
