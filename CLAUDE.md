@@ -18,7 +18,10 @@ Published on CurseForge (project 1780262) and Wago (rNkgx3Na) by the GitHub Acti
   the addon, the repo or commit messages.
 - Don't tag or push a release until Stinkie has tried the change in game and says it's good.
   Commit locally as often as is useful; pushing `main` without a tag is fine when he asks.
-- Explain changes in plain words, conclusion first.
+- Releases are batched. Don't tag, bump the version, edit the changelog or suggest a release after
+  each change. Wait until Stinkie calls for one, after several changes are in and all very stable.
+- Explain changes in plain words, conclusion first. Be precise and direct, and make the change
+  rather than describing it. Label anything not actually checked as unverified.
 
 ## Midnight API rules (secret values and taint)
 
@@ -95,6 +98,16 @@ pasted result tells you what this client actually has. `/st` is short for `/stin
    - `git push origin main`
    - `git push origin vX.Y.Z`
 5. The Actions tab shows the packager run; CurseForge and Wago update a few minutes later.
+
+## Cloud sessions (phone or web)
+
+- There's no game here, so a fix is only ever mock-tested. Say so, and list what to check in game.
+- Run the tests before pushing (the Testing section's commands work here). Each branch push also
+  runs them in the Tests workflow on GitHub.
+- Work on a branch, and leave it for Stinkie to review. Nothing but his say-so stops a push to
+  `main` from here, so don't push there unless he asks in that session.
+- Cloud sessions can't push tags. Tagging a release has to happen from a machine with git.
+- The Rated Tracker tests can't run here because `STINKIE_RT` needs a file from the game folder.
 
 ## Local setup (Windows)
 

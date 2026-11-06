@@ -1,0 +1,29 @@
+# Runs the mock client tests on every branch push, so a pass or fail shows on GitHub
+# without a local machine. Tag pushes are left to release.yml.
+name: Tests
+
+on:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: pip install lupa cbor2
+
+      - name: Run the tests
+        run: python dev/tests/run.py
