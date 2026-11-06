@@ -1,5 +1,11 @@
 # Stinkie UI changelog
 
+## 0.42.1
+- Blitz Map: teammate dots now show in real matches. When the game won't give the addon someone's position, the game draws their dot itself, and that dot has no name beside it.
+- Blitz Map: base names are gone, and so is their option. Small names printed on the map art itself stay.
+- `/stinkie map` now opens a window you can copy the report from.
+- Fixed: an error in Chat.lua when you replied to a whisper during a match. That whisper tab keeps flashing until you open it.
+
 ## 0.42.0
 - New Blitz Map: the zone map for each Blitz with class colored dots and names for your team, flag and orb icons, and bases and uncapped flags. Scroll to zoom, drag to look around, Shift+drag to move the window. Each map remembers its zoom. It has a test mode, and it's off by default.
 - New "BGs & Blitz" menu category holding Blitz Map, Battleground Frames, BG Score and BG Timers.

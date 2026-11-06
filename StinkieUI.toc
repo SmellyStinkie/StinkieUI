@@ -3,7 +3,7 @@
 ## Notes: Flat PvP UI: unit, party, arena and battleground frames, nameplates, castbars, chat, cooldown bars, BG timers and match history. /stinkie, /mh
 ## Author: Stinkie (twitch.tv/smellystinkie)
 ## X-License: MIT
-## Version: 0.42.0
+## Version: 0.42.1
 ## X-Curse-Project-ID: 1780262
 ## X-Wago-ID: rNkgx3Na
 ## IconTexture: Interface\AddOns\StinkieUI\Media\logo_icon

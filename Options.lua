@@ -1457,7 +1457,6 @@ local function BuildBlitzMapPage(page)
 	page:Slider("Base icon size", 12, 40, 1, Getter(cfg, "nodeSize"), Setter(cfg, "nodeSize"))
 	page:Check("Show names", Getter(cfg, "names"), Setter(cfg, "names"))
 	page:Check("Show bases and objectives", Getter(cfg, "nodes"), Setter(cfg, "nodes"))
-	page:Check("Show base names", Getter(cfg, "nodeNames"), Setter(cfg, "nodeNames"))
 	page:TextStyle("Name text", function() return cfg().nameStyle end, { noColor = true })
 	page:Position(nil, function() return "blitzMap" end)
 end

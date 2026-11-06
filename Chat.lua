@@ -349,8 +349,12 @@ local function StartFlash(f, chatType)
 	flashing[f] = true
 end
 
--- Blizzard stops a whisper tab's flash when you reply, as you've seen it in the main tab.
-function CH.StopFlash(f) flashing[f] = nil end
+-- Blizzard stops a whisper tab's flash when you reply, as you've seen it in the main tab. In a
+-- match it can pass a hidden frame, which can't be looked up, so that tab flashes until you open it.
+function CH.StopFlash(f)
+	if issecret(f) then return end
+	flashing[f] = nil
+end
 function CH.IsFlashing(f) return flashing[f] == true end
 
 local function OnAddMessage(f, msg, r, g, b, id, accessID, typeID, event, eventArgs)
@@ -497,7 +501,7 @@ local function CopyWindow()
 	ns.SetFont(title, 15, "OUTLINE")
 	title:SetTextColor(ns.ACCENT[1], ns.ACCENT[2], ns.ACCENT[3])
 	title:SetPoint("TOPLEFT", 12, -10)
-	title:SetText("Copy chat")
+	p.title = title
 	local hint = p:CreateFontString(nil, "OVERLAY")
 	ns.SetFont(hint, 12, "")
 	hint:SetTextColor(0.70, 0.68, 0.60)
@@ -537,12 +541,20 @@ local function CopyWindow()
 	return p
 end
 
-function CH.ShowCopy(f)
+-- Any text you may want out of the game, in the same window
+function CH.ShowText(title, text)
 	local p = CopyWindow()
-	p.text = CH.CopyText(f or SELECTED_CHAT_FRAME or DEFAULT_CHAT_FRAME)
-	p.eb:SetText(p.text)
+	p.title:SetText(title)
+	p.text = text
+	p.eb:SetText(text)
+	p.sf:SetVerticalScroll(0)
 	p:Show()
 	p.eb:SetFocus()
+	return p
+end
+
+function CH.ShowCopy(f)
+	local p = CH.ShowText("Copy chat", CH.CopyText(f or SELECTED_CHAT_FRAME or DEFAULT_CHAT_FRAME))
 	-- start at the newest line
 	C_Timer.After(0, function()
 		if p.sf.GetVerticalScrollRange then p.sf:SetVerticalScroll(p.sf:GetVerticalScrollRange() or 0) end

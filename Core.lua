@@ -770,7 +770,7 @@ ns.defaults = {
 		enabled = false,
 		width = 340, dotSize = 12, iconSize = 22, nodeSize = 22,
 		names = true, nameStyle = text(10),
-		nodes = true, nodeNames = true, -- bases and objectives
+		nodes = true, -- bases and objectives
 		views = {}, -- map id -> { zoom, u, v }: how you left each map
 		point = { "LEFT", 30, 120 },
 	},

@@ -133,11 +133,19 @@ end
 ---------------------------------------------------------------------------
 -- What's on the map
 ---------------------------------------------------------------------------
+-- Units the addon can't get a position for (the game only promises the player and party members,
+-- and a Blitz team is a raid): the game draws those dots itself, see UpdateGameDots.
+BM.gameDots = {}
+
 local function UnitPin(pins, mapID, unit, me)
 	local pos = C_Map.GetPlayerMapPosition(mapID, unit)
-	if not pos then return end
-	local x, y = pos.x, pos.y
-	if not (readable(x) and readable(y)) or (x == 0 and y == 0) then return end
+	local x, y
+	if pos then x, y = pos.x, pos.y end
+	if not (x and y and readable(x) and readable(y)) or (x == 0 and y == 0) then
+		local dots = BM.gameDots
+		dots[#dots + 1] = unit
+		return
+	end
 	pins[#pins + 1] = { kind = "unit", unit = unit, me = me, x = x, y = y }
 end
 
@@ -184,6 +192,7 @@ function BM.ReadObjectives(mapID)
 end
 
 function BM.Collect(mapID)
+	wipe(BM.gameDots)
 	if BM.Preview() then return L.TestPins(GetTime(), cfg().nodes) end
 	local pins = {}
 	if IsInRaid() then
@@ -257,6 +266,29 @@ local function ColorFor(pin)
 	return c.r, c.g, c.b -- can be hidden values: they only go to widget setters
 end
 
+-- The game's own unit dots: it places them, so they work with no position to read. The layer is
+-- part of the map, so the size is divided by the zoom to stay the same on screen. No name can go
+-- with these dots, because the addon never learns where they are.
+local function AddGameDot(layer, unit, size)
+	local c = ns.GetUnitClassColor(unit)
+	-- a hidden color is refused here, where a texture would take it
+	if not pcall(layer.AddUnit, layer, unit, ns.MEDIA.dot, size, size, c.r, c.g, c.b, 1, 7, false) then
+		layer:AddUnit(unit, ns.MEDIA.dot, size, size, 1, 1, 1, 1, 7, false)
+	end
+end
+
+function BM.UpdateGameDots()
+	local layer = BM.gameLayer
+	if not layer then return end
+	local dots = BM.gameDots
+	if #dots == 0 and not BM.gameDotsUp then return end
+	BM.gameDotsUp = #dots > 0
+	layer:ClearUnits()
+	local size = cfg().dotSize / zoom
+	for _, unit in ipairs(dots) do pcall(AddGameDot, layer, unit, size) end
+	layer:FinalizeUnits()
+end
+
 local function Draw(mapID)
 	local c = cfg()
 	local pins = BM.Collect(mapID)
@@ -272,7 +304,7 @@ local function Draw(mapID)
 		p.icon:SetVertexColor(r, g, b)
 		p.ring:SetShown(pin.me and true or false)
 		if pin.me then p.ring:SetSize(size + 4, size + 4) end
-		local named = (isUnit and c.names) or (isNode and c.nodeNames and pin.name)
+		local named = isUnit and c.names
 		p.label:SetShown(named and true or false)
 		if named then
 			if p.styled ~= BM.styleRound then
@@ -290,6 +322,7 @@ local function Draw(mapID)
 	end
 	for i = #pins + 1, #pinFrames do pinFrames[i]:Hide() end
 	BM.shownPins = #pins
+	BM.UpdateGameDots()
 end
 
 local function ApplyView()
@@ -353,6 +386,7 @@ function BM.LoadMap(mapID)
 	for i = n + 1, #tiles do tiles[i]:Hide() end
 	RestoreView(mapID)
 	BM.mapID, BM.loadedWidth = mapID, c.width
+	if BM.gameLayer then BM.gameLayer:SetUiMapID(mapID) end
 	return true
 end
 
@@ -507,6 +541,12 @@ function BM:Init()
 	BM.view:SetAllPoints()
 	BM.view:SetClipsChildren(true)
 	BM.canvas = CreateFrame("Frame", nil, BM.view)
+	local ok, layer = pcall(CreateFrame, "UnitPositionFrame", nil, BM.canvas)
+	if ok and layer then
+		layer:SetAllPoints(BM.canvas)
+		layer:EnableMouse(false)
+		BM.gameLayer = layer
+	end
 	BM.pins = CreateFrame("Frame", nil, BM.view)
 	BM.pins:SetAllPoints()
 	BM.pins:SetFrameLevel(BM.view:GetFrameLevel() + 5)
@@ -556,9 +596,14 @@ end
 
 -- /stinkie map: what the game gives us, to see why something isn't on the map
 function BM.Debug()
+	local lines = {}
+	local function add(line)
+		print(line)
+		lines[#lines + 1] = readable(line) and line or "  (hidden by the game)"
+	end
 	local mapID = C_Map.GetBestMapForUnit("player")
 	local layer = mapID and (C_Map.GetMapArtLayers(mapID) or {})[1]
-	ns:Print(string.format("Blitz Map: map %s, in Blitz %s, art %s, showing %s", tostring(mapID), tostring(BM.InBlitz()),
+	add(string.format("Blitz Map: map %s, in Blitz %s, art %s, showing %s", tostring(mapID), tostring(BM.InBlitz()),
 		layer and (layer.layerWidth .. "x" .. layer.layerHeight) or "none", tostring(BM.frame:IsShown())))
 	local function unitLine(unit)
 		local pos = mapID and C_Map.GetPlayerMapPosition(mapID, unit)
@@ -566,8 +611,9 @@ function BM.Debug()
 		if pos then
 			text = readable(pos.x) and string.format("%.3f, %.3f", pos.x, pos.y) or "hidden"
 		end
-		print("  " .. unit .. ": " .. text)
+		add("  " .. unit .. ": " .. text)
 	end
+	add(string.format("  game dots: %s, %d now", BM.gameLayer and "ready" or "not available", #BM.gameDots))
 	unitLine("player")
 	if IsInRaid() then
 		for i = 1, GetNumGroupMembers() do unitLine("raid" .. i) end
@@ -576,20 +622,22 @@ function BM.Debug()
 	end
 	for i = 1, mapID and GetNumBattlefieldFlagPositions() or 0 do
 		local x, y, texture = C_PvP.GetBattlefieldFlagPosition(i, mapID)
-		print(string.format("  marker %d: %s, %s  file %s", i, tostring(x), tostring(y), tostring(texture)))
+		add(string.format("  marker %d: %s, %s  file %s", i, tostring(x), tostring(y), tostring(texture)))
 	end
 	for _, id in ipairs(mapID and C_AreaPoiInfo.GetAreaPOIForMap(mapID) or {}) do
 		local p = C_AreaPoiInfo.GetAreaPOIInfo(mapID, id)
 		if p then
-			print(string.format("  base %d: %s  atlas=%s  texture=%s", id, tostring(p.name), tostring(p.atlasName), tostring(p.textureIndex)))
+			add(string.format("  base %d: %s  atlas=%s  texture=%s", id, tostring(p.name), tostring(p.atlasName), tostring(p.textureIndex)))
 		end
 	end
 	for _, guid in ipairs(mapID and C_VignetteInfo and C_VignetteInfo.GetVignettes() or {}) do
 		local v = C_VignetteInfo.GetVignetteInfo(guid)
 		if v then
-			print(string.format("  vignette: %s  atlas=%s  on map=%s", tostring(v.name), tostring(v.atlasName), tostring(v.onWorldMap)))
+			add(string.format("  vignette: %s  atlas=%s  on map=%s", tostring(v.name), tostring(v.atlasName), tostring(v.onWorldMap)))
 		end
 	end
+	-- chat text can't be selected, so the report opens where it can be copied
+	if ns.Chat and ns.Chat.ShowText then ns.Chat.ShowText("Blitz Map report", table.concat(lines, "\n")) end
 end
 
 ns:RegisterModule("BlitzMap", BM)

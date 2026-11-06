@@ -332,7 +332,36 @@ do
 		if p.me then me = me + 1 end
 	end
 	check("you once, teammates once", units == 2 and me == 1, units)
-	check("no position, no dot", found[1].unit == "raid1")
+	check("no position, no dot of ours", found[1].unit == "raid1")
+	do
+		-- the game draws the ones the addon can't place
+		local layer, added, cleared, sized = BM.gameLayer, {}, 0, nil
+		local isDot = false
+		for _, u in ipairs(BM.gameDots) do if u == "raid3" then isDot = true end end
+		check("no position goes to the game's dots", isDot)
+		layer.ClearUnits = function() cleared = cleared + 1 end
+		layer.AddUnit = function(_, unit, _, w) added[#added + 1] = unit; sized = w end
+		BM.UpdateGameDots()
+		check("game dots drawn at the dot size", #added == #BM.gameDots and sized == c.dotSize, sized)
+		local oldColor = ns.GetUnitClassColor
+		local plain = 0
+		layer.AddUnit = function(_, _, _, _, _, r)
+			if r ~= 1 then error("refused") end
+			plain = plain + 1
+		end
+		ns.GetUnitClassColor = function() return { r = 0.5, g = 0.5, b = 0.5 } end
+		BM.UpdateGameDots()
+		check("a refused color falls back", plain == #BM.gameDots, plain)
+		ns.GetUnitClassColor = oldColor
+		wipe(BM.gameDots)
+		cleared = 0
+		BM.UpdateGameDots()
+		check("dots clear when not needed", cleared == 1)
+		BM.UpdateGameDots()
+		check("nothing to redo while empty", cleared == 1)
+		layer.ClearUnits, layer.AddUnit = nil, nil
+		BM.Collect(BM.mapID)
+	end
 	check("markers with no spot are skipped", flags == 1 and found[#found].color[1] > 0.9)
 	do
 		local secret, old = {}, ns.issecret
@@ -396,7 +425,18 @@ do
 	BM.Check()
 	check("no map art: nothing shows", not BM.frame:IsShown())
 	hasArt = true
-	ns.BlitzMap.Debug()
+	do
+		local title, text
+		local real = ns.Chat.ShowText
+		ns.Chat.ShowText = function(a, b) title, text = a, b end
+		ns.BlitzMap.Debug()
+		ns.Chat.ShowText = real
+		check("map report opens to copy", title == "Blitz Map report" and text:find("Blitz Map: map", 1, true) ~= nil, title)
+		check("map report lists game dots", text:find("game dots", 1, true) ~= nil)
+		local p = ns.Chat.ShowText("Test report", "line")
+		check("copy window shows the text", p:IsShown() and p.text == "line")
+		p:Hide()
+	end
 	MOCK.bracket = oldBracket
 	MOCK.flags = {}
 	c.enabled = false
