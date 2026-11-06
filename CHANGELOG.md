@@ -1,5 +1,21 @@
 # Stinkie UI changelog
 
+## 0.42.0
+- New Blitz Map: the zone map for each Blitz with class colored dots and names for your team, flag and orb icons, and bases and uncapped flags. Scroll to zoom, drag to look around, Shift+drag to move the window. Each map remembers its zoom. It has a test mode, and it's off by default.
+- New "BGs & Blitz" menu category holding Blitz Map, Battleground Frames, BG Score and BG Timers.
+- BG Timers: Arathi Basin and Deepwind Gorge in Blitz now follow the Blitz base cycle: 30 seconds to capture, 45 seconds locked, 5 seconds until it can be taken again.
+- Objectives: new "Group quests by zone" option. Zones fold with plus and minus buttons, there's a yellow button on each quest to focus it for the Quest marker, repeatable quests have a blue outline and campaign quests a purple one, and quest names keep their difficulty colors. In a dungeon or group the list folds under one Quests header.
+- Objectives: the background defaults to 50% opacity and shrinks to fit when All Objectives is folded.
+- Cooldowns: new option to gray out abilities you can't use right now.
+- Character Sheet: picture backgrounds now reach the edge of the window, and the lines around the character area and beside the weapons are gone.
+- Character Sheet: name and level sit closer together, with more space above.
+- Character Sheet: the durability line gets shorter as an item wears out.
+- Character Sheet: both Darken background sliders go to 1.00. New profiles start at 1.00 window opacity and 0.65 on both sliders.
+- Character Sheet: the Blizzard (race) background is gone, because it didn't fit the larger window. Anyone using it moves to Flat dark.
+- Nameplates: spec and healer icons no longer jump up when you target a friendly player. They stay just above the name and target border.
+- Mouse circle: moves more smoothly.
+- Fixed: a "Font not set" error from nameplates that only show widgets.
+
 ## 0.41.0
 - Nameplates: the options are now a group of pages: General, Enemy, Friendly, Target, Icons, and Auras & Units.
 - Nameplates: friendly plates have their own settings for name (first, last or both), name length, level, health percent and its text, target marker and healer cross size. Your existing plates look the same as before.

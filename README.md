@@ -22,6 +22,7 @@ Unzip so the folders are `World of Warcraft/_retail_/Interface/AddOns/StinkieUI/
 - `/stinkie auras`: prints how your target's nameplate aura icons are set up (for bug reports)
 - `/stinkie quest`: what the Quest marker can see right now (for bug reports)
 - `/stinkie tooltip`: what the game reports for the tooltip under your mouse (for bug reports)
+- `/stinkie map`: what the Blitz Map can see right now (for bug reports)
 - `/stinkie reset`: restore all defaults and reload
 
 ## What's in it

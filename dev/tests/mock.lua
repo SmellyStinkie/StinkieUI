@@ -67,6 +67,8 @@ function Frame:GetBottom() return 290 end
 function Frame:GetScale() return self._scale end
 function Frame:SetScale(s) self._scale = s end
 function Frame:GetEffectiveScale() return 1 end
+function Frame:GetFrameStrata() return "MEDIUM" end
+function Frame:SetClipsChildren(v) self._clips = v end
 function Frame:SetAlpha(a) self._alpha = a end
 function Frame:GetAlpha() return self._alpha end
 function Frame:GetFrameLevel() return 1 end
@@ -172,6 +174,14 @@ function hooksecurefunc(a, b, c)
 		_G[a] = function(...) local r = { old and old(...) } b(...) return unpack(r) end
 	end
 end
+bit = bit or { band = function(a, b)
+	local out, place = 0, 1
+	while a > 0 and b > 0 do
+		if a % 2 == 1 and b % 2 == 1 then out = out + place end
+		a, b, place = math.floor(a / 2), math.floor(b / 2), place * 2
+	end
+	return out
+end }
 function InCombatLockdown() return false end
 function UnitAffectingCombat() return false end
 function IsInInstance() return MOCK.instanceType ~= "none", MOCK.instanceType end

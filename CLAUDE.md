@@ -80,7 +80,7 @@ Published on CurseForge (project 1780262) and Wago (rNkgx3Na) by the GitHub Acti
 ## In-game debug commands
 
 `/stinkie dmg`, `/stinkie cpu`, `/stinkie score`, `/stinkie plates`, `/stinkie auras`,
-`/stinkie flags`, `/stinkie timers`, `/stinkie fontcheck`, `/stinkie quest`, `/stinkie tooltip`. They print what the game reports, so a
+`/stinkie flags`, `/stinkie timers`, `/stinkie fontcheck`, `/stinkie quest`, `/stinkie tooltip`, `/stinkie map`. They print what the game reports, so a
 pasted result tells you what this client actually has. `/st` is short for `/stinkie`.
 
 ## Releasing

@@ -63,7 +63,13 @@ function OB.ApplyBackground()
 	end
 	local bg = OB.bg
 	bg:ClearAllPoints()
-	bg:SetPoint("TOPLEFT", t.NineSlice, "TOPLEFT", -c.padding, c.padding)
+	if ns.QuestList.Active() then
+		-- Blizzard's background leaves a strip on the left for its quest icons; our list has none
+		bg:SetPoint("TOP", t.NineSlice, "TOP", 0, c.padding)
+		bg:SetPoint("LEFT", t, "LEFT", -c.padding, 0)
+	else
+		bg:SetPoint("TOPLEFT", t.NineSlice, "TOPLEFT", -c.padding, c.padding)
+	end
 	bg:SetPoint("BOTTOMRIGHT", t.NineSlice, "BOTTOMRIGHT", c.padding, -c.padding)
 	local col = c.bgColor
 	bg.tex:SetColorTexture(col[1], col[2], col[3], c.bgAlpha)
@@ -77,6 +83,16 @@ function OB.ApplyBackground()
 		t.NineSlice:SetAlpha(1)
 	end
 	OB.nineSliceTouched = c.enabled and c.hideBlizzardBg
+end
+
+-- Folded with its minus button, the tracker hides its sections but keeps their heights, and still
+-- ends the background at the last hidden one. Ours follows that background, so end it at the header.
+function OB.FitCollapsed()
+	local t = Tracker()
+	if OB.fitting or not (t and t.isCollapsed and t.Header and t.NineSlice and cfg().enabled) then return end
+	OB.fitting = true
+	t.NineSlice:SetPoint("BOTTOM", t.Header, "BOTTOM", 0, 0)
+	OB.fitting = false
 end
 
 ---------------------------------------------------------------------------
@@ -209,14 +225,18 @@ function OB:Init()
 	if t.Update then
 		local queued = false
 		hooksecurefunc(t, "Update", function()
+			OB.FitCollapsed()
 			if queued then return end
 			queued = true
 			C_Timer.After(0, function() queued = false; pcall(OB.ApplyFlat) end)
 		end)
 	end
+	-- Blizzard's routine updates skip the Update hook but always anchor this
+	if t.NineSlice then hooksecurefunc(t.NineSlice, "SetPoint", OB.FitCollapsed) end
 	ns:On("PLAYER_ENTERING_WORLD", function() OB.ApplyFrame() end)
 	ns:On("ZONE_CHANGED_NEW_AREA", function() OB.ApplyFrame() end)
 	ns:On("CHALLENGE_MODE_START", function() OB.ApplyFrame() end)
+	ns.QuestList.Setup()
 	OB:Refresh()
 end
 
@@ -226,6 +246,7 @@ function OB:Refresh()
 	OB.ApplyBackground()
 	pcall(OB.ApplyFlat)
 	OB.ApplyFrame()
+	ns.QuestList.Refresh()
 	-- new text sizes show on the tracker's next update (any quest change, zone or /reload)
 end
 

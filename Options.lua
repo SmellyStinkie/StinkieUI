@@ -1443,6 +1443,25 @@ local function BuildBGScorePage(page)
 	page:TextStyle("Status text", function() return fc().statusStyle end, {})
 end
 
+local function BuildBlitzMapPage(page)
+	local function cfg() return ns.db.blitzMap end
+	page:Column(1)
+	page:Header("Blitz Map")
+	page:Note("The zone map in its own window during Blitz, with your team and any flags or orbs. Use the mouse wheel to zoom and drag to look around. Shift+drag moves the window.", 62)
+	page:Check("Enabled", Getter(cfg, "enabled"), function(v) cfg().enabled = v; ns.BlitzMap:Refresh() end)
+	page:Button("Test mode on / off", function() ns.BlitzMap:SetTestMode(not ns.BlitzMap.testMode) end)
+	page:Header("Look")
+	page:Slider("Width", 200, 700, 10, Getter(cfg, "width"), Setter(cfg, "width"))
+	page:Slider("Teammate dot size", 6, 24, 1, Getter(cfg, "dotSize"), Setter(cfg, "dotSize"))
+	page:Slider("Flag and orb size", 12, 40, 1, Getter(cfg, "iconSize"), Setter(cfg, "iconSize"))
+	page:Slider("Base icon size", 12, 40, 1, Getter(cfg, "nodeSize"), Setter(cfg, "nodeSize"))
+	page:Check("Show names", Getter(cfg, "names"), Setter(cfg, "names"))
+	page:Check("Show bases and objectives", Getter(cfg, "nodes"), Setter(cfg, "nodes"))
+	page:Check("Show base names", Getter(cfg, "nodeNames"), Setter(cfg, "nodeNames"))
+	page:TextStyle("Name text", function() return cfg().nameStyle end, { noColor = true })
+	page:Position(nil, function() return "blitzMap" end)
+end
+
 local function BuildBGTimersPage(page)
 	local function cfg() return ns.db.bgTimers end
 	page:Column(1)
@@ -1468,14 +1487,14 @@ local function BuildBGTimersPage(page)
 	page:Color("Unknown team / resurrection", Getter(cfg, "neutralColor"), Setter(cfg, "neutralColor"))
 	page:Position(nil, function() return "bgTimers" end)
 	page:Column(2)
-	page:TextList("Base capture time per map", 150, function() return table.concat(cfg().durations, "\n") end, function(text)
+	page:TextList("Base capture time per map (regular timing)", 150, function() return table.concat(cfg().durations, "\n") end, function(text)
 		local list = {}
 		for line in text:gmatch("[^\r\n]+") do
 			line = strtrim(line)
 			if line ~= "" then table.insert(list, line) end
 		end
 		cfg().durations = list
-	end, "One map per line: Map name = seconds. Maps not listed get no base timers (maps without bases, like Warsong Gulch, need nothing).")
+	end, "One map per line: Map name = seconds. Maps not listed get no base timers (maps without bases, like Warsong Gulch, need nothing). Blitz on Arathi Basin and Deepwind Gorge ignores this list.")
 	page:Note("Map names as the game shows them on entry. /stinkie timers inside a battleground prints the map name and what each base icon reports, to add or correct a map.", 62)
 	page:TextStyle("Bar text", function() return cfg().textStyle end, {})
 end
@@ -1572,7 +1591,7 @@ local function BuildCharacterPage(page)
 	page:Check("Arrow under the trinkets to hide / show stats, titles and sets", Getter(cfg, "collapseButton"), function(v) cfg().collapseButton = v; bgChanged() end)
 	page:Check("Name and level centered over the character", Getter(cfg, "centerHeader"), function(v) cfg().centerHeader = v; bgChanged() end)
 	page:Check("Background across the whole window (flat look)", Getter(cfg, "wideBackground"), function(v) cfg().wideBackground = v; bgChanged() end)
-	page:Slider("Darken background (character area)", 0, 0.9, 0.05, Getter(cfg, "dim"), function(v) cfg().dim = v; bgChanged() end)
+	page:Slider("Darken background (character area)", 0, 1, 0.05, Getter(cfg, "dim"), function(v) cfg().dim = v; bgChanged() end)
 	page:Slider("Darken background (names and stats)", 0, 1, 0.05, Getter(cfg, "outerDim"), function(v) cfg().outerDim = v; bgChanged() end)
 	page:Header("Item details")
 	page:Check("Compact (less busy)", Getter(cfg, "compact"), Setter(cfg, "compact"))
@@ -1621,6 +1640,9 @@ local function BuildObjectivesPage(page)
 	page:Choice("Outline", { { "NONE", "None" }, { "OUTLINE", "Thin" }, { "THICKOUTLINE", "Thick" } }, Getter(cfg, "outline"), Setter(cfg, "outline"))
 	page:Header("Size")
 	page:Slider("Scale", 0.5, 2, 0.05, Getter(cfg, "scale"), Setter(cfg, "scale"))
+	page:Header("Quests")
+	page:Check("Group quests by zone", Getter(cfg, "zoneGroups"), Setter(cfg, "zoneGroups"), true)
+	page:Note("Click the plus or minus on a zone to fold it. Right-click a quest to focus it or stop tracking it.", 36)
 	page:Header("Look")
 	page:Check("Flat headers, bars and quest item buttons", Getter(cfg, "flat"), Setter(cfg, "flat"), true)
 	page:Note("Headers get a thin accent line instead of Blizzard's gradient; progress bars a flat fill with a 1px border.", 36)
@@ -2372,9 +2394,12 @@ local pages = {
 	{ "Cooldowns", BuildCooldownPage },
 	{ "PvP Assist", BuildArenaAssistPage },
 	{ "Arena Frames", BuildArenaPage },
-	{ "Battleground Frames", BuildBGPage },
-	{ "BG Score", BuildBGScorePage },
-	{ "BG Timers", BuildBGTimersPage },
+	{ "BGs & Blitz", children = {
+		{ "Blitz Map", BuildBlitzMapPage },
+		{ "Battleground Frames", BuildBGPage },
+		{ "BG Score", BuildBGScorePage },
+		{ "BG Timers", BuildBGTimersPage },
+	} },
 	{ "Character Sheet", BuildCharacterPage },
 	{ "Combat Indicator", BuildCombatPage },
 	{ "Match History", children = {

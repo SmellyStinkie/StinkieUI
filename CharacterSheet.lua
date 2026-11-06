@@ -174,13 +174,14 @@ local function Overlay(button, side)
 	e[4]:SetPoint("TOPRIGHT"); e[4]:SetPoint("BOTTOMRIGHT"); e[4]:SetWidth(2)
 	hl:Hide()
 	o.highlight = hl
-	-- durability: a thin vertical line on the text side of the icon, green -> yellow -> red
+	-- durability: a thin vertical line on the text side of the icon, green -> yellow -> red, which
+	-- drains toward the bottom of the icon as the item wears out
 	local dura = button:CreateTexture(nil, "OVERLAY", nil, 6)
 	dura:SetWidth(2)
 	if side == "RIGHT" then
-		dura:SetPoint("TOPLEFT", button, "TOPRIGHT", 1, 0); dura:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 1, 0)
+		dura:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 1, 0)
 	else
-		dura:SetPoint("TOPRIGHT", button, "TOPLEFT", -1, 0); dura:SetPoint("BOTTOMRIGHT", button, "BOTTOMLEFT", -1, 0)
+		dura:SetPoint("BOTTOMRIGHT", button, "BOTTOMLEFT", -1, 0)
 	end
 	dura:Hide()
 	o.dura = dura
@@ -195,6 +196,11 @@ function CS.DurabilityColor(frac)
 	return 1, 0.85 * frac * 2, 0.15
 end
 
+-- never quite gone: a broken item still shows its red mark
+function CS.DurabilityHeight(frac, full)
+	return math.max(2, full * math.max(0, math.min(1, frac)))
+end
+
 local function UpdateDurability(o, unit, slot)
 	local c = cfg()
 	if not o.dura then return end
@@ -204,6 +210,7 @@ local function UpdateDurability(o, unit, slot)
 	local r, g, b = CS.DurabilityColor(cur / max)
 	o.dura:SetColorTexture(r, g, b, 1)
 	o.dura:SetWidth(c.durabilityWidth or 2)
+	o.dura:SetHeight(CS.DurabilityHeight(cur / max, o.dura:GetParent():GetHeight() or 0))
 	o.dura:Show()
 end
 CS.UpdateDurability = UpdateDurability
@@ -631,7 +638,7 @@ end
 ---------------------------------------------------------------------------
 -- list for the options: { value, label }
 function CS.BackgroundChoices()
-	local items = { { "blizzard", "Blizzard (race)" }, { "dark", "Flat dark" }, { "custom", "Custom texture / atlas" } }
+	local items = { { "dark", "Flat dark" }, { "custom", "Custom texture / atlas" } }
 	local W = C_WarbandScene
 	if W and W.SearchWarbandSceneEntries then
 		local ok, ids = pcall(W.SearchWarbandSceneEntries, { ownedOnly = cfg().ownedOnly and true or false, favoritesOnly = false })
@@ -648,8 +655,12 @@ function CS.BackgroundChoices()
 	return items
 end
 
--- fills a region with an atlas, cropped (not stretched) to the region's shape
-local function SetAtlasCropped(tex, atlas, w, h)
+-- Camp pictures are collection cards with a dark edge built into the image, so that edge is cut off
+local CAMP_TRIM = 0.03
+
+-- fills a region with an atlas, cropped (not stretched) to the region's shape. trim cuts that share
+-- off every side of the picture first.
+local function SetAtlasCropped(tex, atlas, w, h, trim)
 	local info = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas)
 	if not (info and info.file and w and h and w > 0 and h > 0) then
 		tex:SetAtlas(atlas)
@@ -657,6 +668,10 @@ local function SetAtlasCropped(tex, atlas, w, h)
 	end
 	local l, r, t, b = info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord
 	local aw, ah = info.width, info.height
+	if trim then
+		local cutX, cutY = (r - l) * trim, (b - t) * trim
+		l, r, t, b = l + cutX, r - cutX, t + cutY, b - cutY
+	end
 	if aw and ah and aw > 0 and ah > 0 then
 		local target, src = w / h, aw / ah
 		if src > target then
@@ -687,6 +702,7 @@ local function PaintWindowFill(panel)
 	local col = c.frameColor
 	local wide = panel.SUIWide and panel.SUIWide:IsShown()
 	flat.tex:SetColorTexture(col[1], col[2], col[3], wide and 0 or c.frameAlpha)
+	ns.SetBorderColor(flat, 0, 0, 0, wide and 0 or 1) -- the picture runs right to the window's edge
 end
 CS.PaintWindowFill = PaintWindowFill
 
@@ -730,11 +746,19 @@ local function WideBackground(model, panel)
 		local irl = ir:GetLeft() * ((ir:GetEffectiveScale() > 0 and ws > 0) and ir:GetEffectiveScale() / ws or 1)
 		if irl > L and irl < R then split = irl - L end
 	end
+	-- the same shade everywhere is one pane, so no join between panes can show as a line
+	local same = math.abs(outer - inner) < 0.001
 	p[1]:ClearAllPoints(); p[1]:SetPoint("TOPLEFT", w, "TOPLEFT"); p[1]:SetPoint("BOTTOMRIGHT", w, "TOPRIGHT", 0, -top)
 	p[3]:ClearAllPoints(); p[3]:SetPoint("TOPLEFT", w, "TOPLEFT", split, -top); p[3]:SetPoint("BOTTOMRIGHT", w, "BOTTOMRIGHT")
-	p[5]:ClearAllPoints(); p[5]:SetPoint("TOPLEFT", w, "TOPLEFT", 0, -top); p[5]:SetPoint("BOTTOMRIGHT", w, "BOTTOMLEFT", split, 0)
+	p[5]:ClearAllPoints()
+	if same then
+		p[5]:SetAllPoints(w)
+	else
+		p[5]:SetPoint("TOPLEFT", w, "TOPLEFT", 0, -top); p[5]:SetPoint("BOTTOMRIGHT", w, "BOTTOMLEFT", split, 0)
+	end
 	p[1]:SetAlpha(outer); p[3]:SetAlpha(outer); p[5]:SetAlpha(inner)
-	p[3]:SetShown(split < (R - L) - 1)
+	p[1]:SetShown(not same)
+	p[3]:SetShown(not same and split < (R - L) - 1)
 	p[5]:SetShown(inner > 0)
 	p[2]:Hide(); p[4]:Hide()
 	w:SetAlpha(c.frameAlpha)
@@ -743,6 +767,14 @@ local function WideBackground(model, panel)
 	return w.bg, w:GetWidth(), w:GetHeight()
 end
 CS.WideBackground = WideBackground
+
+-- The black line around the character area: it marks the area off from a plain window, but over
+-- the whole-window picture it would be a line drawn across the art.
+local function PaintModelEdge(model)
+	local panel = PANEL_OF[model]
+	local wide = panel and panel.SUIWide and panel.SUIWide:IsShown()
+	ns.SetBorderColor(model, 0, 0, 0, wide and 0 or 1)
+end
 
 local function ApplyBackground(model)
 	if not model then return end
@@ -763,6 +795,7 @@ local function ApplyBackground(model)
 		for _, t in ipairs(blizz) do if t then t:SetAlpha(t == model.BackgroundOverlay and t:GetAlpha() or 1) end end
 		bg:Hide(); dim:Hide()
 		if panel and panel.SUIWide then panel.SUIWide:Hide() end
+		PaintModelEdge(model)
 		return
 	end
 	for _, t in ipairs(blizz) do if t then t:SetAlpha(0) end end
@@ -794,13 +827,14 @@ local function ApplyBackground(model)
 	elseif mode:find("^warband:") then
 		local id = tonumber(mode:match("^warband:(%d+)"))
 		local e = id and C_WarbandScene and C_WarbandScene.GetWarbandSceneEntry(id)
-		if e and readable(e.textureKit) then SetAtlasCropped(bg, e.textureKit, w, h) else bg:SetColorTexture(0.06, 0.06, 0.07, 1) end
+		if e and readable(e.textureKit) then SetAtlasCropped(bg, e.textureKit, w, h, CAMP_TRIM) else bg:SetColorTexture(0.06, 0.06, 0.07, 1) end
 	end
 	bg:Show()
 	if dim then
 		dim:SetAlpha(c.dim)
 		dim:SetShown(c.dim > 0)
 	end
+	PaintModelEdge(model)
 end
 CS.ApplyBackground = ApplyBackground
 
@@ -885,6 +919,10 @@ local function SkinSlot(button)
 	local nt = button.GetNormalTexture and button:GetNormalTexture()
 	Hide(nt)
 	Hide(button.IconBorder)
+	-- the bracket lines Blizzard draws beside the weapon slots
+	for _, r in ipairs({ button:GetRegions() }) do
+		if r:IsObjectType("Texture") and r:GetDrawLayer() == "BACKGROUND" then r:SetAlpha(0) end
+	end
 	local icon = button.icon or (name and _G[name .. "IconTexture"])
 	if icon then
 		icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -925,7 +963,7 @@ local function SkinModel(model)
 		ns.CreateBackdrop(model, 0)
 		model.SUIEdge = true
 	end
-	ns.SetBorderColor(model, 0, 0, 0, 1)
+	PaintModelEdge(model)
 end
 
 local function SkinStats()
@@ -1229,6 +1267,8 @@ end
 
 -- Name (title bar) and "Level 90 Affliction Warlock" centered over the character, not over the
 -- whole window (which is wider than Blizzard's on the left for the gems and on the right).
+local TITLE_Y, LEVEL_Y = -13, -37 -- name down from the top of the window, level up to meet it
+
 function CS.CenterHeader()
 	local cf, inset = _G.CharacterFrame, _G.CharacterFrame and _G.CharacterFrame.Inset
 	local c = cfg()
@@ -1242,7 +1282,7 @@ function CS.CenterHeader()
 		local cx = container:GetCenter()
 		title:ClearAllPoints()
 		if on and ix and cx then
-			title:SetPoint("TOP", container, "TOP", ix - cx, -5)
+			title:SetPoint("TOP", container, "TOP", ix - cx, TITLE_Y)
 			title:SetWidth(math.max(60, inset:GetWidth() - 8))
 		else
 			title:SetPoint("TOP", 0, -5); title:SetPoint("LEFT"); title:SetPoint("RIGHT")
@@ -1250,10 +1290,9 @@ function CS.CenterHeader()
 	end
 	if level and on and ix then
 		local fx = _G.PaperDollFrame:GetCenter()
-		local _, _, _, _, y = level:GetPoint(1)
 		if fx then
 			level:ClearAllPoints()
-			level:SetPoint("CENTER", _G.PaperDollFrame, "TOP", ix - fx, tonumber(y) or -42)
+			level:SetPoint("CENTER", _G.PaperDollFrame, "TOP", ix - fx, LEVEL_Y)
 		end
 	end
 end

@@ -151,13 +151,10 @@ local PRESET = {
 	},
 	character = {
 		background = "warband:25",
-		dim = 0.65,
 		extraHeight = 100,
 		extraWidth = 100,
-		frameAlpha = 0.65,
 		gemSize = 13,
 		nameChars = 20,
-		outerDim = 0.65,
 		scale = 1.45,
 	},
 	chat = {

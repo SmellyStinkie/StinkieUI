@@ -59,6 +59,11 @@ function CU:Apply()
 	f.tex:SetVertexColor(c[1], c[2], c[3], 1)
 	f.tex:SetAlpha(cfg.ringAlpha)
 	f.tex:SetSize(cfg.ringSize, cfg.ringSize)
+	-- by default a texture jumps to whole pixels, which makes a moving ring stutter
+	if f.tex.SetSnapToPixelGrid then
+		f.tex:SetSnapToPixelGrid(false)
+		f.tex:SetTexelSnappingBias(0)
+	end
 	f:Show()
 end
 

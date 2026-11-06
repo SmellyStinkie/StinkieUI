@@ -332,6 +332,13 @@ function NP.BorderReach(f)
 	return (ns.db.nameplates.highlight.outset or 0) * ns.Pixel(f)
 end
 
+-- Height of the spec / healer slot above a full-size bar. Enemy plates leave room for their aura
+-- row. Friendly plates have no auras, so a friendly target's icons sit just over its name and border.
+function NP.SlotHeight(f, nameInBar, fontSize)
+	if f.friendTarget then return (nameInBar and 2 or fontSize + 5) + NP.BorderReach(f) end
+	return (nameInBar and 4 or fontSize + 6) + ns.db.nameplates.auraSize + 4
+end
+
 local THREAT_SPOTS = { LEFT = { "BOTTOMLEFT", "TOPLEFT" }, CENTER = { "BOTTOM", "TOP" }, RIGHT = { "BOTTOMRIGHT", "TOPRIGHT" } }
 
 -- Everything just above and below the bar, kept clear of the target border.
@@ -539,6 +546,7 @@ local function CreatePlateFrame(nameplate)
 	roles.unit:SetSize(12, 12)
 	roles.text = roles:CreateFontString(nil, "OVERLAY")
 	roles.text:SetPoint("CENTER")
+	pcall(roles.text.SetFont, roles.text, ns.MEDIA.healerFont, 12, "OUTLINE") -- text needs a font from the start
 	roles:Hide()
 	f.SecretRoles = roles
 
@@ -757,9 +765,7 @@ local function LayoutPlate(f)
 				frame:SetPoint("BOTTOM", f.Name, "TOP", dx, 2 + dy)
 			end
 		else
-			-- above the aura row so the two never overlap
-			local y = (nameInBar and 4 or (fontSize + 6)) + cfg.auraSize + 4
-			frame:SetPoint("BOTTOM", f.HealthFrame, "TOP", dx, y + dy)
+			frame:SetPoint("BOTTOM", f.HealthFrame, "TOP", dx, NP.SlotHeight(f, nameInBar, fontSize) + dy)
 		end
 	end
 	local specOn = (friendly and cfg.specIconsFriendly) or (not friendly and cfg.specIcons)
@@ -954,6 +960,7 @@ local function OnPlateAdded(unit)
 	local f = nameplate.SUIFrame or CreatePlateFrame(nameplate)
 	f.unit = unit
 	if UnitNameplateShowsWidgetsOnly(unit) or UnitIsGameObject(unit) then
+		f.unit = nil -- not one of our plates: nothing later should update it
 		f:Hide()
 		f.Castbar:SetUnit(nil)
 		ns.SetAuraUnit(f.Auras, nil)

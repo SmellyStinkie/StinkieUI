@@ -182,6 +182,7 @@ do
 	MOCK.Fire("AREA_POIS_UPDATED")
 	MOCK.Advance(1)
 	check("bar: assault", shown()["Stables"])
+	check("the map list doesn't set the time", shown()["0:29"] or shown()["0:28"])
 	for _ = 1, 30 do MOCK.Advance(1) end
 	check("bar: locked", shown()["Stables locked"] and not shown()["Stables"])
 	for _ = 1, 45 do MOCK.Advance(1) end
@@ -197,6 +198,214 @@ do
 	MOCK.Fire("PLAYER_ENTERING_WORLD", false, false)
 end
 flushErrors("blitz cycle")
+
+-- Blitz Map
+do
+	local BM, L, c = ns.BlitzMap, ns.BlitzMap.Logic, ns.db.blitzMap
+	check("blitz map is off by default", c.enabled == false and not BM.frame:IsShown())
+	check("map is clipped", BM.view._clips == true)
+
+	-- markers
+	local A, H = L.Icon(137200), L.Icon(137218)
+	check("alliance flag", A.kind == "flag" and A.color[3] > A.color[1])
+	check("horde flag", H.kind == "flag" and H.color[1] > H.color[3])
+	check("orbs", L.Icon(625754).kind == "orb" and L.Icon(625757).kind == "orb" and L.Icon(625755).color ~= L.Icon(625756).color)
+	check("flag by file name", L.Icon("Interface\\WorldStateFrame\\HordeFlag") == H)
+	check("orb by file name", L.Icon("interface/minimap/templeofkotmogu_ball_green").kind == "orb")
+	check("unknown marker is a neutral flag", L.Icon(1).kind == "flag" and L.Icon(nil).kind == "flag")
+
+	-- zoom keeps the point under the cursor, and the map fills the window
+	local x, y = L.ZoomAt(1, 2, 0, 0, 100, 50, 300, 200)
+	check("zoom at the cursor", x == -100 and y == -50)
+	x, y = L.ZoomAt(2, 4, -100, -50, 250, 150, 300, 200)
+	check("zoomed further", x == -450 and y == -250, x)
+	x, y = L.ClampPan(50, 50, 2, 300, 200)
+	check("can't pull past the top left", x == 0 and y == 0)
+	x, y = L.ClampPan(-900, -900, 2, 300, 200)
+	check("or the bottom right", x == -300 and y == -200)
+	x, y = L.ZoomAt(2, 1, -300, -200, 10, 10, 300, 200)
+	check("zoomed out fits again", x == 0 and y == 0)
+	x, y = L.Place(0.5, 0.25, 2, -100, -50, 300, 200)
+	check("pin follows zoom", x == 200 and y == 50)
+	check("zoom stops", L.NextZoom(1, -1) == 1 and L.NextZoom(6, 1) == 6 and L.NextZoom(1, 1) == 1.25)
+	check("zoom gets back to exactly 1", L.NextZoom(1.25, -1) == 1)
+
+	local cols, rows = L.TileGrid({ layerWidth = 1002, layerHeight = 668, tileWidth = 256, tileHeight = 256 })
+	check("tile grid", cols == 4 and rows == 3)
+
+	-- map art
+	local saved = {}
+	local function stub(tbl, k, fn) saved[#saved + 1] = { tbl, k, rawget(tbl, k) }; rawset(tbl, k, fn) end
+	local art = {}
+	for i = 1, 12 do art[i] = 1000 + i end
+	local hasArt = true
+	local positions = {}
+	stub(C_Map, "GetMapArtLayers", function()
+		return hasArt and { { layerWidth = 1002, layerHeight = 668, tileWidth = 256, tileHeight = 256 } } or nil
+	end)
+	stub(C_Map, "GetMapArtLayerTextures", function() return art end)
+	stub(C_Map, "GetPlayerMapPosition", function(_, unit) return positions[unit] end)
+	stub(_G, "IsInRaid", function() return true end)
+	stub(_G, "GetNumGroupMembers", function() return 3 end)
+	stub(_G, "UnitIsUnit", function(a, b) return a == "raid2" and b == "player" end)
+
+	-- test mode needs nothing but the map
+	BM:SetTestMode(true)
+	check("test mode shows it, enabled or not", BM.frame:IsShown())
+	check("window keeps the map's shape", math.abs(BM.frame._h - c.width * 668 / 1002) < 0.01 and BM.frame._w == c.width,
+		tostring(BM.frame._w) .. " " .. tostring(BM.frame._h))
+	check("fake team, markers and bases drawn", BM.shownPins == 17, BM.shownPins)
+	local pins = L.TestPins(10, true)
+	check("test pins stay on the map", (function()
+		for _, p in ipairs(pins) do
+			if p.x < 0 or p.x > 1 or p.y < 0 or p.y > 1 then return false end
+		end
+		return true
+	end)())
+	BM.OnWheel(1)
+	check("wheel zooms", BM.canvas._scale == 1.25, BM.canvas._scale)
+	BM.OnWheel(-1)
+	check("and back", BM.canvas._scale == 1)
+	-- each map remembers its zoom and spot
+	do
+		local u, v = L.ViewCenter(-100, -50, 2, 300, 200)
+		x, y = L.PanForCenter(u, v, 2, 300, 200)
+		check("view round trip", math.abs(x + 100) < 0.001 and math.abs(y + 50) < 0.001)
+		x, y = L.PanForCenter(u, v, 2, 600, 400)
+		check("view follows a wider window", math.abs(x + 200) < 0.001 and math.abs(y + 100) < 0.001)
+		x, y = L.PanForCenter(0, 0, 2, 300, 200)
+		check("a saved view stays on the map", x == 0 and y == 0)
+
+		check("nothing saved at full map", next(c.views) == nil)
+		BM.OnWheel(1)
+		BM.OnWheel(1)
+		local saved = c.views[BM.mapID]
+		check("zoom is saved for this map", saved and math.abs(saved.zoom - 1.5625) < 0.001)
+		local keptU = saved.u
+		BM.mapID = nil
+		BM.Check()
+		check("zoom comes back", math.abs(BM.canvas._scale - 1.5625) < 0.001, BM.canvas._scale)
+		check("so does the spot", math.abs(c.views[BM.mapID].u - keptU) < 0.001)
+		c.views[1234] = { zoom = 99, u = 0.5, v = 0.5 }
+		check("other maps have their own", c.views[BM.mapID].zoom ~= 99)
+		c.views[1234] = nil
+		BM.OnWheel(-1)
+		BM.OnWheel(-1)
+		check("zooming all the way out clears it", c.views[BM.mapID] == nil and BM.canvas._scale == 1)
+	end
+	local before = BM.shownPins
+	MOCK.Advance(0.2)
+	check("test mode keeps drawing", BM.shownPins == before)
+
+	-- moving saves where it landed
+	local f = BM.frame
+	local shift = false
+	stub(_G, "IsShiftKeyDown", function() return shift end)
+	f:GetScript("OnDragStart")(f, "LeftButton")
+	check("drag looks around, doesn't move the window", BM.panning ~= nil and not BM.moving)
+	f:GetScript("OnDragStop")(f)
+	check("drag ends", BM.panning == nil)
+	shift = true
+	f:GetScript("OnDragStart")(f, "LeftButton")
+	check("shift+drag moves the window", BM.moving == true and BM.panning == nil)
+	f:GetScript("OnDragStop")(f)
+	check("position saved", c.point[1] == "CENTER" and not BM.moving)
+	shift = false
+	c.point = ns.defaults.blitzMap.point
+	BM:SetTestMode(false)
+	check("test mode off hides it", not BM.frame:IsShown())
+
+	-- a real match
+	c.enabled = true
+	BM:Refresh()
+	check("not in Blitz: hidden", not BM.frame:IsShown())
+	local oldBracket = MOCK.bracket
+	MOCK.bracket = "blitz"
+	positions = { player = { x = 0.5, y = 0.5 }, raid1 = { x = 0.2, y = 0.3 }, raid2 = { x = 0.5, y = 0.5 }, raid3 = { x = 0, y = 0 } }
+	MOCK.flags = { { x = 0.4, y = 0.4, tex = 137218 }, { x = 0, y = 0, tex = 137200 } }
+	BM.Check()
+	check("shows in Blitz", BM.frame:IsShown())
+	local found = BM.Collect(BM.mapID)
+	local units, flags, me = 0, 0, 0
+	for _, p in ipairs(found) do
+		if p.kind == "unit" then units = units + 1 else flags = flags + 1 end
+		if p.me then me = me + 1 end
+	end
+	check("you once, teammates once", units == 2 and me == 1, units)
+	check("no position, no dot", found[1].unit == "raid1")
+	check("markers with no spot are skipped", flags == 1 and found[#found].color[1] > 0.9)
+	do
+		local secret, old = {}, ns.issecret
+		ns.issecret = function(v) return v == secret end
+		check("collect doesn't choke", #BM.Collect(BM.mapID) == 3)
+		ns.issecret = old
+	end
+	-- bases and objectives
+	do
+		local vignettes = {
+			a = { name = "Alliance Flag", onWorldMap = true },
+			b = { name = "Crystal", onWorldMap = true, atlasName = "crystal-icon" },
+			c = { name = "Dead thing", onWorldMap = true, isDead = true, atlasName = "x" },
+			d = { name = "Not on the map", atlasName = "x" },
+		}
+		local oldVignette = C_VignetteInfo
+		C_VignetteInfo = {
+			GetVignettes = function() return { "a", "b", "c", "d" } end,
+			GetVignetteInfo = function(guid) return vignettes[guid] end,
+			GetVignettePosition = function() return { x = 0.6, y = 0.6 } end,
+		}
+		local oldPois = MOCK.pois
+		MOCK.pois = {
+			[1] = { name = "Stables", textureIndex = 36, position = { x = 0.3, y = 0.3 } },
+			[2] = { name = "Stables Graveyard", textureIndex = 8, position = { x = 0.1, y = 0.1 } },
+			[3] = { name = "Farm", atlasName = "farm-horde", position = { x = 0.7, y = 0.7 } },
+			[4] = { name = "No icon", position = { x = 0.2, y = 0.2 } },
+		}
+		local got = BM.ReadObjectives(BM.mapID)
+		local names = {}
+		for _, p in ipairs(got) do names[#names + 1] = tostring(p.name) .. ":" .. p.kind end
+		local list = table.concat(names, ",")
+		check("bases, no graveyards or empty spots", list:find("Stables:node", 1, true) and list:find("Farm:node", 1, true)
+			and not list:find("Graveyard", 1, true) and not list:find("No icon", 1, true), list)
+		check("uncapped flag uses our art", list:find("nil:flag", 1, true) ~= nil, list)
+		check("other objectives use their icon", list:find("Crystal:node", 1, true) ~= nil, list)
+		check("dead or off-map ones are skipped", #got == 4, #got)
+		check("base keeps its icon number", got[1].poiIndex == 36 and got[2].atlas == "farm-horde")
+		local flags, hideFlag = C_Map.GetMapInfo, Enum.UIMapFlag
+		Enum.UIMapFlag = { HideVignettes = 4 }
+		stub(C_Map, "GetMapInfo", function() return { flags = 6 } end)
+		check("a map that hides vignettes", #BM.ReadObjectives(BM.mapID) == 2)
+		Enum.UIMapFlag = hideFlag
+		stub(C_Map, "GetMapInfo", flags)
+		local ok, draw = pcall(function()
+			BM.UpdateObjectives()
+			stub(C_Minimap, "GetPOITextureCoords", function() return 0, 0.1, 0, 0.1 end)
+			MOCK.Advance(0.2)
+			return BM.shownPins
+		end)
+		check("objectives are drawn", ok and draw >= 6, tostring(draw))
+		c.nodes = false
+		BM.UpdateObjectives()
+		check("objectives can be turned off", #BM.objectives == 0)
+		c.nodes = true
+		C_VignetteInfo, MOCK.pois = oldVignette, oldPois
+		BM.UpdateObjectives()
+	end
+	hasArt = false
+	BM.mapID = nil
+	BM.Check()
+	check("no map art: nothing shows", not BM.frame:IsShown())
+	hasArt = true
+	ns.BlitzMap.Debug()
+	MOCK.bracket = oldBracket
+	MOCK.flags = {}
+	c.enabled = false
+	BM.mapID = nil
+	BM:Refresh()
+	check("off again", not BM.frame:IsShown())
+	for i = #saved, 1, -1 do rawset(saved[i][1], saved[i][2], saved[i][3]) end
+end
+flushErrors("blitz map")
 
 ---------------------------------------------------------------------------
 -- Match recorder: a 3v3
@@ -541,7 +750,7 @@ CS.Highlight("Character", nil)
 check("cs highlight off", not CharacterHeadSlot.SUISheet.highlight:IsShown())
 local choices = CS.BackgroundChoices()
 for _, v in ipairs(choices) do print("choice", v[1], v[2]) end
-check("cs warband choices", #choices == 5 and choices[4][1] == "warband:3", #choices)
+check("cs warband choices", #choices == 4 and choices[3][1] == "warband:3", #choices)
 CharacterModelScene._w, CharacterModelScene._h = 231, 320
 ns.db.character.background = "warband:7"
 CS.ApplyBackground(CharacterModelScene)
@@ -576,6 +785,325 @@ ns.Objectives:Refresh()
 check("objectives bg", ns.Objectives.bg and ns.Objectives.bg:IsShown())
 flushErrors("objectives")
 
+-- quests by zone
+do
+	local QL, c = ns.QuestList, ns.db.objectives
+	local t = ObjectiveTrackerFrame
+	check("zone list is off by default", c.zoneGroups == false and QL.list == nil)
+	local log = {
+		{ isHeader = true, title = "Elwynn Forest" },
+		{ questID = 1, title = "Boars" }, { questID = 2, title = "Wolves", isAutoComplete = true },
+		{ isHeader = true, title = "Westfall" },
+		{ questID = 3, title = "Gnolls" }, { questID = 4, title = "Hidden task", isTask = true },
+		{ questID = 5, title = "Bounty", isBounty = true },
+	}
+	local watched, complete, failed, tracked, popups = { 3, 1, 2, 4, 5 }, { [2] = true }, {}, 0, {}
+	local objectives = { [1] = { { text = "2/8 Boars" }, { text = "Done bit", finished = true } }, [3] = { { text = "1/5 Gnolls" } } }
+	local items = {}
+	local saved = {}
+	local function stub(tbl, k, fn) saved[#saved + 1] = { tbl, k, rawget(tbl, k) }; rawset(tbl, k, fn) end
+	stub(C_QuestLog, "GetNumQuestLogEntries", function() return #log end)
+	stub(C_QuestLog, "GetInfo", function(i) return log[i] end)
+	stub(C_QuestLog, "GetNumQuestWatches", function() return #watched end)
+	stub(C_QuestLog, "GetQuestIDForQuestWatchIndex", function(i) return watched[i] end)
+	stub(C_QuestLog, "GetLogIndexForQuestID", function(id)
+		for i, e in ipairs(log) do if e.questID == id then return i end end
+	end)
+	stub(C_QuestLog, "GetTitleForQuestID", function(id) return "Quest " .. id end)
+	stub(C_QuestLog, "IsComplete", function(id) return complete[id] end)
+	stub(C_QuestLog, "IsFailed", function(id) return failed[id] end)
+	stub(C_QuestLog, "GetQuestObjectives", function(id) return objectives[id] end)
+	stub(C_QuestLog, "GetNextWaypointText", function() return nil end)
+	stub(C_SuperTrack, "GetSuperTrackedQuestID", function() return tracked end)
+	stub(_G, "GetQuestLogSpecialItemInfo", function(i) local e = items[i]; if e then return e[1], e[2], e[3], e[4] end end)
+	stub(_G, "GetQuestLogCompletionText", function() return nil end)
+	stub(_G, "GetQuestLogSpecialItemCooldown", function() return 0, 0 end)
+	stub(_G, "GetNumAutoQuestPopUps", function() return #popups end)
+	stub(_G, "GetAutoQuestPopUp", function(i) return popups[i][1], popups[i][2] end)
+	local inCombat = false
+	stub(_G, "InCombatLockdown", function() return inCombat end)
+
+	local groups = QL.Build()
+	check("zones in quest log order", #groups == 2 and groups[1].zone == "Elwynn Forest" and groups[2].zone == "Westfall")
+	check("quests land in their zone", #groups[1].quests == 2 and #groups[2].quests == 1 and groups[2].quests[1].id == 3)
+	check("tasks and bounties are left out", #groups[2].quests == 1)
+	local rows = QL.Flatten(groups, {})
+	local function texts(list)
+		local out = {}
+		for i, r in ipairs(list) do out[i] = r.text end
+		return table.concat(out, "|")
+	end
+	check("zone rows with counts", rows[1].text == "Elwynn Forest (2)" and rows[1].kind == "zone")
+	check("finished objectives drop off", not texts(rows):find("Done bit") and texts(rows):find("2/8 Boars"))
+
+	check("auto-complete says click", texts(rows):find("CLICK_TO_COMPLETE") ~= nil, texts(rows))
+
+	-- a quest under a header folded in the quest log keeps its zone
+	local folded = table.remove(log, 5)
+	groups = QL.Build()
+	check("folded in the log: still in its zone", groups[#groups].zone == "Westfall" and groups[#groups].quests[1].id == 3)
+	table.insert(log, 5, folded)
+
+	-- a zone nobody has seen goes last, under Other
+	QL.zoneOf[99] = nil
+	watched[#watched + 1] = 99
+	groups = QL.Build()
+	check("unknown zone goes last", groups[#groups].zone == (OTHER or "Other") and groups[#groups].quests[1].title == "Quest 99")
+	watched[#watched] = nil
+
+	-- layout around Blizzard's sections
+	local function Module(height, margin)
+		local m = MOCK.NewObj("Frame", nil, t)
+		m.contentsHeight, m.leftMargin = height, margin
+		local anchors = {}
+		m.anchors = anchors
+		m.SetPoint = function(_, point, rel, relPoint, x, y) anchors[point] = { rel, relPoint, x, y } end
+		m.ClearAllPoints = function() for k in pairs(anchors) do anchors[k] = nil end end
+		return m
+	end
+	local scenario, campaign, quests, bonus = Module(50, 0), Module(40, 0), Module(90, 0), Module(30, 5)
+	QuestObjectiveTracker, CampaignQuestObjectiveTracker = quests, campaign
+	t.modules = { scenario, campaign, quests, bonus }
+	t.moduleSpacing, t.bottomModulePadding, t.topModulePadding = 10, 10, 0
+	local belowNine
+	local oldNine = t.NineSlice.SetPoint
+	t.NineSlice.SetPoint = function(_, point, rel) if point == "BOTTOM" then belowNine = rel end end
+	c.zoneGroups = true
+	QL.Setup()
+	check("list is on the tracker", QL.list ~= nil and QL.list:GetParent() == t)
+	check("rows built", QL.rows[1] and QL.rows[1].data.kind == "zone")
+	t:Update()
+	check("Blizzard's quest sections move off screen", quests.anchors.TOPRIGHT and campaign.anchors.TOPRIGHT
+		and quests.anchors.TOPRIGHT[3] == -4000)
+	check("the section below hangs under the list", bonus.anchors.TOP and bonus.anchors.TOP[1] == QL.list)
+	check("and keeps its margin", bonus.anchors.LEFT[3] == 5)
+	check("sections above stay put", next(scenario.anchors) == nil)
+	check("background ends with the last section", belowNine == bonus)
+	-- routine updates skip the Update hook: they put the sections back and anchor the background
+	do
+		quests:ClearAllPoints()
+		quests:SetPoint("TOP", campaign, "BOTTOM", 0, -10)
+		bonus:ClearAllPoints()
+		bonus:SetPoint("TOP", quests, "BOTTOM", 0, -10)
+		t.NineSlice:SetPoint("BOTTOM", bonus, "BOTTOM", 0, -10)
+		check("routine update: sections move away again", quests.anchors.TOPRIGHT and not quests.anchors.TOP)
+		check("routine update: the one below follows the list", bonus.anchors.TOP[1] == QL.list)
+		check("our own background anchor doesn't loop", not QL.placing)
+	end
+	t.modules = { scenario, campaign, quests }
+	t:Update()
+	check("list last: background follows it", belowNine == QL.list)
+	t.modules = { scenario, campaign, quests, bonus }
+	t.isCollapsed = true
+	t:Update()
+	check("tracker folded: list goes too", not QL.list:IsShown())
+	t.Header = MOCK.NewObj("Frame", nil, t)
+	ns.Objectives.FitCollapsed()
+	check("tracker folded: background ends at the header", belowNine == t.Header and not ns.Objectives.fitting)
+	t.isCollapsed = nil
+	t:Update()
+	check("unfolded: list is back", QL.list:IsShown())
+
+	-- folding a zone
+	QL.Update()
+	local first = QL.rows[1]
+	first:GetScript("OnClick")(first, "LeftButton")
+	check("fold is saved", c.collapsedZones["Elwynn Forest"] == true)
+	check("fold hides the zone's quests", not texts(QL.Flatten(QL.Build(), {})):find("Boars"))
+	check("fold keeps the zone", QL.rows[1].data.zone == "Elwynn Forest" and QL.rows[1].data.closed)
+	check("plus when folded", QL.rows[1].bar:IsShown())
+	first:GetScript("OnClick")(first, "LeftButton")
+	check("unfold", c.collapsedZones["Elwynn Forest"] == nil and not QL.rows[1].bar:IsShown())
+
+	-- quest clicks
+	do
+		local opened, removed, shown
+		stub(_G, "QuestMapFrame_OpenToQuestDetails", function(id) opened = id end)
+		stub(_G, "ShowQuestComplete", function(id) shown = id end)
+		stub(_G, "RemoveAutoQuestPopUp", function() end)
+		stub(_G, "IsModifiedClick", function() return false end)
+		stub(C_QuestLog, "RemoveQuestWatch", function(id) removed = id end)
+		QL.ClickQuest({}, { id = 1 }, "LeftButton")
+		check("click opens the quest", opened == 1)
+		opened = nil
+		inCombat = true
+		QL.ClickQuest({}, { id = 1 }, "LeftButton")
+		inCombat = false
+		check("in combat it doesn't try", opened == nil)
+		QL.ClickQuest({}, { id = 2, autoComplete = true, complete = true }, "LeftButton")
+		check("auto-complete quest completes", shown == 2 and opened == nil)
+	end
+
+	-- the focus button sets the quest the marker points at
+	do
+		local focused
+		stub(C_SuperTrack, "SetSuperTrackedQuestID", function(id) focused = id end)
+		QL.Update()
+		local row
+		for _, r in ipairs(QL.rows) do
+			if r.data and r.data.kind == "quest" and r.data.quest.id == 1 then row = r end
+		end
+		check("quests have a focus button", row and row.focus:IsShown())
+		check("zones don't", not QL.rows[1].focus:IsShown())
+		row.focus:GetScript("OnClick")(row.focus)
+		check("focus button focuses", focused == 1)
+		tracked = 1
+		QL.Update()
+		row.focus:GetScript("OnClick")(row.focus)
+		check("and clears", focused == 0)
+		tracked = 0
+		QL.Update()
+	end
+
+	-- only "Ready for turn-in" is green
+	do
+		local function green(lines) return lines[#lines].color[2] == 1 and lines[#lines].color[1] < 1 end
+		stub(_G, "GetQuestLogCompletionText", function() return "Bring the crate to the wharf." end)
+		check("completion text isn't green", not green(QL.QuestLines({ id = 9, index = 1, complete = true })))
+		stub(_G, "GetQuestLogCompletionText", function() return nil end)
+		check("ready for turn-in is green", green(QL.QuestLines({ id = 9, index = 1, complete = true })))
+		check("click to complete isn't", not green(QL.QuestLines({ id = 9, complete = true, autoComplete = true })))
+	end
+
+	-- focus shows as filled, otherwise hollow
+	do
+		QL.Update()
+		local row
+		for _, r in ipairs(QL.rows) do
+			if r.data and r.data.kind == "quest" and r.data.quest.id == 1 then row = r end
+		end
+		check("not focused: hollow", select(2, QL.FocusColors(row.data.quest))[1] == 0)
+		check("no focus tooltip", row.focus:GetScript("OnEnter") == nil)
+		MOCK.instanceType = "arena"
+		check("no quests in arena, like Blizzard", #QL.Build() == 0)
+		MOCK.instanceType = "none"
+		tracked = 1
+		QL.Update()
+		check("focused: filled", select(2, QL.FocusColors(row.data.quest))[1] == 1)
+		tracked = 0
+		QL.Update()
+	end
+
+	-- quest types color the box outline
+	do
+		local oldSystem, oldClasses, class = C_QuestInfoSystem, Enum.QuestClassification, nil
+		C_QuestInfoSystem = { GetQuestClassification = function() return class end }
+		Enum.QuestClassification = { Campaign = 2, Calling = 3, Meta = 4, Recurring = 5, Normal = 7 }
+		class = 2
+		check("campaign quest", QL.QuestType(1, {}) == "campaign")
+		class = 5
+		check("recurring quest", QL.QuestType(1, {}) == "repeatable")
+		class = 3
+		check("calling counts as repeatable", QL.QuestType(1, {}) == "repeatable")
+		class = 4
+		check("weekly meta quest doesn't", QL.QuestType(1, { frequency = 2 }) == nil)
+		class = 7
+		check("plain quest", QL.QuestType(1, {}) == nil)
+		check("daily by frequency", QL.QuestType(1, { frequency = 1 }) == "repeatable")
+		stub(C_QuestLog, "IsRepeatableQuest", function() return true end)
+		check("repeatable by the log", QL.QuestType(1, {}) == "repeatable")
+		stub(C_QuestLog, "IsRepeatableQuest", function() return false end)
+		class = nil
+		check("no classification: frequency still works", QL.QuestType(1, { frequency = 2 }) == "repeatable")
+		local outline, middle = QL.FocusColors({ questType = "repeatable", tracked = true })
+		local blue = QL.FocusColors({ questType = "repeatable" })
+		local purple = QL.FocusColors({ questType = "campaign" })
+		check("focused keeps its outline, filled yellow", outline == blue and middle[2] > 0.8)
+		check("campaign has its own color", purple ~= blue and blue[3] > blue[1])
+		C_QuestInfoSystem, Enum.QuestClassification = oldSystem, oldClasses
+	end
+
+	-- in a dungeon the whole list folds under one header
+	do
+		local function firstRow() return QL.Flatten(QL.Build(), {})[1] end
+		check("no Quests header in the world", firstRow().kind == "zone")
+		MOCK.instanceType = "party"
+		check("Quests header in a dungeon", firstRow().kind == "header")
+		check("it counts every quest", firstRow().text:find("(3)", 1, true) ~= nil, firstRow().text)
+		QL.Update()
+		local head = QL.rows[1]
+		check("header is on the list with its line", head.data.kind == "header" and head.rule:IsShown() and head.dash:IsShown())
+		check("minus while open", not head.bar:IsShown())
+		head:GetScript("OnClick")(head, "LeftButton")
+		check("folding is saved", c.questsCollapsed == true)
+		check("folded: just the header", #QL.Flatten(QL.Build(), {}) == 1 and head.bar:IsShown() and not QL.rows[2]:IsShown())
+		MOCK.instanceType = "none"
+		check("zones are back outside", firstRow().kind == "zone")
+		MOCK.instanceType = "party"
+		check("still folded next dungeon", #QL.Flatten(QL.Build(), {}) == 1)
+		QL.Update()
+		head:GetScript("OnClick")(head, "LeftButton")
+		check("unfolds", c.questsCollapsed == false and #QL.Flatten(QL.Build(), {}) > 1)
+		MOCK.instanceType = "raid"
+		check("raids too", firstRow().kind == "header")
+		MOCK.instanceType = "none"
+		QL.Update()
+		check("no line on a zone row", not QL.rows[1].rule:IsShown())
+	end
+
+	-- titles as the client shows them
+	do
+		stub(_G, "SetQuestTitleLevelAndDifficultyColor", function(id, title) return "|cffff0000[13] " .. title .. "|r" end)
+		check("title uses the client's difficulty color", QL.Build()[1].quests[1].display:find("|cffff0000[13] Boars", 1, true) ~= nil)
+		check("the plain title stays for menus", QL.Build()[1].quests[1].title == "Boars")
+		stub(_G, "SetQuestTitleLevelAndDifficultyColor", function() return nil end)
+		check("no client title: plain", QL.Build()[1].quests[1].display == "Boars")
+	end
+
+	-- pop-ups stay reachable
+	popups[1] = { 7, "OFFER" }
+	local offers = QL.Offers()
+	check("quest offers show", offers[1].id == 7 and QL.Flatten({}, offers)[1].text == "New quest: Quest 7")
+	popups[1] = nil
+
+	-- quest item buttons: secure, so nothing about them changes in combat
+	do
+		items[5] = { "|Hitem:555:0|h", 134400, 3 }
+		QL.Update()
+		local b = QL.buttons[1]
+		check("item button made", b ~= nil and QL.shownItems == 1, QL.shownItems)
+		check("uses the item", b and b:GetAttribute("type") == "item" and b:GetAttribute("item") == "item:555")
+		check("item button sits outside the list", b and b:GetParent() == UIParent)
+		local before = #QL.itemRows
+		objectives[1][1].text = "3/8 Boars"
+		table.remove(watched, 1)
+		inCombat = true
+		QL.Update()
+		check("combat: layout waits", #QL.itemRows == before and b:IsShown() and QL.dirty)
+		local found = false
+		for _, row in ipairs(QL.rows) do
+			if row.data and row.text._text == "3/8 Boars" then found = true end
+		end
+		check("combat: counts still update", found)
+		inCombat = false
+		MOCK.Fire("PLAYER_REGEN_ENABLED")
+		check("after combat the layout catches up", not QL.dirty and not b:IsShown() and QL.shownItems == 0)
+		table.insert(watched, 1, 3)
+		QL.Update()
+		MOCK.instanceType = "arena"
+		QL.Update()
+		check("hidden tracker takes its item buttons along", not b:IsShown())
+		MOCK.instanceType = "none"
+		QL.Update()
+		check("and brings them back", b:IsShown())
+		items[5] = nil
+	end
+
+	-- a complete quest only keeps its item if it says so
+	items[5] = { "|Hitem:555:0|h", 134400, 1, false }
+	complete[3] = true
+	check("item gone once complete", QL.Build()[2].quests[1].item == nil)
+	complete[3] = nil
+	items[5] = nil
+	QL.Update()
+
+	t.NineSlice.SetPoint = oldNine
+	for i = #saved, 1, -1 do rawset(saved[i][1], saved[i][2], saved[i][3]) end
+	t.modules, QuestObjectiveTracker, CampaignQuestObjectiveTracker = nil, nil, nil
+	c.zoneGroups = false
+end
+flushErrors("quest list")
+
 ---------------------------------------------------------------------------
 -- 0.28: flat skins and sizing
 ---------------------------------------------------------------------------
@@ -591,7 +1119,7 @@ check("character scale", math.abs(CharacterFrame._scale - ns.defaults.character.
 check("resizer", CharacterFrame.SUIResizer ~= nil)
 ns.CharacterSheet.UpdateButton(CharacterHeadSlot, "player", 1, "RIGHT")
 ns.Objectives.ApplyFlat()
-check("objectives bg default 0", ns.db.objectives.bgAlpha == 0)
+check("objectives bg default 50%", ns.db.objectives.bgAlpha == 0.5)
 local mig = { version = 5, objectives = { bgAlpha = 0.5 }, units = {} }
 ns.Migrate(mig)
 check("migrate objectives alpha", mig.objectives.bgAlpha == 0)
@@ -2153,6 +2681,11 @@ do
 		f.aboveBar = name
 		NP.PlaceAroundBar(f)
 		check("a name above the bar clears it too", nameY == 7, nameY)
+		f.friendTarget = true
+		check("friendly target icons sit over name and border", NP.SlotHeight(f, false, 12) == 21, NP.SlotHeight(f, false, 12))
+		check("name in the bar: just over the border", NP.SlotHeight(f, true, 12) == 6, NP.SlotHeight(f, true, 12))
+		f.friendTarget = nil
+		check("enemy icons stay above the auras", NP.SlotHeight(f, false, 12) == 22 + np.auraSize, NP.SlotHeight(f, false, 12))
 		f.aboveBar = nil
 		f.Auras.SetPoint, f.Castbar.SetPoint, f.Threat.SetPoint = nil, nil, nil
 		ns.Pixel, np.highlight.outset = oldPixel, oldOutset
@@ -2428,6 +2961,63 @@ do
 	CS.PaintWindowFill(panel)
 	check("other tabs use the fill", fill.a == 0.4, fill.a)
 	ch.frameAlpha = oldAlpha
+
+	-- same darkness inside and out: one pane, so no join can show
+	local oldDim, oldOuter = ch.dim, ch.outerDim
+	ch.dim, ch.outerDim = 0.65, 0.65
+	CS.WideBackground(model, panel)
+	local p = panel.SUIWide.panes
+	check("equal shades are one pane", p[5]:IsShown() and not p[1]:IsShown() and not p[3]:IsShown())
+	ch.dim, ch.outerDim = 0.25, 0.65
+	CS.WideBackground(model, panel)
+	check("different shades get their panes", p[1]:IsShown() and p[5]:IsShown())
+	ch.dim, ch.outerDim = oldDim, oldOuter
+	panel.SUIWide:Hide()
+
+	-- no black lines over the whole-window picture
+	local edges = {}
+	local realEdge = ns.SetBorderColor
+	ns.SetBorderColor = function(frame, _, _, _, a) edges[frame] = a; return realEdge(frame, 0, 0, 0, a) end
+	local cf, scene = CharacterFrame, CharacterModelScene
+	local oldBg = ch.background
+	ch.background = "dark"
+	CS.ApplySkin("Character")
+	CS.ApplyBackground(scene)
+	check("art reaches the window edge", cf.SUIWide:IsShown() and edges[cf.SUIFlat] == 0, edges[cf.SUIFlat])
+	check("no line around the character", edges[scene] == 0, edges[scene])
+	CS.ApplySkin("Character")
+	check("skinning again keeps it off", edges[scene] == 0, edges[scene])
+	ch.background = "blizzard"
+	CS.ApplyBackground(scene)
+	check("plain window keeps its border", edges[cf.SUIFlat] == 1 and edges[scene] == 1, edges[scene])
+	ch.background = oldBg
+	CS.ApplyBackground(scene)
+	ns.SetBorderColor = realEdge
+
+	-- camp pictures lose their dark edge
+	do
+		local oldInfo, coords = C_Texture.GetAtlasInfo, nil
+		rawset(C_Texture, "GetAtlasInfo", function() return { file = 1, leftTexCoord = 0, rightTexCoord = 1, topTexCoord = 0, bottomTexCoord = 1, width = 100, height = 100 } end)
+		local tex = { SetTexture = function() end, SetTexCoord = function(_, a, b, c2, d) coords = { a, b, c2, d } end }
+		CS.SetAtlasCropped(tex, "x", 100, 100, 0.03)
+		check("picture edge trimmed", math.abs(coords[1] - 0.03) < 1e-6 and math.abs(coords[4] - 0.97) < 1e-6, coords[1])
+		CS.SetAtlasCropped(tex, "x", 100, 100)
+		check("custom art keeps its edge", coords[1] == 0 and coords[4] == 1)
+		rawset(C_Texture, "GetAtlasInfo", oldInfo)
+	end
+	local choices = CS.BackgroundChoices()
+	check("Blizzard background gone", choices[1][1] == "dark")
+	local migBg = { version = 15, units = {}, character = { background = "blizzard" } }
+	ns.Migrate(migBg)
+	check("Blizzard background moves to flat dark", migBg.character.background == "dark")
+
+	-- durability line
+	check("full durability, full line", CS.DurabilityHeight(1, 40) == 40)
+	check("half worn, half line", CS.DurabilityHeight(0.5, 40) == 20)
+	check("broken still shows", CS.DurabilityHeight(0, 40) == 2)
+	check("durability line stays on the icon", CS.DurabilityHeight(1.5, 40) == 40)
+	local d = ns.defaults.character
+	check("character defaults", d.frameAlpha == 1 and d.dim == 0.65 and d.outerDim == 0.65)
 end
 flushErrors("new options")
 
@@ -2461,6 +3051,16 @@ do
 	ns.Nameplates.SetupPlate("nameplate9")
 	local f = plate.SUIFrame
 	check("plate built", f ~= nil and f.unit == "nameplate9")
+	do
+		local oldWidgets, plain = UnitNameplateShowsWidgetsOnly, MOCK.NewObj("Frame", nil, UIParent)
+		local realGet = C_NamePlate.GetNamePlateForUnit
+		UnitNameplateShowsWidgetsOnly = function() return true end
+		rawset(C_NamePlate, "GetNamePlateForUnit", function() return plain end)
+		ns.Nameplates.SetupPlate("nameplate8")
+		check("widget-only plate is left alone", plain.SUIFrame and plain.SUIFrame.unit == nil)
+		UnitNameplateShowsWidgetsOnly = oldWidgets
+		rawset(C_NamePlate, "GetNamePlateForUnit", realGet)
+	end
 	check("plate marker shown on setup", f.Marker:IsShown() and set == 4, set)
 	index = nil
 	ns.Nameplates.driver:GetScript("OnEvent")(ns.Nameplates.driver, "RAID_TARGET_UPDATE")
@@ -2591,11 +3191,27 @@ check("durability colors", g > r and r2 == 1 and g2 == 0, string.format("%.2f %.
 GetInventoryItemDurability = function(slot) return 30, 100 end
 ns.CharacterSheet.UpdateButton(CharacterHeadSlot, "player", 1, "RIGHT")
 check("durability line shown", CharacterHeadSlot.SUISheet.dura:IsShown())
+CharacterHeadSlot:SetHeight(40)
+ns.CharacterSheet.UpdateButton(CharacterHeadSlot, "player", 1, "RIGHT")
+check("durability line matches the item", CharacterHeadSlot.SUISheet.dura:GetHeight() == 12, CharacterHeadSlot.SUISheet.dura:GetHeight())
 check("party hidden in raids by default", ns.db.party.hideInRaid == true)
 ns.StartProfile(1)
 MOCK.Fire("PLAYER_TARGET_CHANGED")
 MOCK.Advance(1.2)
 check("profiler stops itself", ns.profile.on == false)
+do
+	local cu, oldRing = ns.db.cursor, ns.db.cursor.ring
+	cu.ring = true
+	ns.Cursor:Apply()
+	local tex, snap, bias = ns.Cursor.frame.tex, nil, nil
+	tex.SetSnapToPixelGrid = function(_, v) snap = v end
+	tex.SetTexelSnappingBias = function(_, v) bias = v end
+	ns.Cursor:Apply()
+	check("cursor ring moves smoothly between pixels", snap == false and bias == 0, snap)
+	tex.SetSnapToPixelGrid, tex.SetTexelSnappingBias = nil, nil
+	cu.ring = oldRing
+	ns.Cursor:Apply()
+end
 check("cursor ring and GCD History have defaults", type(ns.defaults.cursor.ringCombatOnly) == "boolean" and type(ns.defaults.misc.gcd.enabled) == "boolean")
 flushErrors("0.38")
 

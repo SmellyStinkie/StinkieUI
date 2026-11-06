@@ -18,6 +18,7 @@ ns.MEDIA = {
 	edge = [[Interface\AddOns\StinkieUI\Media\edge]],   -- square outline
 	blank = [[Interface\AddOns\StinkieUI\Media\blank]],
 	flag = [[Interface\AddOns\StinkieUI\Media\flag]], -- white flag, tinted per team
+	dot = [[Interface\AddOns\StinkieUI\Media\dot]],   -- white disc with a black outline (tinted)
 	roleHealer = [[Interface\AddOns\StinkieUI\Media\role_healer]], -- role icons (white, tinted)
 	roleTank = [[Interface\AddOns\StinkieUI\Media\role_tank]],
 	roleDamage = [[Interface\AddOns\StinkieUI\Media\role_damage]],
@@ -290,7 +291,7 @@ local function unit(t)
 	return t
 end
 
-ns.DB_VERSION = 15
+ns.DB_VERSION = 16
 ns.defaults = {
 	version = ns.DB_VERSION,
 	scale = 1,
@@ -764,6 +765,15 @@ ns.defaults = {
 		durations = { "Arathi Basin = 60", "Battle for Gilneas = 60", "Deepwind Gorge = 60" },
 		point = { "TOP", 330, -20 },
 	},
+	-- Blitz Map: the zone map in a window, with your team and the flags or orbs on it
+	blitzMap = {
+		enabled = false,
+		width = 340, dotSize = 12, iconSize = 22, nodeSize = 22,
+		names = true, nameStyle = text(10),
+		nodes = true, nodeNames = true, -- bases and objectives
+		views = {}, -- map id -> { zoom, u, v }: how you left each map
+		point = { "LEFT", 30, 120 },
+	},
 	-- Match History: every rated and unrated PvP match is saved at the end. The browser and
 	-- stats (/mh) live in the StinkieUI_History addon, which only loads when you open it.
 	matchHistory = {
@@ -778,13 +788,13 @@ ns.defaults = {
 	character = {
 		enabled = true,
 		inspect = true, -- same look when inspecting others
-		background = "dark", -- blizzard | dark | custom | warband:<id>
+		background = "dark", -- dark | custom | warband:<id>
 		customTexture = "", ownedOnly = false,
-		dim = 0.25, -- darkening over the background in the character area
+		dim = 0.65, -- darkening over the background in the character area
 		durability = true, durabilityWidth = 2, -- thin line beside each item: green (repaired) -> yellow -> red
 		collapsed = false, collapseButton = true, -- arrow under the trinkets hides / shows the stats side
 		centerHeader = true, -- name and level centered over the character
-		wideBackground = true, outerDim = 0.6, -- background across the whole window, darker outside the character
+		wideBackground = true, outerDim = 0.65, -- background across the whole window, darker outside the character
 		line1 = "name", -- name | track ("Mythic 6/6") | none
 		track = true, ilvl = true, pvp = true, gems = true, gemSize = 14,
 		enchants = true, enchantNames = true, missing = true,
@@ -797,7 +807,7 @@ ns.defaults = {
 		moveSpeed = true,      -- movement speed row in the stat list
 		ilvlDecimals = true,
 		textWidth = 140, -- with the roomier layout the model area is ~320 px wide
-		flat = true, frameColor = { 0.05, 0.05, 0.06 }, frameAlpha = 0.9, tabAlpha = 0.9,
+		flat = true, frameColor = { 0.05, 0.05, 0.06 }, frameAlpha = 1, tabAlpha = 0.9,
 		roomy = true, extraWidth = 90, extraHeight = 70, weaponGap = 40, -- more room around the character
 		scale = 1.2, inspectScale = 1.2, resizer = true,
 		nameStyle = text(11),
@@ -808,10 +818,13 @@ ns.defaults = {
 		enabled = true,
 		lineSize = 12, headerSize = 14, outline = "OUTLINE",
 		scale = 1,
-		background = true, bgColor = { 0.04, 0.04, 0.05 }, bgAlpha = 0, border = false, padding = 4,
+		background = true, bgColor = { 0.04, 0.04, 0.05 }, bgAlpha = 0.5, border = false, padding = 4,
 		hideBlizzardBg = true,
 		flat = true, -- flat headers, progress bars and quest item buttons (no gradients)
 		hideArena = true, hideBG = true, hideRaid = true, hideMPlus = false, hideDungeon = false,
+		zoneGroups = false, -- our own quest list, grouped by zone, in place of Blizzard's quest sections
+		collapsedZones = {}, -- zone name -> true
+		questsCollapsed = false, -- in dungeons: the whole list folded under its Quests header
 	},
 	-- Damage Numbers: floating combat text over targets (0 = the game's default for each)
 	damageText = { scroll = { enabled = true, size = 22, critSize = 32, critPop = false, outline = "OUTLINE", spacing = 10,
@@ -999,6 +1012,11 @@ local function Migrate(db)
 			if ch.whisperTabs == false then ch.whisperDisplay = "main" end
 			ch.whisperTabs = nil
 		end
+	end
+	if v < 16 then
+		-- Character Sheet: Blizzard's race background was removed, it doesn't fit the roomier window
+		local ch = db.character
+		if ch and ch.background == "blizzard" then ch.background = "dark" end
 	end
 	if v < 15 then
 		-- Nameplates: settings enemy and friendly plates used to share are separate now. Friendly
@@ -1678,6 +1696,8 @@ SlashCmdList.STINKIEUI = function(msg)
 		ns:FontCheck()
 	elseif msg == "quest" then
 		ns.QuestArrow.Debug()
+	elseif msg == "map" then
+		ns.BlitzMap.Debug()
 	elseif msg == "tooltip" then
 		ns.Tooltip.Debug()
 	elseif msg == "dmg" then
