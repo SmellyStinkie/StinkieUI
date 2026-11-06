@@ -40,6 +40,17 @@ check("moving = carried", (L.Step(f, 1.2, 0.202, 0.2, 1000, 600, false) == nil) 
 L.Step(f, 3, 0.202, 0.2, 1000, 600, false)
 check("still 1.8s = not carried", not f.carried)
 check("gone event", L.Step(f, 4, nil) == "GONE")
+do
+	-- the cap spot is the base a flag didn't start from, whichever team's flag it is
+	local spots = ns.FlagCap.BASE_SPOTS[1339]
+	local a, b = spots[1], spots[2]
+	check("picked up at one base, caps at the other", L.CapSpot(spots, a.x, a.y, 1145, 764, 50) == b)
+	check("and the same the other way", L.CapSpot(spots, b.x, b.y, 1145, 764, 50) == a)
+	check("mid-field pickup has no new cap spot", L.CapSpot(spots, 0.5, 0.5, 1145, 764, 50) == nil)
+	check("near a base still counts", L.CapSpot(spots, a.x + 0.01, a.y, 1145, 764, 50) == b)
+	check("old and current Warsong share bases", ns.FlagCap.BASE_SPOTS[92] == spots)
+	check("Twin Peaks is listed", ns.FlagCap.BASE_SPOTS[206] ~= nil)
+end
 
 ---------------------------------------------------------------------------
 -- Flag Cap in a (mock) Warsong Gulch
@@ -56,12 +67,9 @@ MOCK.Advance(0.3)
 -- Alliance player picks up the Horde flag at the Horde base (0.5, 0.9)
 MOCK.flags[2].x, MOCK.flags[2].y = 0.5, 0.9
 MOCK.Advance(0.3)
-local bases = StinkieUIDB.flagCapBases[1339]
-check("learned alliance base", bases and bases.Alliance and math.abs(bases.Alliance.y - 0.1) < 1e-9)
-check("learned horde base", bases and bases.Horde and math.abs(bases.Horde.y - 0.9) < 1e-9)
 -- the Alliance flag runs to the Horde base
 for i = 1, 20 do MOCK.flags[1].y = 0.1 + i * 0.04; MOCK.Advance(0.2) end
-MOCK.flags[1].y = 0.895
+MOCK.flags[1].x, MOCK.flags[1].y = 0.530, 0.930
 MOCK.Advance(0.25)
 check("indicator shown", ns.FlagCap.holder:IsShown())
 local found

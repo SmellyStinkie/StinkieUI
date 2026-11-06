@@ -1,5 +1,9 @@
 # Stinkie UI changelog
 
+## 0.42.4
+- Flag Cap Indicator: the yards now count down to the base where the carrier can cap, not the one they picked the flag up from, on Warsong Gulch and Twin Peaks.
+- `/stinkie flags` now shows where each flag caps.
+
 ## 0.42.3
 - Blitz Map: Silvershard Mines carts now show on the map, using the game's own cart icons and turning the way they're heading.
 - `/stinkie map` now lists the vehicles the game reports.

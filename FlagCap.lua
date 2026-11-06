@@ -3,9 +3,10 @@
 -- ON CAP / NOT ON CAP / DROPPED, so the team knows when a return wins the point.
 --
 -- Data: C_PvP.GetBattlefieldFlagPosition (map position of each flag that isn't at its base; not a
--- secret value) and C_Map.GetMapWorldSize (map size in yards). Cap spots aren't exposed by the game,
--- so they're learned: a flag first appears where it's picked up, which is its own base, and a team
--- caps at its own flag's base. Learned spots are kept per map (account-wide) and refined on caps.
+-- secret value) and C_Map.GetMapWorldSize (map size in yards). The game doesn't give the two bases,
+-- so they're listed per map. A flag caps at the base it was NOT picked up from, which is worked out
+-- from where it first appears, never from its team. On a map not listed the spots are learned from
+-- pickups, kept per map (account-wide) and refined on caps.
 -- Carrier names come from the arena1..5 units (enemy carriers, which the game exposes in
 -- battlegrounds) and from your raid's flag-carrier classification, when those are readable.
 -- Polls 5 times a second only while a flag map is active; does nothing anywhere else.
@@ -29,6 +30,12 @@ local FLAG_PATHS = {
 	Horde = { [[Interface\WorldStateFrame\HordeFlag]] },
 }
 local TEAM_COLOR = { Alliance = { 0.30, 0.60, 1.00 }, Horde = { 1.00, 0.25, 0.25 } }
+
+-- The two flag rooms of each map, by uiMapID (Warsong Gulch old / current, Twin Peaks)
+local WARSONG = { { x = 0.489, y = 0.113 }, { x = 0.530, y = 0.930 } }
+FC.BASE_SPOTS = { [92] = WARSONG, [1339] = WARSONG, [206] = { { x = 0.609, y = 0.183 }, { x = 0.484, y = 0.849 } } }
+-- a flag appearing further than this from both bases was dropped and picked up again
+FC.BASE_RANGE = 50
 
 ---------------------------------------------------------------------------
 -- Pure logic (no frames): kept separate so it can be tested outside the game
@@ -102,6 +109,16 @@ function L.Step(flag, now, x, y, w, h, carrierKnown)
 	end
 	flag.carried = carrierKnown or (now - flag.lastMoveT) < 1.0
 	return ev
+end
+
+-- The base a flag caps at, for a flag that just appeared at (x, y): the one it didn't start from.
+-- nil when it appeared away from both bases, so a flag picked up mid-field keeps the one it had.
+function L.CapSpot(spots, x, y, w, h, range)
+	for i, spot in ipairs(spots) do
+		local d = L.Yards(x, y, spot.x, spot.y, w, h)
+		if d and d <= range then return spots[i == 1 and 2 or 1] end
+	end
+	return nil
 end
 
 -- Which bar each flag goes in: under the score of the team CARRYING it. The Alliance flag is
@@ -505,8 +522,14 @@ function FC:Poll()
 		f.index, f.faction = i, faction
 		if readable(tex) then f.texture = tex end
 		local carrier = faction and carriers[faction] or nil
+		local wasPresent = f.present
 		local ev = L.Step(f, now, x, y, mapW, mapH, carrier ~= nil)
-		if ev == "PICKUP" then
+		local known = FC.BASE_SPOTS[mapID]
+		if known then
+			if f.present and not wasPresent then
+				f.capSpot = L.CapSpot(known, f.x, f.y, mapW, mapH, FC.BASE_RANGE) or f.capSpot
+			end
+		elseif ev == "PICKUP" then
 			bases[key] = L.Learn(bases[key] or {}, f.x, f.y)
 		elseif ev == "GONE" and f.wasCarried and f.lastX then
 			-- vanished while carried: most likely capped at the other base, right where it disappeared
@@ -519,7 +542,7 @@ function FC:Poll()
 		end
 		if f.present then
 			local other = OtherKey(key)
-			local spot = other and bases[other]
+			local spot = known and f.capSpot or (not known and other and bases[other]) or nil
 			local dist = (spot and spot.x) and L.Yards(f.x, f.y, spot.x, spot.y, mapW, mapH) or nil
 			local status = L.Status(dist, c.radius, f.carried)
 			local eta = (status == "CARRIED" and dist and f.speed > 2) and (dist - c.radius) / f.speed or nil
@@ -651,6 +674,9 @@ function FC.Debug()
 	end
 	for key, b in pairs(m and Bases(m) or {}) do
 		print(string.format("  learned base %s: %.4f, %.4f (%d samples)", key, b.x or 0, b.y or 0, b.n or 0))
+	end
+	for key, f in pairs(flags) do
+		if f.capSpot then print(string.format("  %s flag caps at: %.3f, %.3f", key, f.capSpot.x, f.capSpot.y)) end
 	end
 	for faction, cinfo in pairs(carriers) do print("  carrier of " .. faction .. " flag: " .. tostring(cinfo.name)) end
 end
