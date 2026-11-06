@@ -122,6 +122,8 @@ function L.TestPins(now, withBases)
 	marker(137218, 0.7, 0.68 + math.cos(now * 0.4) * 0.05)
 	marker(625754, 0.2, 0.7)
 	marker(625757, 0.8, 0.25)
+	pins[#pins + 1] = { kind = "cart", atlas = "vehicle-silvershardmines-minecartblue", x = 0.6 + math.cos(now * 0.3) * 0.08,
+		y = 0.42, facing = now * 0.3 }
 	if withBases then
 		for _, base in ipairs(TEST_BASES) do
 			pins[#pins + 1] = { kind = "node", name = base[1], x = base[2], y = base[3], poiIndex = base[4] }
@@ -200,6 +202,25 @@ function BM.ReadObjectives(mapID)
 	return found
 end
 
+-- Carts come from the game's vehicle list, the one Blizzard's map draws. Each brings its own icon,
+-- picked by the game. Only carts: the same list can hold other maps' vehicles.
+function L.IsCart(atlas)
+	if type(atlas) ~= "string" then return false end
+	local a = atlas:lower()
+	return a:find("cart", 1, true) ~= nil or a:find("silvershardmines", 1, true) ~= nil
+end
+
+function BM.ReadCarts(mapID, pins)
+	if not C_PvP.GetBattlefieldVehicles then return end
+	for _, info in ipairs(C_PvP.GetBattlefieldVehicles(mapID) or {}) do
+		local x, y, atlas = info.x, info.y, info.atlas
+		if readable(x) and readable(y) and readable(atlas) and L.IsCart(atlas)
+			and readable(info.isAlive) and info.isAlive and not (readable(info.isPlayer) and info.isPlayer) then
+			pins[#pins + 1] = { kind = "cart", atlas = atlas, x = x, y = y, facing = readable(info.facing) and info.facing or 0 }
+		end
+	end
+end
+
 function BM.Collect(mapID)
 	wipe(BM.gameDots)
 	if BM.Preview() then return L.TestPins(GetTime(), cfg().nodes) end
@@ -222,6 +243,7 @@ function BM.Collect(mapID)
 			pins[#pins + 1] = { kind = icon.kind, color = icon.color, x = x, y = y }
 		end
 	end
+	BM.ReadCarts(mapID, pins)
 	for _, pin in ipairs(BM.objectives) do pins[#pins + 1] = pin end
 	return pins
 end
@@ -264,7 +286,7 @@ local function SetArt(p, pin)
 end
 
 local function ColorFor(pin)
-	if pin.kind == "node" then return 1, 1, 1 end
+	if pin.kind == "node" or pin.kind == "cart" then return 1, 1, 1 end
 	if pin.color then return pin.color[1], pin.color[2], pin.color[3] end
 	local c
 	if pin.class then
@@ -313,6 +335,11 @@ local function Draw(mapID)
 		p:SetSize(size, size)
 		p:SetFrameLevel(BM.pins:GetFrameLevel() + (isNode and 0 or isUnit and (pin.me and 3 or 1) or 5))
 		SetArt(p, pin)
+		local facing = pin.facing or 0
+		if facing ~= (p.facing or 0) then
+			p.facing = facing
+			p.icon:SetRotation(facing)
+		end
 		p.icon:SetVertexColor(r, g, b)
 		p.ring:SetShown(pin.me and true or false)
 		if pin.me then p.ring:SetSize(size + 4, size + 4) end
@@ -629,6 +656,11 @@ function BM.Debug()
 		add("  " .. unit .. ": " .. text)
 	end
 	add(string.format("  game dots: %s, %d now", BM.gameLayer and "ready" or "not available", #BM.gameDots))
+	if C_PvP.GetBattlefieldVehicles and mapID then
+		for i, info in ipairs(C_PvP.GetBattlefieldVehicles(mapID) or {}) do
+			add(string.format("  vehicle %d: %s %s", i, tostring(info.atlas), tostring(info.isAlive)))
+		end
+	end
 	unitLine("player")
 	if IsInRaid() then
 		for i = 1, GetNumGroupMembers() do unitLine("raid" .. i) end

@@ -254,7 +254,7 @@ do
 	check("test mode shows it, enabled or not", BM.frame:IsShown())
 	check("window keeps the map's shape", math.abs(BM.frame._h - c.width * 668 / 1002) < 0.01 and BM.frame._w == c.width,
 		tostring(BM.frame._w) .. " " .. tostring(BM.frame._h))
-	check("fake team, markers and bases drawn", BM.shownPins == 17, BM.shownPins)
+	check("fake team, markers, cart and bases drawn", BM.shownPins == 18, BM.shownPins)
 	local pins = L.TestPins(10, true)
 	check("test pins stay on the map", (function()
 		for _, p in ipairs(pins) do
@@ -333,6 +333,30 @@ do
 	end
 	check("you once, teammates once", units == 2 and me == 1, units)
 	check("no position, no dot of ours", found[1].unit == "raid1")
+	do
+		-- carts: the game's own icon and facing, nothing else from the vehicle list
+		local list = {
+			{ x = 0.3, y = 0.4, atlas = "vehicle-silvershardmines-minecartred", facing = 1.5, isAlive = true, isPlayer = false },
+			{ x = 0.5, y = 0.5, atlas = "vehicle-ground-occupied", facing = 0, isAlive = true, isPlayer = false },
+			{ x = 0.6, y = 0.6, atlas = "vehicle-hordecart", facing = 0, isAlive = false, isPlayer = false },
+			{ x = 0.7, y = 0.7, atlas = "vehicle-alliancecart", facing = 0, isAlive = true, isPlayer = true },
+			{ x = { __secret = true }, y = 0.7, atlas = "vehicle-hordecart", facing = 0, isAlive = true, isPlayer = false },
+		}
+		local old = rawget(C_PvP, "GetBattlefieldVehicles")
+		rawset(C_PvP, "GetBattlefieldVehicles", function() return list end)
+		local carts = {}
+		for _, p in ipairs(BM.Collect(BM.mapID)) do
+			if p.kind == "cart" then carts[#carts + 1] = p end
+		end
+		check("one cart on the map", #carts == 1, #carts)
+		check("cart keeps the game's icon", carts[1] and carts[1].atlas == "vehicle-silvershardmines-minecartred")
+		check("cart faces where it's going", carts[1] and carts[1].facing == 1.5)
+		rawset(C_PvP, "GetBattlefieldVehicles", nil)
+		local ok = pcall(BM.Collect, BM.mapID)
+		check("no vehicle list from the game still draws", ok)
+		rawset(C_PvP, "GetBattlefieldVehicles", old)
+		BM.Collect(BM.mapID)
+	end
 	do
 		-- the game draws the ones the addon can't place
 		local layer, added, cleared, sized = BM.gameLayer, {}, 0, nil

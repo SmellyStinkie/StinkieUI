@@ -1,5 +1,9 @@
 # Stinkie UI changelog
 
+## 0.42.3
+- Blitz Map: Silvershard Mines carts now show on the map, using the game's own cart icons and turning the way they're heading.
+- `/stinkie map` now lists the vehicles the game reports.
+
 ## 0.42.2
 - Queue Time & MMR: the MMR change now shows real gains and losses for Blitz and Solo Shuffle. Blizzard only gives the MMR going into a match there, so the number is how far it moved since your last match, and it runs one game behind. Old +0 values from before this version are hidden.
 - Queue Time & MMR: new option to set the volume of the queue pop sound. The game has no volume for one sound, so your master volume moves to that level for 3 seconds and then goes back. It's off by default, and a Play it button lets you try it.
