@@ -144,7 +144,7 @@ local function StyleButton(size, opts, button)
 end
 
 -- Creates one AuraContainer with one or more groups.
--- groups: list of { filter = string, max = n }
+-- groups: list of { filter = string, max = n, decorate = its own decorate (optional) }
 -- opts: { size, spacing, growthX ("RIGHT"|"LEFT"), growthY ("UP"|"DOWN"), anchor, maxWidth, dispelBorder, disableMouse,
 --         magicGlow (function -> true to add the blue Magic glow; read once, at creation),
 --         glow (function -> glow settings), onShow (icon appeared), decorate(button, textParent) }
@@ -163,11 +163,12 @@ function ns.CreateAuraContainer(parent, groups, opts)
 	container.SUIGroupKeys = {}
 	for i, g in ipairs(groups) do
 		local key = "SUIGroup" .. i
+		local groupOpts = g.decorate and setmetatable({ decorate = g.decorate }, { __index = opts }) or opts
 		container:AddAuraGroup(key, g.filter, {
 			maxFrameCount = g.max or 4,
 			sortMethod = AuraContainerSortMethod.ExpirationOnly,
 			sortDirection = AuraContainerSortDirection.Normal,
-			initializeFrame = GenerateClosure(StyleButton, g.size or size, opts),
+			initializeFrame = GenerateClosure(StyleButton, g.size or size, groupOpts),
 			layout = {
 				elementSpacing = spacing,
 				lineSpacing = spacing,

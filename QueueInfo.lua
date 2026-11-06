@@ -104,6 +104,45 @@ function Q.InPvP()
 end
 
 ---------------------------------------------------------------------------
+-- Queue pop volume
+---------------------------------------------------------------------------
+-- The game has no volume for one sound, and an addon can't turn Blizzard's sound up or down. So
+-- the master volume moves to the chosen level for as long as the sound lasts, then goes back. The
+-- old volume is kept in StinkieUIDB, so a /reload or logout in those seconds still restores it.
+Q.POP_SECS = 3
+local MASTER = "Sound_MasterVolume"
+local popToken = 0
+local popSeen = {}
+
+function Q.RestoreVolume()
+	local was = StinkieUIDB and StinkieUIDB.popVolumeWas
+	if not was then return end
+	StinkieUIDB.popVolumeWas = nil
+	pcall(C_CVar.SetCVar, MASTER, was)
+end
+
+function Q.PopVolume()
+	if not StinkieUIDB then return end
+	if not StinkieUIDB.popVolumeWas then
+		local cur = C_CVar.GetCVar(MASTER)
+		if not tonumber(cur) then return end
+		StinkieUIDB.popVolumeWas = cur
+	end
+	if not pcall(C_CVar.SetCVar, MASTER, tostring(cfg().popVolume)) then return Q.RestoreVolume() end
+	popToken = popToken + 1
+	local token = popToken
+	C_Timer.After(Q.POP_SECS, function()
+		if token == popToken then Q.RestoreVolume() end
+	end)
+end
+
+-- the options button: hear the sound at the chosen level
+function Q.TestPopSound()
+	Q.PopVolume()
+	PlaySound(SOUNDKIT.PVP_THROUGH_QUEUE, "Master")
+end
+
+---------------------------------------------------------------------------
 -- Queue time tracking (time spent waiting outside other matches)
 ---------------------------------------------------------------------------
 local function TrackStore()
@@ -124,6 +163,10 @@ function Q.Track(now)
 	local max = GetMaxBattlefieldID and GetMaxBattlefieldID() or 0
 	for i = 1, max do
 		local status, name, teamSize, registered, suspended, queueType = GetBattlefieldStatus(i)
+		-- once per pop, whatever the queue: Blizzard's sound plays for all of them
+		local popped = status == "confirm"
+		if popped and not popSeen[i] and cfg().popSound then Q.PopVolume() end
+		popSeen[i] = popped or nil
 		local bracket = (status == "queued" or status == "confirm") and Q.Bracket(queueType, teamSize, registered, name)
 		if bracket then
 			seen[bracket] = true
@@ -150,6 +193,9 @@ function Q.Track(now)
 	end
 	for bracket in pairs(store.live) do
 		if not seen[bracket] then store.live[bracket] = nil end -- left the queue
+	end
+	for i in pairs(popSeen) do
+		if i > max then popSeen[i] = nil end -- the list shrinks when a queue ends
 	end
 end
 
@@ -285,7 +331,10 @@ Q.RATED = { ["2v2"] = true, ["3v3"] = true, shuffle = true, blitz = true, rbg = 
 function Q.MMRText(q, last)
 	if not (q.bracket and Q.RATED[q.bracket]) then return "|cffaaaaaaMMR N/A|r" end
 	if last and last.mmr then
-		return "MMR " .. tostring(last.mmr) .. ((cfg().mmrChange and Q.DeltaText(last.delta)) or "")
+		-- Blitz and Shuffle matches saved before 0.42.2 all have a 0 the game gave us, not a real one
+		local delta = last.delta
+		if PER_SPEC[q.bracket] and delta == 0 then delta = nil end
+		return "MMR " .. tostring(last.mmr) .. ((cfg().mmrChange and Q.DeltaText(delta)) or "")
 	end
 	-- a saved match there but the game gave no MMR for it: not trackable
 	if last then return "|cffaaaaaaMMR N/A|r" end
@@ -355,6 +404,7 @@ function Q:SetTestMode(on)
 end
 
 function Q:Init()
+	Q.RestoreVolume() -- left over from a /reload or logout while the sound was playing
 	local h = CreateFrame("Frame", "StinkieUI_QueueInfo", UIParent)
 	h:SetFrameStrata("MEDIUM")
 	h.bg = h:CreateTexture(nil, "BACKGROUND")

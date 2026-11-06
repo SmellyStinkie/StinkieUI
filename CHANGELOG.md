@@ -1,5 +1,17 @@
 # Stinkie UI changelog
 
+## 0.42.2
+- Queue Time & MMR: the MMR change now shows real gains and losses for Blitz and Solo Shuffle. Blizzard only gives the MMR going into a match there, so the number is how far it moved since your last match, and it runs one game behind. Old +0 values from before this version are hidden.
+- Queue Time & MMR: new option to set the volume of the queue pop sound. The game has no volume for one sound, so your master volume moves to that level for 3 seconds and then goes back. It's off by default, and a Play it button lets you try it.
+- Match History: click a column header in match details to sort by damage, healing and the rest.
+- Blitz Map: healers show as a plus in their class color.
+- Blitz Map: teammate dots now draw on top of base icons.
+- Nameplates: a flag carrier shows one flag icon instead of two.
+- BG Score: on flag maps, Blizzard's flag row under the score bars is gone when our flag indicators are on.
+- Battleground Frames: enemy roles and specs now fill in when the scoreboard arrives, without a /reload.
+- Fixed: a Chat.lua error during matches, which could repeat thousands of times.
+- Match History: a problem with the MMR number can no longer lose a saved match.
+
 ## 0.42.1
 - Blitz Map: teammate dots now show in real matches. When the game won't give the addon someone's position, the game draws their dot itself, and that dot has no name beside it.
 - Blitz Map: base names are gone, and so is their option. Small names printed on the map art itself stay.

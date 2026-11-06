@@ -10,9 +10,27 @@ local function readable(v) return v ~= nil and not issecret(v) end
 local SMOOTH = Enum.StatusBarInterpolation.ExponentialEaseOut
 
 -- Auras a flag / orb carrier has: WSG / Twin Peaks flags (old and current IDs), Eye of the Storm
--- flag, Temple of Kotmogu orbs
-NP.CARRY_AURAS = { [23333] = true, [23335] = true, [156618] = true, [156621] = true, [34976] = true,
-	[121164] = true, [121175] = true, [121176] = true, [121177] = true }
+-- flag, Temple of Kotmogu orbs. A flag shows as our own flag icon, the same one the game's carrier
+-- classification gives; an orb keeps its game icon.
+NP.CARRY_GROUPS = {
+	{ style = "FlagCarrierHorde", ids = { [23333] = true, [156618] = true } },
+	{ style = "FlagCarrierAlliance", ids = { [23335] = true, [156621] = true } },
+	{ style = "FlagCarrierNeutral", ids = { [34976] = true } },
+	{ ids = { [121164] = true, [121175] = true, [121176] = true, [121177] = true } },
+}
+
+-- Runs at the button's creation, the only time a locked aura button can be touched (Auras.lua)
+function NP.DecorateCarry(style, button, textParent)
+	button.Icon:SetAlpha(0)
+	button.Cooldown:SetAlpha(0)
+	local border = button.SUIBorder
+	border.bg:SetAlpha(0)
+	for _, edge in ipairs(border.edges) do edge:SetAlpha(0) end
+	local flag = textParent:CreateTexture(nil, "OVERLAY")
+	flag:SetAllPoints()
+	ns.ApplyCarrierStyle(flag, ns.CARRIER_STYLE[style])
+	button.SUIFlag = flag
+end
 
 -- spell IDs of auras that important units carry on themselves (for when their name is hidden)
 function NP.ApplyImportantAuras(f)
@@ -283,7 +301,10 @@ local function UpdateCarrier(f)
 	else
 		f.Carrier:Hide()
 	end
+	-- one icon: the aura only stands in when the game gives this teammate no classification
+	if f.FlagAura then f.FlagAura:SetAlpha(style and 0 or 1) end
 end
+NP.UpdateCarrier = UpdateCarrier
 
 local function UpdateClassification(f)
 	UpdateCarrier(f)
@@ -616,14 +637,20 @@ local function CreatePlateFrame(nameplate)
 	NP.ApplyImportantAuras(f)
 	ns.SetAuraUnit(f.ImpAura, nil)
 
-	-- friendly flag / orb carriers: the game gives no carrier classification for teammates, so
-	-- their carry aura is shown instead (Blizzard's aura container matches the spell IDs)
-	f.FlagAura = ns.CreateAuraContainer(f, {
-		{ filter = "HELPFUL", max = 1 },
-		{ filter = "HARMFUL", max = 1 },
-	}, { size = ns.db.nameplates.carrierSize or 40, spacing = 0, anchor = "CENTER", growthX = "RIGHT", growthY = "DOWN", disableMouse = true })
-	ns.SetAuraGroupCandidates(f.FlagAura, 1, { includeSpellIDs = NP.CARRY_AURAS })
-	ns.SetAuraGroupCandidates(f.FlagAura, 2, { includeSpellIDs = NP.CARRY_AURAS })
+	-- friendly flag / orb carriers: the game doesn't always give teammates a carrier classification,
+	-- so their carry aura stands in (Blizzard's aura container matches the spell IDs)
+	local carryGroups = {}
+	for _, carry in ipairs(NP.CARRY_GROUPS) do
+		local decorate = carry.style and GenerateClosure(NP.DecorateCarry, carry.style) or nil
+		carryGroups[#carryGroups + 1] = { filter = "HELPFUL", max = 1, decorate = decorate }
+		carryGroups[#carryGroups + 1] = { filter = "HARMFUL", max = 1, decorate = decorate }
+	end
+	f.FlagAura = ns.CreateAuraContainer(f, carryGroups,
+		{ size = ns.db.nameplates.carrierSize or 40, spacing = 0, anchor = "CENTER", growthX = "RIGHT", growthY = "DOWN", disableMouse = true })
+	for i, carry in ipairs(NP.CARRY_GROUPS) do
+		ns.SetAuraGroupCandidates(f.FlagAura, i * 2 - 1, { includeSpellIDs = carry.ids })
+		ns.SetAuraGroupCandidates(f.FlagAura, i * 2, { includeSpellIDs = carry.ids })
+	end
 	ns.SetAuraUnit(f.FlagAura, nil)
 
 	f:SetScript("OnEvent", ns.Timed("Nameplates (plate updates)", OnEvent))

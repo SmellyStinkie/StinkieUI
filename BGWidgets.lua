@@ -102,7 +102,21 @@ local function RestyleText(frame, size, depth)
 	end
 end
 
+-- Blizzard's own flag icons under the score: the flag banners show the same thing. Alpha only, and
+-- it's undone wherever the banners aren't taking over (the frame is reused between matches).
+function W:UpdateFlagRow()
+	local container = _G.UIWidgetTopCenterContainerFrame
+	if not (container and type(container.widgetFrames) == "table") then return end
+	local row = Enum.UIWidgetVisualizationType and Enum.UIWidgetVisualizationType.DoubleStateIconRow
+	local FC = ns.FlagCap
+	local ours = FC and FC.inPvP and FC.flagMap and ns.db.flagCap.enabled
+	for _, widget in pairs(container.widgetFrames) do
+		if row and widget.widgetType == row then widget:SetAlpha(ours and 0 or 1) end
+	end
+end
+
 function W:SkinScore()
+	W:UpdateFlagRow()
 	local c = cfg()
 	if not c.enabled then return end
 	local inBG, inArena = InBattleground(), InArena()

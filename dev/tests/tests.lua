@@ -336,6 +336,7 @@ do
 	do
 		-- the game draws the ones the addon can't place
 		local layer, added, cleared, sized = BM.gameLayer, {}, 0, nil
+		check("game dots draw over the bases", layer:GetFrameLevel() > BM.pins:GetFrameLevel(), layer:GetFrameLevel())
 		local isDot = false
 		for _, u in ipairs(BM.gameDots) do if u == "raid3" then isDot = true end end
 		check("no position goes to the game's dots", isDot)
@@ -353,6 +354,19 @@ do
 		BM.UpdateGameDots()
 		check("a refused color falls back", plain == #BM.gameDots, plain)
 		ns.GetUnitClassColor = oldColor
+		-- healers are a plus, a little bigger; a hidden role stays a dot
+		local oldRole, art, w = UnitGroupRolesAssigned, nil, nil
+		layer.AddUnit = function(_, _, tex, width) art, w = tex, width end
+		UnitGroupRolesAssigned = function() return "HEALER" end
+		BM.UpdateGameDots()
+		check("a healer is a plus", art == ns.MEDIA.cross and w == c.dotSize * BM.HEALER_SCALE, tostring(art))
+		UnitGroupRolesAssigned = function() return "DAMAGER" end
+		BM.UpdateGameDots()
+		check("damage stays a dot", art == ns.MEDIA.dot and w == c.dotSize, tostring(art))
+		UnitGroupRolesAssigned = function() return { __secret = true } end
+		BM.UpdateGameDots()
+		check("a hidden role stays a dot", art == ns.MEDIA.dot, tostring(art))
+		UnitGroupRolesAssigned = oldRole
 		wipe(BM.gameDots)
 		cleared = 0
 		BM.UpdateGameDots()
@@ -552,6 +566,37 @@ flushErrors("stats tab")
 H.Toggle("matches")
 H.ShowDetail(D.summaries[1])
 flushErrors("detail")
+do
+	local function names(list)
+		local out = {}
+		for i, pl in ipairs(list) do out[i] = pl.name end
+		return table.concat(out, " ")
+	end
+	local list = {
+		{ name = "Ann", dmg = 10, heal = 90, stats = "7:1" },
+		{ name = "bob", dmg = 30, heal = 20, stats = "7:5" },
+		{ name = "Cy", dmg = 30, heal = 70 },
+	}
+	H.SortDetail(list, 3, true)
+	check("detail sorts by damage, ties in order", names(list) == "bob Cy Ann", names(list))
+	H.SortDetail(list, 4, true)
+	check("detail sorts by healing", names(list) == "Ann Cy bob", names(list))
+	H.SortDetail(list, 4, false)
+	check("detail sort reverses", names(list) == "bob Cy Ann", names(list))
+	H.SortDetail(list, 1, false)
+	check("detail sorts names A-Z", names(list) == "Ann bob Cy", names(list))
+	local realParse = ns.MatchRecorder.Codec.ParseStats
+	ns.MatchRecorder.Codec.ParseStats = function(s) return s == "7:5" and { [7] = "5" } or s == "7:1" and { [7] = "1" } or {} end
+	H.SortDetail(list, "s7", true)
+	check("detail sorts by a stat", names(list) == "bob Ann Cy", names(list))
+	ns.MatchRecorder.Codec.ParseStats = realParse
+	local head = H.DetailHeader(3)
+	head:GetScript("OnClick")(head)
+	check("clicking a heading sorts", head.text:GetText():find(" v", 1, true) ~= nil, head.text:GetText())
+	head:GetScript("OnClick")(head)
+	check("clicking it again reverses", head.text:GetText():find(" ^", 1, true) ~= nil, head.text:GetText())
+	flushErrors("detail sort")
+end
 -- a new match while the window is loaded goes straight in
 MOCK.bracket = "arena"
 for _, s in ipairs(MOCK.scores) do s.stats = {} end
@@ -676,6 +721,48 @@ check("take queue once", ns.QueueInfo.TakeQueue("shuffle") == nil)
 MOCK.queues = {}
 MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
 check("left queue cleared", next(track.live) == nil)
+do
+	-- queue pop volume: off by default, once per pop, and the old volume always comes back
+	local oldCV, master = C_CVar, "0.3"
+	local sets = 0
+	C_CVar = { GetCVar = function() return master end, SetCVar = function(_, v) master = v; sets = sets + 1 end }
+	local qi = ns.db.queueInfo
+	local pop = { status = "confirm", name = "Battleground Blitz", size = 0, rated = true, qt = "RATEDSOLORBG" }
+	check("pop volume is off by default", qi.popSound == false)
+	MOCK.queues = { pop }
+	MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
+	check("off leaves the volume alone", sets == 0 and master == "0.3", master)
+	MOCK.queues = {}
+	MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
+	qi.popSound, qi.popVolume = true, 0.8
+	MOCK.queues = { pop }
+	MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
+	check("pop sets the chosen volume", tonumber(master) == 0.8, master)
+	MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
+	check("once per pop", sets == 1, sets)
+	check("old volume is kept for a reload", StinkieUIDB.popVolumeWas == "0.3", tostring(StinkieUIDB.popVolumeWas))
+	MOCK.queues = {}
+	MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
+	MOCK.queues = { pop }
+	MOCK.Advance(1)
+	MOCK.Fire("UPDATE_BATTLEFIELD_STATUS") -- a second pop while the first plays
+	check("a second pop keeps the first old volume", StinkieUIDB.popVolumeWas == "0.3")
+	MOCK.Advance(2.2)
+	check("the first timer doesn't cut the second short", tonumber(master) == 0.8, master)
+	MOCK.Advance(1)
+	check("volume goes back", master == "0.3" and StinkieUIDB.popVolumeWas == nil, master)
+	StinkieUIDB.popVolumeWas = "0.5"
+	Q.RestoreVolume()
+	check("a reload mid sound restores it", master == "0.5" and StinkieUIDB.popVolumeWas == nil, master)
+	C_CVar.GetCVar = function() return nil end
+	master = "0.3"
+	Q.PopVolume()
+	check("no readable volume, nothing changes", master == "0.3" and StinkieUIDB.popVolumeWas == nil, master)
+	C_CVar = oldCV
+	qi.popSound, qi.popVolume = false, 1
+	MOCK.queues = {}
+	MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
+end
 ns.db.queueInfo.hideInPvP = true
 flushErrors("queue 0.32")
 
@@ -1244,10 +1331,92 @@ check("skirmish not saved", #StinkieUIMatchInbox.records + #Dh.Archive().records
 C_PvP.IsRatedArena = oldRated
 flushErrors("0.29")
 
+-- Blizzard's flag icons give way to the flag banners, on flag maps only
+do
+	local W, FC = ns.BGWidgets, ns.FlagCap
+	local row = MOCK.NewObj("Frame", nil, UIParent)
+	row.widgetType = 7
+	local bars = MOCK.NewObj("Frame", nil, UIParent)
+	bars.widgetType = 3
+	local oldTop = UIWidgetTopCenterContainerFrame
+	UIWidgetTopCenterContainerFrame = { widgetFrames = { row, bars } }
+	local oldPvP, oldMap = FC.inPvP, FC.flagMap
+	FC.inPvP, FC.flagMap = true, true
+	W:UpdateFlagRow()
+	check("flag icons hidden on a flag map", row:GetAlpha() == 0 and bars:GetAlpha() == 1, row:GetAlpha())
+	FC.flagMap = false
+	W:UpdateFlagRow()
+	check("flag icons back elsewhere", row:GetAlpha() == 1)
+	FC.inPvP, FC.flagMap = oldPvP, oldMap
+	UIWidgetTopCenterContainerFrame = oldTop
+end
+
+-- a spec or role that shows up after the names reaches the rows
+do
+	local side = ns.BGEnemies.enemies
+	local row = side.rows[1]
+	local keepEntry, keepShown, keepRoster = row.entry, row:IsShown(), side.roster
+	row.entry = { fullName = "Late-Realm", baseName = "Late" }
+	row:Show()
+	local fresh = { fullName = "Late-Realm", baseName = "Late", specText = "Discipline" }
+	side.roster = { fresh }
+	local text
+	local realSet = row.SpecText.SetText
+	row.SpecText.SetText = function(_, v) text = v end
+	side:RefreshHiddenInfo()
+	check("late spec reaches the row", row.entry == fresh and text == "Discipline", text)
+	row.SpecText.SetText = realSet
+	row.entry, side.roster = keepEntry, keepRoster
+	row:SetShown(keepShown)
+end
+
 -- 0.30: MMR change, roomy layout, outside gems, remembered window sizes
 ns.MatchRecorder.RememberMMR({ char = "Stinkie-Tichondrius", bracket = "shuffle", spec = 267, mmr = 2700, mmrAfter = 2773, ratingAfter = 2800, t = 2000000000 })
 local q = ns.QueueInfo.LastMMR("shuffle")
 check("mmr per spec with delta", q and q.mmr == 2773 and q.delta == 73, q and q.delta)
+do
+	local R, me = ns.MatchRecorder, "Mmr-Test"
+	local function save(t, mmr, after, spec)
+		R.RememberMMR({ char = me, bracket = "blitz", spec = spec or 265, mmr = mmr, mmrAfter = after, ratingAfter = 2000, t = t })
+	end
+	local function stored() return StinkieUIDB.lastMMR[me]["blitz:265"] end
+	save(100, 2604, 2604)
+	check("first match: nothing to compare", stored().delta == nil, stored().delta)
+	check("a stored 0 isn't shown for Blitz", not ns.QueueInfo.MMRText({ bracket = "blitz" }, { mmr = 2661, delta = 0 }):find("+0", 1, true))
+	check("a real 0 still shows for arena", ns.QueueInfo.MMRText({ bracket = "3v3" }, { mmr = 2661, delta = 0 }):find("+0", 1, true) ~= nil)
+	do
+		local keep = stored()
+		save(150) -- a match with no MMR from the game
+		check("no MMR from the game doesn't crash", stored().t == 150)
+		StinkieUIDB.lastMMR[me]["blitz:265"], StinkieUIDB.lastMMR[me].blitz = keep, keep
+		local realRemember = R.RememberMMR
+		R.RememberMMR = function() error("boom") end
+		local before = #R.Inbox().records
+		local handler = geterrorhandler
+		geterrorhandler = function() return function() end end
+		local keepAnnounce = ns.db.matchHistory.announce
+		ns.db.matchHistory.announce = false
+		R.Save({ char = me, bracket = "blitz", t = 160, result = "W", map = "Test", players = {} })
+		ns.db.matchHistory.announce = keepAnnounce
+		geterrorhandler = handler
+		R.RememberMMR = realRemember
+		check("a failed MMR note still saves the match", #R.Inbox().records + #StinkieUI_History.Data.Archive().records > before)
+		check("and leaves a note", StinkieUIDB.lastRecord.status == "mmr failed", StinkieUIDB.lastRecord.status)
+	end
+	save(200, 2661, 2661)
+	check("no change from the game: moved since the last match", stored().mmr == 2661 and stored().delta == 57, stored().delta)
+	save(300, 2630)
+	check("drops show too", stored().delta == -31, stored().delta)
+	save(300, 2630)
+	check("same match again keeps its change", stored().delta == -31, stored().delta)
+	save(250, 2000)
+	check("an older import changes nothing", stored().mmr == 2630)
+	save(400, 2700, 2720)
+	check("a real change from the game wins", stored().mmr == 2720 and stored().delta == 20, stored().delta)
+	save(500, 2500, 2500, 266)
+	check("another spec starts fresh", StinkieUIDB.lastMMR[me]["blitz:266"].delta == nil)
+	StinkieUIDB.lastMMR[me] = nil
+end
 check("delta text green", ns.QueueInfo.DeltaText(73):find("55ff55") and ns.QueueInfo.DeltaText(-40):find("ff5555") and ns.QueueInfo.DeltaText(-40):find("-40"))
 ns.CharacterSheet.ApplyLayout()
 do
@@ -2245,6 +2414,52 @@ end
 do
 	local CH = ns.Chat
 	local tab = {}
+	do
+		-- a match can hide a chat widget's own state: nothing here may test it
+		local SECRET = { __secret = true }
+		local function hide(o, focus)
+			o.IsMouseOver = function() return SECRET end
+			o.IsShown = function() return SECRET end
+			o.GetAlpha = function() return SECRET end
+			o.IsSelectingText = function() return SECRET end
+			o.HasFocus = function() return SECRET end
+		end
+		local f = CreateFrame("Frame", "StinkieTestChat")
+		_G.StinkieTestChat = f
+		f.editBox = CreateFrame("Frame")
+		hide(f); hide(f.editBox)
+		local oldFrames, oldDock = CHAT_FRAMES, GeneralDockManager
+		local chat1 = rawget(_G, "ChatFrame1")
+		local saved = {}
+		if chat1 then
+			for _, k in ipairs({ "IsMouseOver", "IsShown", "GetAlpha", "IsSelectingText" }) do saved[k] = rawget(chat1, k) end
+			hide(chat1)
+		end
+		CHAT_FRAMES = chat1 and { "StinkieTestChat", "ChatFrame1" } or { "StinkieTestChat" }
+		GeneralDockManager = CreateFrame("Frame")
+		hide(GeneralDockManager)
+		local oldMouse = ns.db.chat.mouseover
+		for _, on in ipairs({ true, false }) do
+			ns.db.chat.mouseover = on
+			local ok, err = pcall(CH.Tick)
+			check("hidden chat state doesn't break the tick (" .. tostring(on) .. ")", ok, tostring(err))
+		end
+		local ok, err = pcall(CH.Hovered, f)
+		check("hidden focus isn't a hover", ok and err == false, tostring(err))
+		f.editBox.HasFocus = function() return true end
+		check("focus counts when it can be read", CH.Hovered(f) == true)
+		f.editBox.HasFocus = function() return SECRET end
+		check("hidden focus keeps the last answer", CH.Hovered(f) == true)
+		f.editBox.HasFocus = function() return false end
+		CH.Hovered(f)
+		ns.db.chat.mouseover = oldMouse
+		CHAT_FRAMES, GeneralDockManager = oldFrames, oldDock
+		_G.StinkieTestChat = nil
+		if chat1 then
+			chat1.HasFocus = nil
+			for _, k in ipairs({ "IsMouseOver", "IsShown", "GetAlpha", "IsSelectingText" }) do chat1[k] = saved[k] end
+		end
+	end
 	CH.StopFlash(tab)
 	check("no flash left after a reply", CH.IsFlashing(tab) == false)
 end
@@ -3076,6 +3291,35 @@ flushErrors("0.33")
 local plateA, plateB = MOCK.NewObj("Frame", nil, UIParent), MOCK.NewObj("Frame", nil, UIParent)
 local oldGet = C_NamePlate.GetNamePlateForUnit
 rawset(C_NamePlate, "GetNamePlateForUnit", function(u) if u == "target" then return plateA end end)
+do
+	-- a carrier gets one flag: ours, whether from the classification or from the carry aura
+	local NP = ns.Nameplates
+	local all = {}
+	for _, carry in ipairs(NP.CARRY_GROUPS) do
+		for id in pairs(carry.ids) do all[id] = carry.style or "orb" end
+	end
+	check("Horde flags look like the Horde carrier", all[23333] == "FlagCarrierHorde" and all[156618] == "FlagCarrierHorde")
+	check("Alliance flags look like the Alliance carrier", all[23335] == "FlagCarrierAlliance" and all[156621] == "FlagCarrierAlliance")
+	check("Eye of the Storm flag is the white flag", all[34976] == "FlagCarrierNeutral")
+	check("orbs keep their icon", all[121164] == "orb" and all[121177] == "orb")
+	local b = CreateFrame("Frame")
+	b.Icon = b:CreateTexture()
+	b.Cooldown = CreateFrame("Frame")
+	ns.CreateBackdrop(b, 1)
+	NP.DecorateCarry("FlagCarrierNeutral", b, CreateFrame("Frame"))
+	check("aura icon is hidden for our flag", b.Icon:GetAlpha() == 0 and b.SUIBorder.bg:GetAlpha() == 0, tostring(b.Icon:GetAlpha()))
+	check("our flag is on the button", b.SUIFlag._tex == ns.MEDIA.flag, tostring(b.SUIFlag._tex))
+	local BG, old = ns.BGEnemies, ns.BGEnemies.ClassificationStyle
+	local aura = CreateFrame("Frame")
+	local plate = { unit = "nameplate1", Carrier = CreateFrame("Frame"):CreateTexture(), FlagAura = aura }
+	BG.ClassificationStyle = function() return ns.CARRIER_STYLE.FlagCarrierNeutral end
+	NP.UpdateCarrier(plate)
+	check("classification shown, the aura steps aside", aura:GetAlpha() == 0, aura:GetAlpha())
+	BG.ClassificationStyle = function() return nil end
+	NP.UpdateCarrier(plate)
+	check("no classification, the aura stands in", aura:GetAlpha() == 1, aura:GetAlpha())
+	BG.ClassificationStyle = old
+end
 check("target plate by frame", ns.Nameplates.IsTargetPlate({ nameplate = plateA, unit = "nameplate1" }) == true)
 check("other plate not target", ns.Nameplates.IsTargetPlate({ nameplate = plateB, unit = "nameplate2" }) == false)
 -- target marker on a real plate: built by plate setup, follows the marker event

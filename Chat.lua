@@ -18,6 +18,13 @@ local CH = {}
 ns.Chat = CH
 
 local issecret = ns.issecret
+
+-- In a match a chat widget's own state can come back hidden (HasFocus, IsShown, GetAlpha...), and
+-- a hidden answer can't be tested. So each check says what to assume when it can't tell.
+local function Known(v, default)
+	if issecret(v) then return default end
+	return v
+end
 local function cfg() return ns.db.chat end
 
 local hiddenParent = CreateFrame("Frame")
@@ -344,7 +351,7 @@ end
 
 local function StartFlash(f, chatType)
 	local c = cfg()
-	if not c.flashTabs or f:IsShown() then return end
+	if not c.flashTabs or Known(f:IsShown(), false) then return end
 	if c.flashPlayerOnly and not (chatType and PLAYER_TYPES[chatType]) then return end
 	flashing[f] = true
 end
@@ -731,7 +738,7 @@ local function ApplyButtons()
 				end)
 			end
 			if hide then
-				if b:IsShown() then hiddenByUs[b] = true; b:Hide() end
+				if Known(b:IsShown(), false) then hiddenByUs[b] = true; b:Hide() end
 			elseif hiddenByUs[b] then
 				hiddenByUs[b] = nil
 				b:Show()
@@ -823,15 +830,33 @@ end
 ---------------------------------------------------------------------------
 -- Visibility: hide-until-mouseover, selected tab, flashing
 ---------------------------------------------------------------------------
+local lastFocus = {}
+
+-- the last answer we could read stands in for a hidden one, so chat doesn't fade as you type
+local function Focused(eb)
+	local v = eb:HasFocus()
+	if issecret(v) then return lastFocus[eb] or false end
+	lastFocus[eb] = v
+	return v
+end
+
 local function Hovered(f)
 	local box = Part(f, "Background") or f
-	if box:IsMouseOver(30, -4, -4, 4) then return true end
+	if Known(box:IsMouseOver(30, -4, -4, 4), false) then return true end
 	local o = objects[f]
-	if o and o.tab and o.tab:IsMouseOver() then return true end
+	if o and o.tab and Known(o.tab:IsMouseOver(), false) then return true end
 	local eb = f.editBox or Part(f, "EditBox")
-	if eb and eb.HasFocus and eb:HasFocus() then return true end
-	if f.IsSelectingText and f:IsSelectingText() then return true end
+	if eb and eb.HasFocus and Focused(eb) then return true end
+	if f.IsSelectingText and Known(f:IsSelectingText(), false) then return true end
 	return false
+end
+
+CH.Hovered = Hovered
+
+-- a hidden alpha can't be compared, so it's just set again
+local function SetAlphaTo(frame, a)
+	local cur = frame:GetAlpha()
+	if issecret(cur) or cur ~= a then frame:SetAlpha(a) end
 end
 
 local function Tick()
@@ -841,7 +866,7 @@ local function Tick()
 	-- docked windows share one dock, so they fade together
 	local dockShown = not c.mouseover
 	if c.mouseover then
-		if GeneralDockManager and GeneralDockManager:IsMouseOver() then dockShown = true end
+		if GeneralDockManager and Known(GeneralDockManager:IsMouseOver(), false) then dockShown = true end
 		for _, f in ipairs(frames) do
 			if f.isDocked and (Hovered(f) or (showUntil[f] and showUntil[f] > now)) then dockShown = true end
 		end
@@ -855,15 +880,15 @@ local function Tick()
 			else shown = Hovered(f) or (showUntil[f] and showUntil[f] > now) or false end
 		end
 		local a = shown and 1 or (c.fadeAlpha or 0)
-		if f:GetAlpha() ~= a then f:SetAlpha(a) end
+		SetAlphaTo(f, a)
 		local o = objects[f]
 		if o then
-			o.copy:SetShown(c.copyButton and shown and f:IsShown() and Hovered(f) or false)
+			o.copy:SetShown(c.copyButton and shown and Known(f:IsShown(), false) and Hovered(f) or false)
 			if o.tabBg then
 				local tab = o.tab
-				local visible = tab:IsShown()
-				local selected = f:IsShown()
-				local hover = tab:IsMouseOver()
+				local visible = Known(tab:IsShown(), true)
+				local selected = Known(f:IsShown(), false)
+				local hover = Known(tab:IsMouseOver(), false)
 				local base = selected and 1 or (hover and 1 or c.tabInactiveAlpha)
 				o.tabBg:SetAlpha(visible and a or 0)
 				o.tabBg.fill:SetAlpha(c.tabAlpha)
@@ -879,7 +904,7 @@ local function Tick()
 	end
 	if GeneralDockManager and GeneralDockManager.SetAlpha then
 		local a = (dockShown and 1) or (c.fadeAlpha or 0)
-		if GeneralDockManager:GetAlpha() ~= a then GeneralDockManager:SetAlpha(a) end
+		SetAlphaTo(GeneralDockManager, a)
 	end
 end
 CH.Tick = Tick

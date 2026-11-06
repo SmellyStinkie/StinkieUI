@@ -71,7 +71,8 @@ function Frame:GetFrameStrata() return "MEDIUM" end
 function Frame:SetClipsChildren(v) self._clips = v end
 function Frame:SetAlpha(a) self._alpha = a end
 function Frame:GetAlpha() return self._alpha end
-function Frame:GetFrameLevel() return 1 end
+function Frame:GetFrameLevel() return self._level or 1 end
+function Frame:SetFrameLevel(n) self._level = n end
 function Frame:GetParent() return self._parent end
 function Frame:SetParent(p) self._parent = p end
 function Frame:SetFont() return true end
@@ -281,7 +282,7 @@ C_UIWidgetManager = setmetatable({
 	GetDoubleStatusBarWidgetVisualizationInfo = function(id) return MOCK.widgetInfo and MOCK.widgetInfo[id] end,
 }, { __index = function() return function() return nil end end })
 Enum = setmetatable({
-	UIWidgetVisualizationType = { DoubleStatusBar = 3 },
+	UIWidgetVisualizationType = { DoubleStatusBar = 3, DoubleStateIconRow = 7 },
 	TooltipDataLineType = { ItemLevel = 31, ItemEnchantmentPermanent = 15, GemSocket = 3 },
 	ItemClass = { Weapon = 2, Armor = 4 },
 	PvPUnitClassification = { FlagCarrierHorde = 0, FlagCarrierAlliance = 1, FlagCarrierNeutral = 2 },

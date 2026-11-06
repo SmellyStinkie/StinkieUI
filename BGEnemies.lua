@@ -610,11 +610,9 @@ function Side:PlaceName(row)
 	end
 end
 
-function Side:FillRow(row, e)
+-- spec name text only when there's no icon for it (secret values go straight to the text)
+function Side:ShowSpecText(row, e)
 	local c = self:cfg()
-	if not (row.entry and row.entry.fullName == e.fullName) then row.hasHealth = nil; row.hasPower = nil end
-	row.entry = e
-	-- spec name text only when there's no icon for it (secret values go straight to the text)
 	local twoLine = c.specText and not e.specIcon and (issecret(e.specText) or e.specText ~= nil)
 	if twoLine then
 		row.SpecText:SetText(e.specText)
@@ -626,6 +624,27 @@ function Side:FillRow(row, e)
 		row.twoLine = twoLine
 		self:PlaceName(row)
 	end
+end
+
+-- A live match's spec and role are hidden values: nothing can tell if one changed, and they often
+-- arrive after the names. So each scoreboard update puts them on the rows again. Text and healer
+-- marks only, which is fine in combat.
+function Side:RefreshHiddenInfo()
+	for i, row in ipairs(self.rows) do
+		local e = self.roster[i]
+		if e and row.entry and row.entry.fullName == e.fullName and row:IsShown() then
+			row.entry = e
+			self:ShowSpecText(row, e)
+			self:UpdateHealer(row)
+		end
+	end
+end
+
+function Side:FillRow(row, e)
+	local c = self:cfg()
+	if not (row.entry and row.entry.fullName == e.fullName) then row.hasHealth = nil; row.hasPower = nil end
+	row.entry = e
+	self:ShowSpecText(row, e)
 	row.Name:SetText(c.shortNames and e.baseName or e.fullName)
 	local col = C_ClassColor.GetClassColor(e.classToken)
 	if col then row.Health:SetStatusBarColor(col:GetRGB()) end
@@ -1041,6 +1060,8 @@ function BG:Init()
 				if key ~= side.rosterKey then
 					side.rosterKey = key
 					side:ApplyRoster()
+				else
+					side:RefreshHiddenInfo()
 				end
 			end)
 		elseif event == "PLAYER_REGEN_ENABLED" or event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" then

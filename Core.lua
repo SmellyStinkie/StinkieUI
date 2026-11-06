@@ -877,6 +877,7 @@ ns.defaults = {
 		enabled = true,
 		estimate = true, mmr = true, mmrChange = true, rating = false,
 		specIcon = true, header = true, hideInPvP = true, -- queued spec icon per row, "Queued as" line
+		popSound = false, popVolume = 1, -- master volume while the queue pop sound plays
 		width = 440, height = 22, spacing = 2, scale = 1,
 		background = true, bgColor = { 0.04, 0.04, 0.05 }, bgAlpha = 0.65, border = true,
 		textStyle = text(14),

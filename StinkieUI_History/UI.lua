@@ -392,6 +392,43 @@ local function BuildDetail(parent)
 	return p
 end
 
+-- What a detail column sorts by. Stat columns (flag captures and so on) are keyed "s<id>" because
+-- which ones show differs per match.
+local DETAIL_SORT = {
+	function(pl) return tostring(pl.name or ""):lower() end,
+	function(pl) return tostring(SpecName(pl.spec) or ""):lower() end,
+	function(pl) return pl.dmg or 0 end,
+	function(pl) return pl.heal or 0 end,
+	function(pl) return pl.kb or 0 end,
+	function(pl) return pl.deaths or 0 end,
+	function(pl) return pl.rating or 0 end,
+	function(pl) return pl.rchg or 0 end,
+	function(pl) return pl.mmr or 0 end,
+}
+
+function H.DetailHeader(ci) return win and win.detail.statHeaders[ci] end
+
+-- One ranked list of everyone, by the column you clicked; ties keep the scoreboard's order
+function H.SortDetail(list, key, desc)
+	local value = DETAIL_SORT[key]
+	local statID = type(key) == "string" and tonumber(key:match("^s(%d+)$"))
+	for i, pl in ipairs(list) do
+		pl._at = i
+		if statID then
+			pl._sort = tonumber(SUI.MatchRecorder.Codec.ParseStats(pl.stats)[statID]) or 0
+		else
+			pl._sort = value(pl)
+		end
+	end
+	table.sort(list, function(a, b)
+		if a._sort ~= b._sort then
+			if desc then return a._sort > b._sort end
+			return a._sort < b._sort
+		end
+		return a._at < b._at
+	end)
+end
+
 function H.ShowDetail(summary)
 	local m = D.Get(summary.i)
 	if not m then return end
@@ -456,24 +493,51 @@ function H.ShowDetail(summary)
 	end
 	local names = D.Archive().statNames
 	local cols = {}
-	for _, c in ipairs(DETAIL_COLS) do cols[#cols + 1] = c end
-	for i = 1, math.min(4, #statIDs) do cols[#cols + 1] = { names[statIDs[i]] or ("Stat " .. statIDs[i]), 70, stat = statIDs[i] } end
+	for i, c in ipairs(DETAIL_COLS) do cols[#cols + 1] = { c[1], c[2], key = i } end
+	for i = 1, math.min(4, #statIDs) do
+		cols[#cols + 1] = { names[statIDs[i]] or ("Stat " .. statIDs[i]), 70, stat = statIDs[i], key = "s" .. statIDs[i] }
+	end
+	-- a sort on a stat this match doesn't have falls back to the normal order
+	local sortKey
+	for _, col in ipairs(cols) do
+		if col.key == view.detailSort then sortKey = col.key end
+	end
 
 	-- header
 	for _, h in ipairs(p.statHeaders) do h:Hide() end
 	local x = 6
 	for ci, col in ipairs(cols) do
-		local h = p.statHeaders[ci] or Text(p, 12, "LEFT", ACCENT)
-		p.statHeaders[ci] = h
+		local h = p.statHeaders[ci]
+		if not h then
+			h = CreateFrame("Button", nil, p)
+			h.text = Text(h, 12, "LEFT", ACCENT)
+			h.text:SetPoint("LEFT")
+			h:SetScript("OnClick", function(self)
+				if view.detailSort == self.key then
+					view.detailDesc = not view.detailDesc
+				else
+					-- names A-Z first, numbers high-low first
+					view.detailSort, view.detailDesc = self.key, self.key ~= 1 and self.key ~= 2
+				end
+				H.ShowDetail(p.summary)
+			end)
+			p.statHeaders[ci] = h
+		end
+		h.key = col.key
 		h:ClearAllPoints()
-		h:SetPoint("TOPLEFT", x, -90)
-		h:SetWidth(col[2] - 4)
-		h:SetText(col[1])
+		h:SetPoint("TOPLEFT", x, -88)
+		h:SetSize(col[2] - 4, 16)
+		h.text:SetWidth(col[2] - 4)
+		local active = sortKey == col.key
+		h.text:SetText(col[1] .. (active and (view.detailDesc and " v" or " ^") or ""))
+		local tint = active and BRAND.cream or ACCENT
+		h.text:SetTextColor(tint[1], tint[2], tint[3])
 		h:Show()
 		x = x + col[2]
 	end
 
-	-- players: my team first, then the rest; each team sorted by damage + healing
+	-- players: my team first, then the rest; each team sorted by damage + healing. A clicked
+	-- column ranks everyone together instead, with the other team's rows tinted.
 	local me = m.players[m.me or 0]
 	local list = {}
 	for i, pl in ipairs(m.players) do pl._i = i; list[#list + 1] = pl end
@@ -484,13 +548,20 @@ function H.ShowDetail(summary)
 		if ta ~= tb then return ta < tb end
 		return (a.dmg or 0) + (a.heal or 0) > (b.dmg or 0) + (b.heal or 0)
 	end)
+	if sortKey then H.SortDetail(list, sortKey, view.detailDesc) end
 	local y = -108
 	local lastTeam
 	for ri, r in ipairs(p.rows) do
 		local pl = list[ri]
 		if pl then
 			local team = (not shuffle and me and pl.team == me.team) and 0 or 1
-			if lastTeam ~= nil and team ~= lastTeam then y = y - 8 end
+			if sortKey then
+				local enemy = not shuffle and me and team == 1
+				r.bg:SetColorTexture(1, enemy and 0.2 or 1, enemy and 0.2 or 1, enemy and 0.07 or (ri % 2 == 0 and 0.03 or 0))
+			else
+				r.bg:SetColorTexture(1, 1, 1, ri % 2 == 0 and 0.03 or 0)
+				if lastTeam ~= nil and team ~= lastTeam then y = y - 8 end
+			end
 			lastTeam = team
 			r:ClearAllPoints()
 			r:SetPoint("TOPLEFT", 0, y)

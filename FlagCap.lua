@@ -559,6 +559,7 @@ local function OnUpdate(_, elapsed)
 	if not active then
 		FC.flagMap = FlagMap()
 		if not FC.flagMap then return end
+		if ns.BGWidgets then ns.BGWidgets:UpdateFlagRow() end
 	end
 	scanAccum = scanAccum + 1
 	if scanAccum >= 3 then -- carriers ~1.7 times a second

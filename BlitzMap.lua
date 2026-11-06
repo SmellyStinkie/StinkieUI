@@ -1,5 +1,5 @@
--- StinkieUI: Blitz Map. The zone map of a Blitz in a flat square window, with class colored dots and
--- names for your team, our own flag and orb icons, and the bases and objectives the map reports.
+-- StinkieUI: Blitz Map. The zone map of a Blitz in a flat square window, with class colored dots (a
+-- plus for healers) and names for your team, our own flag and orb icons, and the bases and objectives the map reports.
 -- Wheel to zoom, drag to look around, Shift+drag to move the window. Only our own frames; shows only
 -- in Blitz (or test mode).
 -- Tiles sit on a canvas that scales with the zoom. Pins sit on their own layer and are placed by
@@ -111,7 +111,7 @@ function L.TestPins(now, withBases)
 	local pins = {}
 	for i, mate in ipairs(TEAMMATES) do
 		local a = now * 0.25 + i * 0.8
-		pins[i] = { kind = "unit", me = i == 1, name = mate[1], class = mate[2],
+		pins[i] = { kind = "unit", me = i == 1, name = mate[1], class = mate[2], healer = mate[2] == "PRIEST",
 			x = 0.5 + math.cos(a) * (0.1 + i * 0.03), y = 0.5 + math.sin(a * 1.3) * (0.08 + i * 0.03) }
 	end
 	local function marker(texture, x, y)
@@ -137,6 +137,15 @@ end
 -- and a Blitz team is a raid): the game draws those dots itself, see UpdateGameDots.
 BM.gameDots = {}
 
+-- A plus has less to it than a filled dot, so it's drawn a little bigger to read the same
+BM.HEALER_SCALE = 1.4
+
+-- A hidden role can't be tested, so that unit stays a dot
+function BM.IsHealer(unit)
+	local role = UnitGroupRolesAssigned(unit)
+	return readable(role) and role == "HEALER"
+end
+
 local function UnitPin(pins, mapID, unit, me)
 	local pos = C_Map.GetPlayerMapPosition(mapID, unit)
 	local x, y
@@ -146,7 +155,7 @@ local function UnitPin(pins, mapID, unit, me)
 		dots[#dots + 1] = unit
 		return
 	end
-	pins[#pins + 1] = { kind = "unit", unit = unit, me = me, x = x, y = y }
+	pins[#pins + 1] = { kind = "unit", unit = unit, me = me, x = x, y = y, healer = BM.IsHealer(unit) }
 end
 
 local function HidesVignettes(mapID)
@@ -240,7 +249,7 @@ local function GetPin(i)
 end
 
 local function SetArt(p, pin)
-	local art = pin.atlas or pin.poiIndex or pin.kind
+	local art = pin.atlas or pin.poiIndex or (pin.healer and "cross") or pin.kind
 	if p.art == art then return end
 	p.art = art
 	p.icon:SetTexCoord(0, 1, 0, 1)
@@ -250,7 +259,7 @@ local function SetArt(p, pin)
 		p.icon:SetTexture(POI_ICONS, "CLAMP", "CLAMP", "TRILINEAR")
 		p.icon:SetTexCoord(C_Minimap.GetPOITextureCoords(pin.poiIndex))
 	else
-		p.icon:SetTexture(pin.kind == "unit" and ns.MEDIA.dot or ns.MEDIA[pin.kind], "CLAMP", "CLAMP", "TRILINEAR")
+		p.icon:SetTexture(art == "unit" and ns.MEDIA.dot or ns.MEDIA[art], "CLAMP", "CLAMP", "TRILINEAR")
 	end
 end
 
@@ -271,9 +280,11 @@ end
 -- with these dots, because the addon never learns where they are.
 local function AddGameDot(layer, unit, size)
 	local c = ns.GetUnitClassColor(unit)
+	local art = ns.MEDIA.dot
+	if BM.IsHealer(unit) then art, size = ns.MEDIA.cross, size * BM.HEALER_SCALE end
 	-- a hidden color is refused here, where a texture would take it
-	if not pcall(layer.AddUnit, layer, unit, ns.MEDIA.dot, size, size, c.r, c.g, c.b, 1, 7, false) then
-		layer:AddUnit(unit, ns.MEDIA.dot, size, size, 1, 1, 1, 1, 7, false)
+	if not pcall(layer.AddUnit, layer, unit, art, size, size, c.r, c.g, c.b, 1, 7, false) then
+		layer:AddUnit(unit, art, size, size, 1, 1, 1, 1, 7, false)
 	end
 end
 
@@ -298,6 +309,7 @@ local function Draw(mapID)
 		local isUnit = pin.kind == "unit"
 		local isNode = pin.kind == "node"
 		local size = isNode and c.nodeSize or isUnit and (pin.me and c.dotSize + 4 or c.dotSize) or c.iconSize
+		if pin.healer then size = size * BM.HEALER_SCALE end
 		p:SetSize(size, size)
 		p:SetFrameLevel(BM.pins:GetFrameLevel() + (isNode and 0 or isUnit and (pin.me and 3 or 1) or 5))
 		SetArt(p, pin)
@@ -550,6 +562,9 @@ function BM:Init()
 	BM.pins = CreateFrame("Frame", nil, BM.view)
 	BM.pins:SetAllPoints()
 	BM.pins:SetFrameLevel(BM.view:GetFrameLevel() + 5)
+	-- the game's dots stay on the canvas to zoom with the map, but draw over the bases (level +0
+	-- on the pins) and under you and the flags (+3 and +5)
+	if BM.gameLayer then BM.gameLayer:SetFrameLevel(BM.pins:GetFrameLevel() + 2) end
 
 	-- on its own frame: the clipped view would draw over a border on this one
 	BM.edge = CreateFrame("Frame", nil, f)

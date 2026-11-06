@@ -307,6 +307,7 @@ function R.Read(statNames)
 				-- 0 MMR means the game didn't give one (not trackable), not an MMR of 0
 				mmr = (readable(s.prematchMMR) and s.prematchMMR ~= 0) and s.prematchMMR or nil,
 				mmrchg = readable(s.mmrChange) and s.mmrChange or nil,
+				mmrpost = (readable(s.postmatchMMR) and s.postmatchMMR ~= 0) and s.postmatchMMR or nil,
 				stats = StatsString(s.stats, statNames),
 			}
 			players[#players + 1] = p
@@ -369,7 +370,7 @@ function R.Read(statNames)
 		dur = C_PvP.GetActiveMatchDuration and math.floor(C_PvP.GetActiveMatchDuration() or 0) or nil,
 		result = result,
 		rating = mine.rating, ratingAfter = (mine.rating and mine.rchg) and (mine.rating + mine.rchg) or nil,
-		mmr = mine.mmr, mmrAfter = (mine.mmr and mine.mmrchg) and (mine.mmr + mine.mmrchg) or nil,
+		mmr = mine.mmr, mmrAfter = mine.mmrpost or ((mine.mmr and mine.mmrchg) and (mine.mmr + mine.mmrchg)) or nil,
 		teamMMR = teamMMR(myMMRIndex), enemyMMR = teamMMR(enemyMMRIndex),
 		spec = mySpec or mine.spec,
 		hero = hero,
@@ -416,11 +417,19 @@ function R.RememberMMR(m)
 	local byChar = StinkieUIDB.lastMMR[m.char] or {}
 	StinkieUIDB.lastMMR[m.char] = byChar
 	local delta = (m.mmrAfter and m.mmr) and (m.mmrAfter - m.mmr) or nil
-	local entry = { mmr = mmr, rating = m.ratingAfter or m.rating, t = m.t, delta = delta, spec = m.spec }
+	-- Blitz and Solo Shuffle report a change of 0: Blizzard only gives the MMR going into a match
+	local noChange = delta == nil or delta == 0
 	local function put(key)
 		local cur = byChar[key]
 		if cur and cur.t and m.t and cur.t > m.t then return end -- keep the newest
-		byChar[key] = entry
+		local d = delta
+		-- so the change is how far it moved since the last match we saw
+		if noChange then
+			if cur and cur.t == m.t then d = cur.delta
+			elseif cur and cur.mmr and mmr then d = mmr - cur.mmr
+			else d = nil end -- nothing to compare with yet: no number, not a false +0
+		end
+		byChar[key] = { mmr = mmr, rating = m.ratingAfter or m.rating, t = m.t, delta = d, spec = m.spec }
 	end
 	put(m.bracket)
 	-- Solo Shuffle and Blitz have their own rating and MMR per spec
@@ -429,8 +438,23 @@ end
 
 function R.MyChar() return UnitName("player") .. "-" .. MyRealm() end
 
+-- what happened to the last match, kept in the saved variables to read when a match goes missing
+function R.Note(status, m, why)
+	if not StinkieUIDB then return end
+	local me = m and m.players and m.players[m.me]
+	StinkieUIDB.lastRecord = {
+		t = time(), status = status, why = why and tostring(why) or nil, bracket = m and m.bracket, char = m and m.char,
+		mmr = m and m.mmr, mmrAfter = m and m.mmrAfter, rchg = me and me.rchg, mmrchg = me and me.mmrchg, mmrpost = me and me.mmrpost,
+	}
+end
+
 function R.Save(m)
-	R.RememberMMR(m)
+	-- the queue display's number must never cost us the match itself
+	local ok, err = pcall(R.RememberMMR, m)
+	if not ok then
+		R.Note("mmr failed", m, err)
+		geterrorhandler()(err)
+	end
 	local box = Inbox()
 	local line = C.Encode(m)
 	if R.receiver then
@@ -480,8 +504,9 @@ local function TryRecord()
 		local key = R.BRACKET_SETTING[m.bracket]
 		-- queue time (waiting outside other matches only), taken even if this bracket isn't saved
 		local queued = ns.QueueInfo and ns.QueueInfo.TakeQueue and ns.QueueInfo.TakeQueue(m.bracket)
-		if key and cfg()[key] == false then return end
+		if key and cfg()[key] == false then R.Note("bracket off", m) return end
 		if queued and not m.queue then m.queue = queued end
+		R.Note("saved", m)
 		R.Save(m)
 		return
 	end
@@ -491,6 +516,7 @@ local function TryRecord()
 		C_Timer.After(1, TryRecord)
 	else
 		state.pending = false
+		R.Note("unreadable", nil, why)
 		ns:Print("Match History: couldn't read the final scoreboard (" .. tostring(why) .. ").")
 	end
 end
@@ -504,6 +530,7 @@ function R:Init()
 		if not cfg().enabled or state.done or state.pending then return end
 		if C_Commentator and C_Commentator.IsSpectating and C_Commentator.IsSpectating() then return end
 		state.pending, state.tries = true, 0
+		R.Note("match ended")
 		RequestBattlefieldScoreData()
 		C_Timer.After(1, TryRecord)
 	end)
