@@ -1662,6 +1662,20 @@ local function BuildObjectivesPage(page)
 	page:Color("Arrow color", Getter(arrow, "color"), Setter(arrow, "color"))
 	page:Check("Show quest name", Getter(arrow, "showName"), Setter(arrow, "showName"))
 	page:TextStyle("Quest marker text", function() return arrow().textStyle end)
+	local function qt() return cfg().questText end
+	page:Header("Quest progress text")
+	page:Check("Move and size it", Getter(qt, "enabled"), Setter(qt, "enabled"))
+	page:Note("The yellow messages at the top of the screen, like \"Boars slain: 3/10\", in their own box. Red error messages stay where Blizzard puts them.", 48)
+	page:TextStyle("Quest progress text", function() return qt().textStyle end)
+	page:Slider("Seconds on screen", 1, 10, 0.5, Getter(qt, "duration"), Setter(qt, "duration"))
+	page:Button("Show a sample", function()
+		local QT = ns.Objectives.QuestText
+		if not (QT and QT.frame and qt().enabled) then ns:Print("Tick Move and size it first.") return end
+		QT.Add("Boars slain: 3/10")
+		local c = qt().textStyle.color
+		QT.lines[1].fs:SetTextColor(c[1], c[2], c[3])
+	end)
+	page:Position(nil, function() return "questText" end)
 end
 
 local function BuildDamageTextPage(page)

@@ -197,7 +197,130 @@ function OB.ApplyFrame()
 	end)
 end
 
+---------------------------------------------------------------------------
+-- Quest progress text ("Boars slain: 3/10"). Blizzard prints these yellow messages in its
+-- message frame at the top of the screen, together with the red errors. With this on, the
+-- yellow ones come to our own frame instead, which can be moved and sized; the red errors stay.
+-- We only undo what we did, so another addon doing the same is left alone.
+---------------------------------------------------------------------------
+local QT = { lines = {} }
+OB.QuestText = QT
+QT.LINES = 3
+QT.FADE = 0.6
+local function qcfg() return cfg().questText end
+local issecret = ns.issecret
+
+local function LayoutLines()
+	local c = qcfg()
+	local step = (c.textStyle.size or 18) + 6
+	QT.frame:SetSize(520, step * QT.LINES)
+	QT.frame:SetScale(ns.db.scale)
+	for i, line in ipairs(QT.lines) do
+		ns.ApplyText(line.fs, c.textStyle)
+		line.fs:ClearAllPoints()
+		line.fs:SetPoint("TOP", QT.frame, "TOP", 0, -(i - 1) * step)
+		line.fs:SetWidth(1000)
+		line.fs:SetJustifyH("CENTER")
+	end
+	ns:ApplyPoint(QT.frame, c.point)
+end
+
+-- fade each line out once its time is up; the updater stops when nothing is showing
+local function OnUpdate(_, dt)
+	local any = false
+	local hold = qcfg().duration or 3
+	for _, line in ipairs(QT.lines) do
+		if line.fs:IsShown() and not QT.preview then
+			line.age = line.age + dt
+			if line.age >= hold + QT.FADE then
+				line.fs:Hide()
+			else
+				line.fs:SetAlpha(line.age <= hold and 1 or (1 - (line.age - hold) / QT.FADE))
+				any = true
+			end
+		end
+	end
+	if not any and not QT.preview then QT.frame:SetScript("OnUpdate", nil) end
+end
+
+-- newest on top; the same text again just starts over (Blizzard does the same)
+function QT.Add(msg)
+	if msg == nil or not QT.frame then return end
+	local top = QT.lines[1]
+	local same = top.fs:IsShown() and not issecret(msg) and not issecret(top.text) and top.text == msg
+	if not same then
+		for i = QT.LINES, 2, -1 do
+			local a, b = QT.lines[i], QT.lines[i - 1]
+			a.text, a.age = b.text, b.age
+			a.fs:SetText(b.text or "")
+			a.fs:SetShown(b.fs:IsShown())
+			a.fs:SetAlpha(b.fs:GetAlpha())
+		end
+		top.text = msg
+		top.fs:SetText(msg) -- a secret message can still be shown
+	end
+	top.age = 0
+	top.fs:SetAlpha(1)
+	top.fs:Show()
+	QT.frame:SetScript("OnUpdate", OnUpdate)
+end
+
+-- unlocked (or the options' Show sample): a stand-in to place it by
+function QT.SetPreview(on)
+	if not QT.frame then return end
+	QT.preview = on or nil
+	if on then
+		QT.lines[1].text, QT.lines[1].age = "Boars slain: 3/10", 0
+		QT.lines[1].fs:SetText("Boars slain: 3/10")
+		QT.lines[1].fs:SetAlpha(1)
+		QT.lines[1].fs:Show()
+		for i = 2, QT.LINES do QT.lines[i].fs:Hide() end
+	else
+		for _, line in ipairs(QT.lines) do line.fs:Hide() end
+	end
+end
+
+function OB.ApplyQuestText()
+	local c = qcfg()
+	local on = c.enabled and true or false
+	if on and not QT.frame then
+		local f = CreateFrame("Frame", "StinkieUI_QuestText", UIParent)
+		f:SetFrameStrata("HIGH")
+		QT.frame = f
+		for i = 1, QT.LINES do
+			local fs = f:CreateFontString(nil, "OVERLAY")
+			fs:SetWordWrap(false)
+			fs:Hide()
+			QT.lines[i] = { fs = fs, age = 0 }
+		end
+		ns:RegisterMover("questText", f, "Quest Progress Text",
+			function() return qcfg().point end,
+			function(p) qcfg().point = p end)
+		f:SetScript("OnEvent", function(_, _, _, msg)
+			local r, g, b = unpack(qcfg().textStyle.color or { 1, 0.82, 0 })
+			QT.Add(msg)
+			QT.lines[1].fs:SetTextColor(r, g, b)
+		end)
+		table.insert(ns.lockCallbacks, function(unlocked)
+			if qcfg().enabled then QT.SetPreview(unlocked) end
+		end)
+	end
+	if QT.frame then
+		LayoutLines()
+		if on then QT.frame:RegisterEvent("UI_INFO_MESSAGE") else QT.frame:UnregisterEvent("UI_INFO_MESSAGE") end
+		QT.frame:SetShown(on)
+	end
+	-- hand Blizzard's frame its yellow messages back only if we took them
+	local blizz = _G.UIErrorsFrame
+	if blizz and on ~= (QT.taken or false) then
+		QT.taken = on
+		if on then blizz:UnregisterEvent("UI_INFO_MESSAGE") else blizz:RegisterEvent("UI_INFO_MESSAGE") end
+	end
+end
+
 function OB:Init()
+	-- the quest progress text doesn't need the tracker
+	OB.ApplyQuestText()
 	local t = Tracker()
 	if not t then
 		-- the tracker addon loads later on some logins
@@ -241,6 +364,7 @@ function OB:Init()
 end
 
 function OB:Refresh()
+	OB.ApplyQuestText()
 	if not Tracker() then return end
 	OB.ApplyFonts()
 	OB.ApplyBackground()

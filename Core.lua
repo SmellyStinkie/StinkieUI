@@ -842,6 +842,9 @@ ns.defaults = {
 		zoneGroups = false, -- our own quest list, grouped by zone, in place of Blizzard's quest sections
 		collapsedZones = {}, -- zone name -> true
 		questsCollapsed = false, -- in dungeons: the whole list folded under its Quests header
+		-- the yellow quest progress messages ("Boars slain: 3/10") in our own movable frame
+		questText = { enabled = false, duration = 3, point = { "TOP", 0, -170 },
+			textStyle = { size = 20, outline = "OUTLINE", color = { 1, 0.82, 0 }, classColor = false } },
 	},
 	-- Damage Numbers: floating combat text over targets (0 = the game's default for each)
 	damageText = { scroll = { enabled = true, size = 22, critSize = 32, critPop = false, outline = "OUTLINE", spacing = 10,

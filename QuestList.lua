@@ -323,6 +323,29 @@ local function OnRowClick(row, button)
 	end
 end
 
+-- Hover: in a group, the party's progress on the quest, as on Blizzard's own quest blocks.
+-- The tooltip fills itself from the quest ID; on clients without it there's no tooltip.
+function QL.ShowPartyProgress(row, quest)
+	if not (quest and IsInGroup() and GameTooltip.SetQuestPartyProgress) then return false end
+	GameTooltip:ClearAllPoints()
+	GameTooltip:SetPoint("TOPRIGHT", row, "TOPLEFT", 0, 0)
+	GameTooltip:SetOwner(row, "ANCHOR_PRESERVE")
+	GameTooltip:SetQuestPartyProgress(quest.id)
+	return true
+end
+
+local function OnRowEnter(row)
+	local data = row.data
+	if data and (data.kind == "quest" or data.kind == "line") then
+		row.tip = QL.ShowPartyProgress(row, data.quest) or nil
+	end
+end
+
+local function OnRowLeave(row)
+	if row.tip and GameTooltip:IsOwned(row) then GameTooltip:Hide() end
+	row.tip = nil
+end
+
 ---------------------------------------------------------------------------
 -- Rows
 ---------------------------------------------------------------------------
@@ -332,6 +355,8 @@ local function GetRow(i)
 	row = CreateFrame("Button", nil, QL.list)
 	row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	row:SetScript("OnClick", OnRowClick)
+	row:SetScript("OnEnter", OnRowEnter)
+	row:SetScript("OnLeave", OnRowLeave)
 	row.text = row:CreateFontString(nil, "OVERLAY")
 	row.text:SetJustifyH("LEFT")
 	row.text:SetJustifyV("TOP")

@@ -1,5 +1,10 @@
 # Stinkie UI changelog
 
+## 0.43.1
+- New: move and size the yellow quest progress text ("Boars slain: 3/10"). Under Objectives > Quest progress text, tick "Move and size it" to show those messages in their own box, with its own text size, color, outline and time on screen. Drag it with `/stinkie unlock`. Red error messages stay where Blizzard puts them.
+- Objectives: hovering a quest in the zone-grouped quest list shows your party's progress on it again when you're in a group.
+- Arena and Solo Shuffle: the "Players Ready" line at the top is centered with the Stinkie UI font.
+
 ## 0.43.0
 - Modules: Stinkie UI is now split into modules you can turn on and off. A module that's off doesn't load at all: no frames, no events, no changes to your game settings. Open the list with `/stinkie modules` or the new Modules button at the top right of the options window. Changes take effect after a reload, and the panel has an Apply & Reload button.
 - New installs start with a setup screen: one button for Stinkie's Full UI (everything on), or pick the modules you want. Open it again any time with `/stinkie setup`.

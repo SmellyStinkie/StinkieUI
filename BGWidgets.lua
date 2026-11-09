@@ -123,11 +123,23 @@ end
 ---------------------------------------------------------------------------
 local issecret = ns.issecret
 
--- the left and right edge of every visible text in a widget (and its children), in screen pixels
-local function TextBounds(frame, b, depth)
+-- small textures (icons such as the ready check mark) count as content; big ones are backgrounds
+local ICON_MAX = 48
+
+-- the left and right edge of every visible text in a widget (and its children), in screen pixels;
+-- with icons, small visible textures count too
+local function TextBounds(frame, b, depth, icons)
 	if not frame or not frame.GetRegions then return end
 	for _, r in ipairs({ frame:GetRegions() }) do
-		if r:IsObjectType("FontString") and r:IsVisible() then
+		if icons and r:IsObjectType("Texture") and r:IsVisible() and r:GetAlpha() > 0 then
+			local l, rt = r:GetLeft(), r:GetRight()
+			if type(l) == "number" and type(rt) == "number" and not issecret(l) and not issecret(rt)
+				and rt > l and rt - l <= ICON_MAX then
+				local s = r:GetEffectiveScale()
+				b.l = math.min(b.l or math.huge, l * s)
+				b.r = math.max(b.r or -math.huge, rt * s)
+			end
+		elseif r:IsObjectType("FontString") and r:IsVisible() then
 			local text = r:GetText()
 			local l, rt = r:GetLeft(), r:GetRight()
 			if type(text) == "string" and text ~= "" and type(l) == "number" and type(rt) == "number"
@@ -147,10 +159,34 @@ local function TextBounds(frame, b, depth)
 		end
 	end
 	if (depth or 0) < 2 and frame.GetChildren then
-		for _, child in ipairs({ frame:GetChildren() }) do TextBounds(child, b, (depth or 0) + 1) end
+		for _, child in ipairs({ frame:GetChildren() }) do TextBounds(child, b, (depth or 0) + 1, icons) end
 	end
 end
 W.TextBounds = TextBounds
+
+-- The width a widget should have so its content (left..right, screen pixels) keeps the same
+-- inset on both sides, in the widget's own units. nil when it already fits.
+function W.FitWidth(widgetLeft, oldWidth, left, right, scale)
+	if not (widgetLeft and oldWidth and left and right and scale and scale > 0) then return nil end
+	local inset = math.max(0, left - widgetLeft)
+	local want = (right - widgetLeft + inset) / scale
+	if want <= 0 or math.abs(want - oldWidth) < 1 then return nil end
+	return want
+end
+
+-- Blizzard sizes a text widget for its own font and centers it by that width. In our font the
+-- text is a different width, so the line sits off center: give the widget its text's width.
+-- Bars (the timer, team bars) keep their size.
+local function FitWidget(widget)
+	if widget.Bar or widget.LeftBar or widget.RightBar then return end
+	local b = {}
+	TextBounds(widget, b, 0, true)
+	local wl, w = widget:GetLeft(), widget:GetWidth()
+	if not b.l or type(wl) ~= "number" or type(w) ~= "number" or issecret(wl) or issecret(w) then return end
+	local s = widget:GetEffectiveScale()
+	local want = W.FitWidth(wl * s, w, b.l, b.r, s)
+	if want then widget:SetWidth(want) end
+end
 
 -- the nudge (in the container's own units) that puts text spanning left..right (screen pixels)
 -- centered on center (screen pixels)
@@ -164,6 +200,9 @@ function W:CenterArena()
 	if not (p and p.active and p.use and p.frame) then return end
 	local container = p.frame
 	if type(container.widgetFrames) ~= "table" then return end
+	for _, widget in pairs(container.widgetFrames) do
+		if widget:IsShown() then FitWidget(widget) end
+	end
 	local b = {}
 	for _, widget in pairs(container.widgetFrames) do
 		if widget:IsShown() then TextBounds(widget, b, 0) end

@@ -1095,6 +1095,28 @@ do
 	first:GetScript("OnClick")(first, "LeftButton")
 	check("unfold", c.collapsedZones["Elwynn Forest"] == nil and not QL.rows[1].bar:IsShown())
 
+	-- hover: the party's progress, only in a group
+	do
+		local row
+		for _, r in ipairs(QL.rows) do if r.data and r.data.kind == "quest" then row = r break end end
+		local asked
+		local oldGroup, oldSet, oldOwned = IsInGroup, GameTooltip.SetQuestPartyProgress, GameTooltip.IsOwned
+		GameTooltip.SetQuestPartyProgress = function(_, id) asked = id end
+		GameTooltip.IsOwned = function() return true end
+		row:GetScript("OnEnter")(row)
+		check("hover alone: no party tooltip", asked == nil and not row.tip)
+		IsInGroup = function() return true end
+		row:GetScript("OnEnter")(row)
+		check("hover in a group: party progress", asked == row.data.quest.id and row.tip)
+		row:GetScript("OnLeave")(row)
+		check("leave clears it", not row.tip)
+		GameTooltip.SetQuestPartyProgress = nil
+		asked = nil
+		row:GetScript("OnEnter")(row)
+		check("client without it: nothing", asked == nil and not row.tip)
+		IsInGroup, GameTooltip.SetQuestPartyProgress, GameTooltip.IsOwned = oldGroup, oldSet, oldOwned
+	end
+
 	-- quest clicks
 	do
 		local opened, removed, shown
@@ -3703,6 +3725,40 @@ do
 	flushErrors("offline")
 end
 
+-- Quest progress text
+do
+	local OB, QT = ns.Objectives, ns.Objectives.QuestText
+	local c = ns.db.objectives.questText
+	check("quest text off by default", c.enabled == false and not QT.taken)
+	local regs = {}
+	UIErrorsFrame = UIErrorsFrame or CreateFrame("Frame")
+	local oldReg, oldUnreg = UIErrorsFrame.RegisterEvent, UIErrorsFrame.UnregisterEvent
+	UIErrorsFrame.RegisterEvent = function(_, e) regs[e] = true end
+	UIErrorsFrame.UnregisterEvent = function(_, e) regs[e] = false end
+	c.enabled = true
+	ns:Refresh()
+	check("on: Blizzard's frame lets go of yellow messages", regs.UI_INFO_MESSAGE == false and QT.frame and QT.frame:IsShown())
+	check("red errors untouched", regs.UI_ERROR_MESSAGE == nil)
+	QT.frame:GetScript("OnEvent")(QT.frame, "UI_INFO_MESSAGE", 0, "Boars slain: 1/10")
+	QT.frame:GetScript("OnEvent")(QT.frame, "UI_INFO_MESSAGE", 0, "Boars slain: 2/10")
+	check("newest on top", QT.lines[1].fs._text == "Boars slain: 2/10" and QT.lines[2].fs._text == "Boars slain: 1/10")
+	QT.frame:GetScript("OnEvent")(QT.frame, "UI_INFO_MESSAGE", 0, "Boars slain: 2/10")
+	check("same text starts over, no duplicate", QT.lines[2].fs._text == "Boars slain: 1/10")
+	QT.frame:GetScript("OnEvent")(QT.frame, "UI_INFO_MESSAGE", 0, { __secret = true })
+	check("a secret message still shows", QT.lines[1].fs:IsShown())
+	MOCK.Advance(5)
+	check("fades out", not QT.lines[1].fs:IsShown() and not QT.lines[2].fs:IsShown())
+	ns:SetLocked(false)
+	check("unlocked: a sample to place it", QT.lines[1].fs:IsShown() and QT.lines[1].fs._text == "Boars slain: 3/10")
+	ns:SetLocked(true)
+	check("locked: sample gone", not QT.lines[1].fs:IsShown())
+	c.enabled = false
+	ns:Refresh()
+	check("off: Blizzard gets them back", regs.UI_INFO_MESSAGE == true and not QT.frame:IsShown())
+	UIErrorsFrame.RegisterEvent, UIErrorsFrame.UnregisterEvent = oldReg, oldUnreg
+	flushErrors("quest text")
+end
+
 -- Arena info centering
 do
 	local W = ns.BGWidgets
@@ -3712,6 +3768,12 @@ do
 	check("arena nudge scaled", math.abs(W.CenterNudge(900, 1100, 960, 2) - (-20)) < 1e-9)
 	check("arena nudge centered", W.CenterNudge(860, 1060, 960, 1.3) == 0)
 	check("arena nudge without bounds", W.CenterNudge(nil, nil, 960, 1) == 0)
+	-- "1/6 Players Ready": widget 900..1100, icon and text only reach 1040 in our font
+	check("widget shrinks to its text", W.FitWidth(900, 200, 905, 1040, 1) == 145)
+	check("widget grows to its text", W.FitWidth(900, 200, 900, 1150, 1) == 250)
+	check("widget at scale 1.3: already fits in its own units", W.FitWidth(900, 200, 900, 1160, 1.3) == nil)
+	check("widget at scale 2", W.FitWidth(900, 100, 900, 1300, 2) == 200)
+	check("fitting widget left alone", W.FitWidth(900, 200, 905, 1095, 1) == nil)
 	-- a pass through a (mock) arena runs clean
 	MOCK.instanceType, MOCK.instanceName = "arena", "Nagrand Arena"
 	MOCK.Fire("ZONE_CHANGED_NEW_AREA")
