@@ -422,7 +422,7 @@ function Q:Init()
 		if acc >= 1 then acc = 0; Q:Update() end
 	end)
 	Q.ticker:Hide()
-	local function Track() local ok, err = pcall(Q.Track); if not ok then geterrorhandler()(err) end end
+	local function Track() local ok, err = pcall(Q.Track); if not ok then ns.Error(err) end end
 	ns:On("UPDATE_BATTLEFIELD_STATUS", function() Track(); Q:Update() end)
 	ns:On("PLAYER_ENTERING_WORLD", function() Track(); Q:Update() end)
 	ns:On("ZONE_CHANGED_NEW_AREA", function() Track(); Q:Update() end)

@@ -149,6 +149,9 @@ local PRESET = {
 		ghostScale = 1.2,
 		scoreScale = 1.75,
 	},
+	blitzMap = {
+		enabled = true,
+	},
 	character = {
 		background = "warband:25",
 		extraHeight = 100,

@@ -8,6 +8,9 @@ do
 	local v = getMeta and getMeta(addonName, "Version")
 	ns.version = (type(v) == "string" and v ~= "" and not v:find("^@")) and v or "dev"
 end
+-- Caught errors go here. Report.lua replaces this to also keep them for /stinkie report; this
+-- one is the fallback, so a catch can never itself fail.
+function ns.Error(err) geterrorhandler()(err) end
 ns.TEXTURE = [[Interface\Buttons\WHITE8X8]]
 ns.MEDIA = {
 	cross = [[Interface\AddOns\StinkieUI\Media\cross]],
@@ -291,7 +294,7 @@ local function unit(t)
 	return t
 end
 
-ns.DB_VERSION = 16
+ns.DB_VERSION = 17
 ns.defaults = {
 	version = ns.DB_VERSION,
 	scale = 1,
@@ -721,6 +724,20 @@ ns.defaults = {
 	},
 	-- party members' targets: a small frame beside each party frame. Blank in arenas and
 	-- battlegrounds (Blizzard refuses compound unit tokens there), so hidden there by default.
+	bossFrames = {
+		enabled = true,
+		width = 170, height = 28, spacing = 18,
+		growth = "DOWN",
+		showPower = true, powerHeight = 4,
+		shields = true,
+		healthText = "percent",
+		showName = true, nameFormat = "full", showLevel = false,
+		nameStyle = text(12),
+		healthStyle = text(12),
+		castbar = { enabled = true, height = 12, textStyle = text(10) },
+		highlight = true, -- outline on your current target
+		point = { "RIGHT", -240, 120 },
+	},
 	partyTargets = {
 		enabled = false,
 		width = 90, height = 18, showPower = false, powerHeight = 3,
@@ -1014,6 +1031,11 @@ local function Migrate(db)
 			ch.whisperTabs = nil
 		end
 	end
+	if v < 17 then
+		-- Modules: every module starts on (the defaults fill db.modules). Game settings changed
+		-- before 0.43.0 weren't recorded, so turning a module off later puts back Blizzard's default.
+		if StinkieUIDB then StinkieUIDB.cvarLegacy = true end
+	end
 	if v < 16 then
 		-- Character Sheet: Blizzard's race background was removed, it doesn't fit the roomier window
 		local ch = db.character
@@ -1119,7 +1141,13 @@ function ns:SetProfile(name, copyCurrent)
 		store.profiles[name] = CopyDefaults(ns.defaults, base)
 		store.profiles[name].version = ns.DB_VERSION
 	end
-	store.chars[ns.CharKey()] = name
+	local spec = ns.CurrentSpec()
+	local sp = ns.SpecStore() -- defined further down
+	if sp and sp.enabled and spec and sp[spec] then
+		sp[spec] = name
+	else
+		store.chars[ns.CharKey()] = name
+	end
 	return true
 end
 
@@ -1131,6 +1159,11 @@ function ns:DeleteProfile(name)
 	store.profiles[name] = nil
 	for char, p in pairs(store.chars) do
 		if p == name then store.chars[char] = nil end -- falls back to Default
+	end
+	for _, sp in pairs(store.specProfiles or {}) do
+		for spec, p in pairs(sp) do
+			if p == name then sp[spec] = nil end -- falls back to the character's profile
+		end
 	end
 	return true
 end
@@ -1164,6 +1197,98 @@ function ns:ResetProfile()
 	ns.db = t
 end
 
+---------------------------------------------------------------------------
+-- Profile per specialization (optional, per character).
+-- StinkieUIDB.specProfiles[character] = { enabled = true, [spec index] = profile name }
+-- StinkieUIDB.lastSpec[character] = the spec at the last check, for a cold login where the game
+-- doesn't know the spec yet when settings load.
+---------------------------------------------------------------------------
+local function SpecAPI(name)
+	local C = C_SpecializationInfo
+	return (C and C[name]) or _G[name]
+end
+
+-- the active spec's index, or nil (Forever has none; a cold login may not know it yet)
+function ns.CurrentSpec()
+	local get = SpecAPI("GetSpecialization")
+	if not get then return nil end
+	local ok, s = pcall(get)
+	if ok and type(s) == "number" and not ns.issecret(s) and s > 0 then return s end
+	return nil
+end
+
+-- { { index, name, icon }, ... } for this character's class
+function ns.SpecList()
+	local out = {}
+	local num, info = SpecAPI("GetNumSpecializations"), SpecAPI("GetSpecializationInfo")
+	if not (num and info) then return out end
+	local ok, n = pcall(num)
+	if not ok or type(n) ~= "number" then return out end
+	for i = 1, n do
+		local ok2, _, name, _, icon = pcall(info, i)
+		if ok2 and type(name) == "string" then out[#out + 1] = { i, name, icon } end
+	end
+	return out
+end
+
+local function SpecStore(create)
+	local store = Store()
+	if not store then return nil end
+	if create then store.specProfiles = store.specProfiles or {} end
+	local all = store.specProfiles
+	if not all then return nil end
+	local key = ns.CharKey()
+	if create then all[key] = all[key] or {} end
+	return all[key]
+end
+ns.SpecStore = SpecStore
+
+function ns.SpecProfilesOn()
+	local sp = SpecStore()
+	return sp ~= nil and sp.enabled == true
+end
+
+-- the profile this character should use in this spec: the spec's own, else the character's, else Default
+function ns.WantedProfile(spec)
+	local store = Store()
+	local sp = SpecStore()
+	if sp and sp.enabled and spec and sp[spec] and store.profiles[sp[spec]] then return sp[spec], true end
+	local name = store.chars[ns.CharKey()]
+	if name and store.profiles[name] then return name, false end
+	return ns.DEFAULT_PROFILE, false
+end
+
+local function LastSpec()
+	local store = Store()
+	return store and store.lastSpec and store.lastSpec[ns.CharKey()]
+end
+
+StaticPopupDialogs["STINKIEUI_SPEC_PROFILE"] = {
+	text = "You're now %s. Load its Stinkie UI profile \"%s\"? This reloads the UI.",
+	button1 = RELOADUI or "Reload", button2 = "Not now",
+	OnAccept = function() ReloadUI() end,
+	timeout = 0, whileDead = true, hideOnEscape = true,
+}
+
+local declined = {}
+-- After a spec change (or a login where the spec wasn't known yet): offer to load its profile.
+function ns.CheckSpecProfile(force)
+	local spec = ns.CurrentSpec()
+	if not spec then return end
+	local store = Store()
+	store.lastSpec = store.lastSpec or {}
+	store.lastSpec[ns.CharKey()] = spec
+	local want = ns.WantedProfile(spec)
+	if want == ns:CurrentProfileName() or (declined[spec .. want] and not force) then return end
+	ns:RunOOC(function()
+		if ns.WantedProfile(ns.CurrentSpec()) ~= want then return end
+		local specName = "this spec"
+		for _, s in ipairs(ns.SpecList()) do if s[1] == spec then specName = s[2] end end
+		declined[spec .. want] = true -- asked once per spec and profile each session
+		StaticPopup_Show("STINKIEUI_SPEC_PROFILE", specName, want)
+	end)
+end
+
 -- Loads the store, converting the pre-0.9 single-profile layout into profiles.Default.
 local function LoadStore()
 	local raw = StinkieUIDB
@@ -1179,8 +1304,7 @@ local function LoadStore()
 	end
 	store.chars = store.chars or {}
 	StinkieUIDB = store
-	local name = store.chars[ns.CharKey()]
-	if not (name and store.profiles[name]) then name = ns.DEFAULT_PROFILE end
+	local name = ns.WantedProfile(ns.CurrentSpec() or LastSpec())
 	local db = CopyDefaults(ns.defaults, store.profiles[name])
 	if db.version ~= ns.DB_VERSION then Migrate(db) end
 	store.profiles[name] = db
@@ -1284,6 +1408,11 @@ ns:On("PLAYER_REGEN_ENABLED", function()
 		table.remove(combatQueue, 1)()
 	end
 end)
+
+-- profile per spec: offer the spec's profile after a spec change or a login that didn't know it
+ns:On("PLAYER_ENTERING_WORLD", function() C_Timer.After(1, ns.CheckSpecProfile) end)
+ns:On("PLAYER_SPECIALIZATION_CHANGED", function(_, unit) if unit == "player" then ns.CheckSpecProfile() end end)
+ns:On("ACTIVE_PLAYER_SPECIALIZATION_CHANGED", function() ns.CheckSpecProfile() end)
 
 function ns:Print(msg)
 	print("|cff" .. ns.ACCENT_HEX .. "Stinkie UI|r: " .. tostring(msg))
@@ -1590,15 +1719,18 @@ end
 ns.modules = {}
 function ns:RegisterModule(name, mod)
 	ns.modules[name] = mod
+	mod.SUIName = name
 	table.insert(ns.modules, mod)
 end
 
 ns:On("ADDON_LOADED", function(_, name)
 	if name ~= addonName then return end
+	ns.freshInstall = StinkieUIDB == nil -- first time on this account: the module picker opens
 	local db = LoadStore()
 	ns.db = db
 	-- Floating combat text and world names read these once while the world loads, so this
-	-- has to happen here (before PLAYER_LOGIN) and takes a relog to change.
+	-- has to happen here (before PLAYER_LOGIN) and takes a relog to change. Part of Game Fonts.
+	if not ns.Modules.Loads("gameFonts") then return end
 	if db.combatTextFont then
 		local path = ns.GetFontPath()
 		ns.damageFontReady = ns.FontLoads(path) -- /stinkie dmg reports this: a cold login can refuse it
@@ -1634,10 +1766,13 @@ ns:On("DISPLAY_SIZE_CHANGED", function() C_Timer.After(0, function() RetryFonts(
 
 ns:On("PLAYER_LOGIN", function()
 	pcall(HookSharedMedia)
+	-- which modules load this session, and settings to put back for any that are off
+	local ok, err = pcall(ns.Modules.OnLogin)
+	if not ok then ns.Error(err) end
 	for _, mod in ipairs(ns.modules) do
-		if mod.Init then
+		if mod.Init and ns.Modules.FileLoaded(mod.SUIName) then
 			local ok, err = pcall(mod.Init, mod)
-			if not ok then geterrorhandler()(err) end
+			if not ok then ns.Error(err) end
 		end
 	end
 end)
@@ -1672,14 +1807,19 @@ end
 function ns:Refresh()
 	ns:RunOOC(function()
 		for _, mod in ipairs(ns.modules) do
-			if mod.Refresh then
+			if mod.Refresh and ns.Modules.FileLoaded(mod.SUIName) then
 				local ok, err = pcall(mod.Refresh, mod)
-				if not ok then geterrorhandler()(err) end
+				if not ok then ns.Error(err) end
 			end
 		end
 		if ns.unlocked then ns:SetLocked(false, true) end
 	end)
 end
+
+-- New files load only after a full game restart, not a /reload. Until then their code is
+-- missing, so anything core reaches into them for is guarded.
+local function NeedsRestart() ns:Print("Restart the game (not just /reload) to finish updating Stinkie UI.") end
+ns.NeedsRestart = NeedsRestart
 
 SLASH_STINKIERELOAD1 = "/rl"
 SlashCmdList.STINKIERELOAD = function() ReloadUI() end
@@ -1689,7 +1829,20 @@ SLASH_STINKIEUI2 = "/sui"
 SLASH_STINKIEUI3 = "/st"
 SlashCmdList.STINKIEUI = function(msg)
 	msg = strlower(strtrim(msg or ""))
-	if msg == "unlock" or msg == "move" then
+	-- a debug command for a module that's off says so instead of poking at frames it never made
+	local needs = { quest = "questArrow", map = "blitzMap", tooltip = "tooltip", dmg = "damageText", plates = "nameplates",
+		auras = "nameplates", flags = "flagCap", ["flags reset"] = "flagCap", timers = "bgTimers", score = "matchHistory" }
+	if needs[msg] and not ns.Modules.Loaded(needs[msg]) then
+		ns:Print(ns.Modules.byId[needs[msg]].name .. " is off. Turn it on in /stinkie modules.")
+		return
+	end
+	if msg == "modules" then
+		ns.Modules.Open("list")
+	elseif msg == "report" then
+		if ns.Report then ns.Report.Show() else ns.NeedsRestart() end
+	elseif msg == "setup" then
+		ns.Modules.Open("picker")
+	elseif msg == "unlock" or msg == "move" then
 		ns:SetLocked(false)
 	elseif msg == "lock" then
 		ns:SetLocked(true)

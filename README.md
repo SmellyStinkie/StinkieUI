@@ -1,4 +1,4 @@
-# Stinkie UI 0.41.0
+# Stinkie UI 0.43.0
 
 Flat PvP UI for WoW: Midnight (12.1.5, Interface 120105) and WoW Forever (Interface 16001), from one build: unit, party, arena and battleground frames, nameplates, castbars, class resource bar, cooldown bars, chat, minimap and more. No library dependencies.
 
@@ -10,6 +10,9 @@ Unzip so the folders are `World of Warcraft/_retail_/Interface/AddOns/StinkieUI/
 ## Commands
 - `/stinkie`, `/st` or `/sui`: options window (also in the addon compartment and Options > AddOns)
 - `/rl`: reload the UI
+- `/stinkie modules`: choose which modules load (also the Modules button in the options window)
+- `/stinkie setup`: the first-run setup screen (Stinkie's Full UI, or pick modules)
+- `/stinkie report`: a block to copy for support: version, client, modules, other addons and recent errors
 - `/stinkie dmg`: which damage-number settings this game version has, and their values.
 - `/stinkie cpu`: measures Stinkie UI's CPU use for 30 seconds and prints the busiest parts.
 - `/stinkie unlock` / `/stinkie lock`: move frames. Drag a box, or click it and use the arrow keys (Shift = 10px). A panel shows its exact X/Y. Every options page also has anchor, X and Y fields with nudge buttons.

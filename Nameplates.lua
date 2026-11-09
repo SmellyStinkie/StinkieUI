@@ -1026,7 +1026,7 @@ local function OnPlateAdded(unit)
 	-- each piece on its own, so an error in one can't skip the others
 	for _, fn in ipairs(plateUpdates) do
 		local ok, err = pcall(fn, f, true)
-		if not ok then geterrorhandler()(err) end
+		if not ok then ns.Error(err) end
 	end
 	f:Show()
 
@@ -1155,8 +1155,14 @@ local function ApplyStacking(cfg)
 	local st = cfg.stacking
 	local E = Enum.NamePlateStackType
 	if E and SetCVarBitfield and HasCVar("nameplateStackingTypes") then
-		if st.enemies ~= nil then pcall(SetCVarBitfield, "nameplateStackingTypes", E.Enemy, st.enemies and true or false) end
-		if st.friendly ~= nil then pcall(SetCVarBitfield, "nameplateStackingTypes", E.Friendly, st.friendly and true or false) end
+		if st.enemies ~= nil then
+			ns.Modules.Remember("nameplates", "nameplateStackingTypes", E.Enemy)
+			pcall(SetCVarBitfield, "nameplateStackingTypes", E.Enemy, st.enemies and true or false)
+		end
+		if st.friendly ~= nil then
+			ns.Modules.Remember("nameplates", "nameplateStackingTypes", E.Friendly)
+			pcall(SetCVarBitfield, "nameplateStackingTypes", E.Friendly, st.friendly and true or false)
+		end
 	end
 	st.touched = st.touched or {}
 	for key, names in pairs(STACK_CVARS) do
@@ -1164,6 +1170,7 @@ local function ApplyStacking(cfg)
 		for _, name in ipairs(names) do
 			if HasCVar(name) then
 				if v and v > 0 then
+					ns.Modules.Remember("nameplates", name)
 					pcall(C_CVar.SetCVar, name, tostring(v))
 					st.touched[name] = true
 				elseif st.touched[name] then
@@ -1205,6 +1212,7 @@ function NP:ApplyCVars()
 		C_NamePlate.SetNamePlateSize(cfg.width + 10, (bh and bh > 0) and bh or (cfg.height + cfg.castHeight + 24))
 		pcall(ApplyStacking, cfg)
 		if cfg.highlight.scale then
+			ns.Modules.Remember("nameplates", "nameplateSelectedScale")
 			pcall(C_CVar.SetCVar, "nameplateSelectedScale", tostring(cfg.highlight.scale))
 		end
 		if C_NamePlateManager and C_NamePlateManager.SetNamePlateHitTestInsets then

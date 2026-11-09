@@ -756,7 +756,7 @@ end
 function CH.SetupAll()
 	for _, f in ipairs(ChatFrames()) do
 		local ok, err = pcall(Skin, f)
-		if not ok then geterrorhandler()(err) end
+		if not ok then ns.Error(err) end
 		Hook(f)
 	end
 	ApplyButtons()
@@ -801,7 +801,10 @@ local function ApplyCVars()
 		SetCVar("showTimestamps", "none")
 	end
 	local mode = CH.WHISPER_MODES[c.whisperDisplay] or CH.WHISPER_MODES.both
-	if GetCVar("whisperMode") ~= mode then SetCVar("whisperMode", mode) end
+	if GetCVar("whisperMode") ~= mode then
+		ns.Modules.Remember("chat", "whisperMode")
+		SetCVar("whisperMode", mode)
+	end
 end
 CH.ApplyCVars = ApplyCVars
 
@@ -913,6 +916,7 @@ CH.Tick = Tick
 -- Module
 ---------------------------------------------------------------------------
 local CONFLICTS = { "Chattynator", "Prat-3.0", "ElvUI", "ls_Glass", "Glass" }
+CH.CONFLICTS = CONFLICTS -- also shown in the module list
 
 function CH:Init()
 	local c = cfg()

@@ -463,25 +463,6 @@ function PageMixin:Position(title, getKey, note)
 	end
 end
 
--- Read-only text box for links (WoW can't open URLs, so the text is selected for copying).
-function PageMixin:CopyBox(label, text)
-	local x, y = self:Next(28)
-	local holder = CreateFrame("Frame", nil, self)
-	holder:SetSize(COL_W - 24, 22)
-	holder:SetPoint("TOPLEFT", x, y)
-	Label(holder, label, 13):SetPoint("LEFT")
-	local eb = EditBox(holder, COL_W - 100)
-	eb:SetPoint("LEFT", 64, 0)
-	eb:SetJustifyH("LEFT")
-	eb:SetText(text)
-	eb:SetCursorPosition(0)
-	eb:SetScript("OnTextChanged", function(self, user) if user then self:SetText(text) self:HighlightText() end end)
-	eb:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
-	eb:SetScript("OnMouseUp", function(self) self:SetFocus() self:HighlightText() end)
-	eb:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-	return holder
-end
-
 -- Single-line text setting, saved on Enter or when focus leaves.
 function PageMixin:EditText(text, get, set)
 	local x, y = self:Next(46)
@@ -674,6 +655,7 @@ local function BuildCastbarPage(page)
 	page:Color("Interrupted / failed", Getter(colors, "castFailed"), Setter(colors, "castFailed"))
 	local function swing() return ns.db.swingTimers end
 	page:Header("Swing timers")
+	if not ns.Modules.Loaded("swingTimers") then page:Note("|cff999999The Swing Timers module is off. Turn it on in Modules (top right).|r", 36) end
 	page:Check("Flat look", Getter(swing, "enabled"), Setter(swing, "enabled"), true)
 	page:Note("Restyles Blizzard's melee, off-hand and ranged swing timers, on clients that have them. Size and position stay in Edit Mode.", 48)
 	page:Check("Only show while attacking", Getter(swing, "hideIdle"), Setter(swing, "hideIdle"))
@@ -725,6 +707,7 @@ local function BuildPartyPage(page)
 	page:Note("Glow options for these icons are on the PvP Assist page.", 22)
 	page:Check("Hide in battlegrounds and Blitz", Getter(cfg, "hideInBattlegrounds"), Setter(cfg, "hideInBattlegrounds"))
 	page:Check("Hide in raid groups", Getter(cfg, "hideInRaid"), Setter(cfg, "hideInRaid"))
+	page:Note("Not in arenas: Solo Shuffle counts as a raid group, but the party frames are your team there.", 36)
 	page:Note("Big and external defensives show while they're active.", 22)
 	page:Position(nil, function() return "party" end)
 
@@ -753,7 +736,7 @@ local function BuildArenaAssistPage(page)
 	page:Button("Test mode on / off", function()
 		local AA = ns.ArenaAssist
 		AA:SetTestMode(not AA.testMode)
-		if ns.Party.SetTestMode then ns.Party:SetTestMode(AA.testMode, "arena") end
+		if ns.Modules.Loaded("party") then ns.Party:SetTestMode(AA.testMode, "arena") end
 	end)
 	page:Slider("Countdown text size", 0.5, 2.5, 0.05, Getter(cfg, "countdownScale"), Setter(cfg, "countdownScale"))
 	page:Note("Timer numbers on party CC, trinkets, the healer warning, Precognition, kicks and Big Debuffs.", 36)
@@ -1002,7 +985,6 @@ end
 
 local function BuildPlateAurasPage(page)
 	local function cfg() return ns.db.nameplates end
-	local function ut() return ns.db.nameplates.unitTypes end
 	local function imp() return ns.db.nameplates.important end
 	page:Column(1)
 	page:Header("Nameplate auras")
@@ -1381,7 +1363,7 @@ local function BuildBGScorePage(page)
 	page:Button("Test mode on / off", function()
 		local on = not ns.BGWidgets.testMode
 		ns.BGWidgets:SetTestMode(on)
-		if ns.FlagCap then ns.FlagCap:SetTestMode(on) end
+		if ns.Modules.Loaded("flagCap") then ns.FlagCap:SetTestMode(on) end
 	end)
 	page:Check("Move the score display (top of screen)", Getter(cfg, "moveScore"), Setter(cfg, "moveScore"))
 	page:Slider("Score size", 0.5, 2, 0.05, Getter(cfg, "scoreScale"), Setter(cfg, "scoreScale"))
@@ -1415,9 +1397,12 @@ local function BuildBGScorePage(page)
 
 	page:Column(2)
 	page:Header("Flag Cap Indicator")
+	if not ns.Modules.Loaded("flagCap") then page:Note("|cff999999The Flag Cap Indicator module is off. Turn it on in Modules (top right).|r", 36) end
 	page:Note("Warsong Gulch and Twin Peaks: a bar for each flag someone is carrying (hidden when it's at home or dropped), with the carrier, yards from their cap spot, and ON CAP when they're standing on it.", 62)
 	page:Check("Enabled", Getter(fc, "enabled"), Setter(fc, "enabled"))
-	page:Button("Test mode on / off", function() if ns.FlagCap then ns.FlagCap:SetTestMode(not ns.FlagCap.testMode) end end)
+	page:Button("Test mode on / off", function()
+		if ns.Modules.Loaded("flagCap") then ns.FlagCap:SetTestMode(not ns.FlagCap.testMode) end
+	end)
 	page:Check("Sit under the score (locked there, same width as the score bar)", Getter(fc, "attach"), Setter(fc, "attach"))
 	page:Slider("Gap under the score", -40, 20, 1, Getter(fc, "attachY"), Setter(fc, "attachY"))
 	page:Position("Position (not under the score)", function() return "flagCap" end)
@@ -1667,6 +1652,7 @@ local function BuildObjectivesPage(page)
 	page:Note("Hidden means invisible (it stays where it is). New text sizes show on the tracker's next update or a /reload.", 36)
 	local function arrow() return ns.db.misc.questArrow end
 	page:Header("Quest marker")
+	if not ns.Modules.Loaded("questArrow") then page:Note("|cff999999The Quest Marker module is off. Turn it on in Modules (top right).|r", 36) end
 	page:Check("Enabled", Getter(arrow, "enabled"), Setter(arrow, "enabled"))
 	page:Note("A small nameplate in the world on the quest you're actively tracking, or your corpse while you're dead, with the distance in yards, in place of Blizzard's marker. Off screen it becomes an arrow at the edge of the screen. It goes wherever Blizzard's marker would.", 76)
 	page:Slider("Height above the spot", 0, 300, 5, Getter(arrow, "height"), Setter(arrow, "height"))
@@ -1845,6 +1831,40 @@ local function BuildPartyTargetsPage(page)
 	page:Check("Show level", Getter(cfg, "showLevel"), Setter(cfg, "showLevel"))
 	page:Choice("Health text", healthTextChoices, Getter(cfg, "healthText"), Setter(cfg, "healthText"))
 	page:TextStyle("Name text", function() return cfg().nameStyle end, { classColor = true })
+	page:TextStyle("Health text", function() return cfg().healthStyle end)
+end
+
+local function BuildBossPage(page)
+	local function cfg() return ns.db.bossFrames end
+	page:Column(1)
+	page:Header("Boss frames")
+	page:Check("Enabled", Getter(cfg, "enabled"), Setter(cfg, "enabled"), true)
+	page:Note("Replaces Blizzard's boss frames in dungeons, raids and world bosses. Each one shows while its boss is in the fight.", 48)
+	page:Button("Test mode on / off", function()
+		local BF = ns.BossFrames
+		if not BF then ns.NeedsRestart() elseif BF.active then BF:SetTestMode(not BF.testMode) else ns:Print("Boss frames are off. Tick Enabled and reload.") end
+	end)
+	page:Slider("Width", 60, 400, 1, Getter(cfg, "width"), Setter(cfg, "width"))
+	page:Slider("Height", 10, 80, 1, Getter(cfg, "height"), Setter(cfg, "height"))
+	page:Slider("Spacing", 0, 60, 1, Getter(cfg, "spacing"), Setter(cfg, "spacing"))
+	page:Choice("Grow", { { "DOWN", "Down" }, { "UP", "Up" } }, Getter(cfg, "growth"), Setter(cfg, "growth"))
+	page:Check("Show power bar", Getter(cfg, "showPower"), Setter(cfg, "showPower"))
+	page:Slider("Power height", 1, 20, 1, Getter(cfg, "powerHeight"), Setter(cfg, "powerHeight"))
+	page:Check("Shields", Getter(cfg, "shields"), Setter(cfg, "shields"))
+	page:Check("Outline your target", Getter(cfg, "highlight"), Setter(cfg, "highlight"))
+	page:Position(nil, function() return "bossFrames" end)
+	page:Column(2)
+	page:Header("Castbar")
+	local function cb() return cfg().castbar end
+	page:Check("Show castbars", Getter(cb, "enabled"), Setter(cb, "enabled"))
+	page:Slider("Castbar height", 6, 30, 1, Getter(cb, "height"), Setter(cb, "height"))
+	page:TextStyle("Castbar text", function() return cb().textStyle end)
+	page:Header("Text")
+	page:Check("Show name", Getter(cfg, "showName"), Setter(cfg, "showName"))
+	page:Choice("Name shows", nameChoices, Getter(cfg, "nameFormat"), Setter(cfg, "nameFormat"))
+	page:Check("Show level", Getter(cfg, "showLevel"), Setter(cfg, "showLevel"))
+	page:Choice("Health text", healthTextChoices, Getter(cfg, "healthText"), Setter(cfg, "healthText"))
+	page:TextStyle("Name text", function() return cfg().nameStyle end)
 	page:TextStyle("Health text", function() return cfg().healthStyle end)
 end
 
@@ -2115,6 +2135,7 @@ local function BuildGeneralPage(page)
 			ns:ToggleOptions()
 		end)
 	end)
+	if not ns.Modules.Loaded("gameFonts") then page:Note("|cff999999The Game Fonts module is off. Turn it on in Modules (top right).|r", 36) end
 	page:Check("Use it for Blizzard's UI too", Getter(db, "globalFont"), Setter(db, "globalFont"))
 	page:Check("Names above characters (yours too)", Getter(db, "worldNameFont"), Setter(db, "worldNameFont"), true)
 	page:Note("Blizzard UI: tooltips, buff timers, spec names, character sheet, damage meter, zone text, settings. Names above characters need a full logout, not just a reload. Damage numbers: Miscellaneous > Damage Numbers.", 62)
@@ -2144,6 +2165,8 @@ local function BuildGeneralPage(page)
 	page:Button("Discord", function() ShowLink("Discord", "https://discord.gg/abb8n4T3rc") end, nil, true)
 	page:Button("Twitch", function() ShowLink("Twitch", "https://twitch.tv/smellystinkie") end, nil, true)
 	page:Button("YouTube", function() ShowLink("YouTube", "https://www.youtube.com/@SmellyStinkie") end, nil, true)
+	page:Button("Support report", function() if ns.Report then ns.Report.Show() else ns.NeedsRestart() end end)
+	page:Note("Asking for help? Paste this block (/stinkie report): version, game client, modules and recent errors. No character names.", 48)
 	page:Header("Profiles")
 	local function profileItems(skipCurrent)
 		return function()
@@ -2170,6 +2193,29 @@ local function BuildGeneralPage(page)
 		if v ~= "" then StaticPopup_Show("STINKIEUI_DELETE_PROFILE", v, nil, v) end
 	end)
 	page:Note("New characters use Default. Profile changes reload the UI.", 22)
+	page:Header("Profile per spec")
+	local specs = ns.SpecList()
+	if #specs == 0 then
+		page:Note("This game version has no specializations.", 22)
+	else
+		page:Check("Switch profile with your spec", function() return ns.SpecProfilesOn() end, function(v)
+			ns.SpecStore(true).enabled = v and true or nil
+			ns.CheckSpecProfile(true)
+		end)
+		local function specItems()
+			local items = { { "", "Character profile" } }
+			for _, n in ipairs(ns:GetProfileNames()) do items[#items + 1] = { n, n } end
+			return items
+		end
+		for _, s in ipairs(specs) do
+			local index = s[1]
+			page:Dropdown(s[2], specItems, function() local sp = ns.SpecStore(); return sp and sp[index] or "" end, function(v)
+				ns.SpecStore(true)[index] = v ~= "" and v or nil
+				if index == ns.CurrentSpec() then ns.CheckSpecProfile(true) end
+			end)
+		end
+		page:Note("A spec left on Character profile uses the profile above. Changing spec asks before it reloads.", 36)
+	end
 	page:Header("Share")
 	page:Button("Export profile", function()
 		local str, err = ns:ExportProfile()
@@ -2184,7 +2230,7 @@ local function BuildGeneralPage(page)
 	end)
 	page:Button("Reset this profile", function() StaticPopup_Show("STINKIEUI_RESET") end)
 	page:Note("Settings marked * apply after a reload.", 22)
-	page:Note("Slash commands: /stinkie, /stinkie unlock, /stinkie lock, /mh (match history), /mh stats, /stinkie flags, /stinkie timers, /stinkie fontcheck, /stinkie auras, /stinkie plates, /stinkie reset", 50)
+	page:Note("Slash commands: /stinkie, /stinkie unlock, /stinkie lock, /mh (match history), /mh stats, /stinkie flags, /stinkie timers, /stinkie fontcheck, /stinkie auras, /stinkie plates, /stinkie modules, /stinkie setup, /stinkie report, /stinkie reset", 50)
 	page:Note("PT Sans Narrow is bundled under the SIL Open Font License (Media folder).", 36)
 end
 
@@ -2385,6 +2431,7 @@ local pages = {
 		{ "Pet", function(p) BuildUnitPage(p, "pet") end },
 		{ "Party", BuildPartyPage },
 		{ "Party Targets", BuildPartyTargetsPage },
+		{ "Boss Frames", BuildBossPage },
 	} },
 	{ "Nameplates", children = {
 		{ "General", BuildPlateGeneralPage },
@@ -2468,8 +2515,17 @@ local function CreateWindow()
 	local close = FlatButton(w, "x", 22, function() w:Hide() end)
 	close:SetPoint("TOPRIGHT", -12, -12)
 
+	-- outlined: it opens a panel rather than changing a setting
+	local modules = FlatButton(w, "Modules", 100, function() O.OpenModules("list") end)
+	modules:SetPoint("RIGHT", close, "LEFT", -8, 0)
+	modules.bg:SetColorTexture(0, 0, 0, 0)
+	ns.SetBorderColor(modules, ACCENT[1], ACCENT[2], ACCENT[3], 1)
+	modules.text:SetTextColor(BRAND.cream[1], BRAND.cream[2], BRAND.cream[3])
+	modules:SetScript("OnLeave", function(self) self.bg:SetColorTexture(0, 0, 0, 0) end)
+	O.modulesButton = modules
+
 	local reload = FlatButton(w, "Reload to apply *", 150, function() ReloadUI() end)
-	reload:SetPoint("RIGHT", close, "LEFT", -8, 0)
+	reload:SetPoint("RIGHT", modules, "LEFT", -8, 0)
 	reload.bg:SetColorTexture(BRAND.orange[1] * 0.75, BRAND.orange[2] * 0.75, BRAND.orange[3] * 0.75, 1)
 	reload:SetScript("OnEnter", nil)
 	reload:SetScript("OnLeave", nil)
@@ -2560,6 +2616,14 @@ local function CreateWindow()
 			end
 		end
 	end
+	-- pages of a module that isn't loaded get the "this module is off" banner
+	local function WithBanner(build, mod)
+		if not mod then return build end
+		return function(page)
+			build(page)
+			O.AddModuleBanner(page, mod.id)
+		end
+	end
 	for _, def in ipairs(pages) do
 		local t = { def = def }
 		if def.children then
@@ -2577,7 +2641,9 @@ local function CreateWindow()
 			t.button.arrow = Label(t.button, "+", 13, { 0.6, 0.6, 0.65 })
 			t.button.arrow:SetPoint("RIGHT", -8, 0)
 			for _, cdef in ipairs(def.children) do
-				leaves[#leaves + 1] = { build = cdef[2], group = t, name = def[1] .. " > " .. cdef[1] }
+				-- a group that is one module (Nameplates) owns all its pages
+				local mod = ns.Modules.byPage[def[1]] or ns.Modules.byPage[cdef[1]]
+				leaves[#leaves + 1] = { build = WithBanner(cdef[2], mod), group = t, name = def[1] .. " > " .. cdef[1] }
 				local leaf = #leaves
 				local c = { leaf = leaf }
 				c.button = FlatButton(nav, cdef[1], 130, function() t.lastLeaf = leaf; SelectPage(leaf) end)
@@ -2589,7 +2655,7 @@ local function CreateWindow()
 				table.insert(t.children, c)
 			end
 		else
-			leaves[#leaves + 1] = { build = def[2], name = def[1] }
+			leaves[#leaves + 1] = { build = WithBanner(def[2], ns.Modules.byPage[def[1]]), name = def[1] }
 			t.leaf = #leaves
 			t.button = FlatButton(nav, def[1], 142, function() SelectPage(t.leaf) end)
 		end
@@ -2623,7 +2689,7 @@ local function CreateWindow()
 				local page = NewPage(scroll)
 				-- one page failing to build must not stop the search
 				local ok, err = pcall(leaf.build, page)
-				if not ok then geterrorhandler()(err) end
+				if not ok then ns.Error(err) end
 				built[i] = page
 			end
 			local list = {}
@@ -2732,6 +2798,284 @@ function O:Init()
 	btn:SetPoint("TOPLEFT", logo, "BOTTOMLEFT", 0, -12)
 	local category = Settings.RegisterCanvasLayoutCategory(panel, "Stinkie UI")
 	Settings.RegisterAddOnCategory(category)
+end
+
+---------------------------------------------------------------------------
+-- Modules: the first-run picker and the list behind the Modules button
+---------------------------------------------------------------------------
+local MOD_W, MOD_H = 600, 660
+
+-- A page whose module isn't loaded: a banner on top, and the page under it dimmed and closed
+-- to clicks, so nothing on it reaches code that never started.
+local function AddModuleBanner(page, id)
+	local Mods = ns.Modules
+	if Mods.Loaded(id) then return end
+	local m = Mods.byId[id]
+	local cover = CreateFrame("Frame", nil, page)
+	cover:SetAllPoints()
+	cover:SetFrameLevel(page:GetFrameLevel() + 50)
+	cover:EnableMouse(true)
+	Flat(cover, BRAND.bg[1], BRAND.bg[2], BRAND.bg[3], 0.72)
+	local band = CreateFrame("Frame", nil, cover)
+	band:SetPoint("TOPLEFT", 10, -8)
+	band:SetPoint("TOPRIGHT", -10, -8)
+	band:SetHeight(46)
+	Flat(band, BRAND.plumDark[1], BRAND.plumDark[2], BRAND.plumDark[3], 1)
+	ns.CreateBackdrop(band, 0)
+	ns.SetBorderColor(band, ACCENT[1], ACCENT[2], ACCENT[3], 1)
+	-- chosen but not loaded yet: it only needs a reload
+	local chosen = Mods.Chosen(id) and Mods.Available(id) and not Mods.Conflict(id)
+	local text = chosen and (m.name .. " turns on after a /reload.")
+		or "This module is off — enable it in Modules."
+	local label = Label(band, text, 14, { BRAND.cream[1], BRAND.cream[2], BRAND.cream[3] })
+	label:SetPoint("LEFT", 12, 0)
+	local btn = FlatButton(band, chosen and "Reload" or "Modules", 100, function()
+		if chosen then ReloadUI() else O.OpenModules("list") end
+	end)
+	btn:SetPoint("RIGHT", -10, 0)
+	page.moduleBanner = band
+end
+O.AddModuleBanner = AddModuleBanner
+
+local function CheckBox(parent, onClick)
+	local b = CreateFrame("Button", nil, parent)
+	b:SetSize(18, 18)
+	Flat(b, 0.12, 0.11, 0.09, 1)
+	ns.CreateBackdrop(b, 0)
+	b.tick = b:CreateTexture(nil, "ARTWORK")
+	b.tick:SetPoint("TOPLEFT", 4, -4)
+	b.tick:SetPoint("BOTTOMRIGHT", -4, 4)
+	b.tick:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
+	function b:SetChecked(on)
+		self.checked = on and true or false
+		self.tick:SetShown(self.checked)
+	end
+	b:SetScript("OnClick", function(self) onClick(not self.checked) end)
+	return b
+end
+
+local function AccentFill(b)
+	local A = ACCENT
+	b.bg:SetColorTexture(A[1] * 0.45, A[2] * 0.45, A[3] * 0.45, 1)
+	b:SetScript("OnEnter", function(self) self.bg:SetColorTexture(A[1] * 0.6, A[2] * 0.6, A[3] * 0.6, 1) end)
+	b:SetScript("OnLeave", function(self) self.bg:SetColorTexture(A[1] * 0.45, A[2] * 0.45, A[3] * 0.45, 1) end)
+end
+
+local function BuildModulesPanel()
+	local Mods = ns.Modules
+	local f = CreateFrame("Frame", "StinkieUIModules", UIParent)
+	f:SetSize(MOD_W, MOD_H)
+	f:SetPoint("CENTER")
+	f:SetFrameStrata("DIALOG")
+	f:SetFrameLevel(200)
+	f:SetClampedToScreen(true)
+	f:EnableMouse(true)
+	f:SetMovable(true)
+	f:RegisterForDrag("LeftButton")
+	f:SetScript("OnDragStart", f.StartMoving)
+	f:SetScript("OnDragStop", f.StopMovingOrSizing)
+	Flat(f, BRAND.bg[1], BRAND.bg[2], BRAND.bg[3], 0.98)
+	ns.CreateBackdrop(f, 0)
+	table.insert(UISpecialFrames, "StinkieUIModules")
+
+	-- header band, as on the options window
+	local band = CreateFrame("Frame", nil, f)
+	band:SetPoint("TOPLEFT"); band:SetPoint("TOPRIGHT"); band:SetHeight(HEADER_H)
+	Flat(band, BRAND.plumDark[1], BRAND.plumDark[2], BRAND.plumDark[3], 1, "BACKGROUND")
+	local line = band:CreateTexture(nil, "ARTWORK")
+	line:SetPoint("BOTTOMLEFT"); line:SetPoint("BOTTOMRIGHT"); line:SetHeight(2)
+	line:SetColorTexture(BRAND.plum[1], BRAND.plum[2], BRAND.plum[3], 1)
+	local logo = band:CreateTexture(nil, "ARTWORK")
+	logo:SetSize(HEADER_H - 12, HEADER_H - 12)
+	logo:SetPoint("LEFT", 10, -1)
+	logo:SetTexture(ns.MEDIA.logo, "CLAMP", "CLAMP", "TRILINEAR")
+	local cream = BRAND.cream
+	local title = Label(band, "STINKIE |cff" .. ns.ACCENT_HEX .. "UI|r", 26, { cream[1], cream[2], cream[3] })
+	title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 14, -10)
+	f.sub = Label(band, "Choose what loads", 13, { 0.78, 0.66, 0.70 })
+	f.sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 1, -6)
+	local close = FlatButton(f, "x", 22, function() f:Hide() end)
+	close:SetPoint("TOPRIGHT", -12, -12)
+
+	-- first view: the two big choices
+	local intro = CreateFrame("Frame", nil, f)
+	intro:SetPoint("TOPLEFT", 0, -HEADER_H)
+	intro:SetPoint("BOTTOMRIGHT")
+	f.intro = intro
+	local welcome = Label(intro, "Stinkie UI is made of modules. Load all of them, or pick the ones you want.", 14,
+		{ cream[1], cream[2], cream[3] })
+	welcome:SetPoint("TOP", 0, -40)
+	welcome:SetWidth(MOD_W - 80)
+	welcome:SetJustifyH("CENTER")
+	welcome:SetWordWrap(true)
+	local full = FlatButton(intro, "Stinkie's Full UI", 320, function()
+		Mods.Apply(Mods.FullChoices())
+		ReloadUI()
+	end)
+	full:SetHeight(56)
+	ns.SetFont(full.text, 20)
+	AccentFill(full)
+	full:SetPoint("TOP", welcome, "BOTTOM", 0, -40)
+	f.fullButton = full
+	local fullNote = Label(intro, "Everything on. Reloads the UI.", 12, { 0.7, 0.7, 0.7 })
+	fullNote:SetPoint("TOP", full, "BOTTOM", 0, -8)
+	local pick = FlatButton(intro, "Choose modules", 320, function() O.ShowModules("list") end)
+	pick:SetHeight(40)
+	ns.SetFont(pick.text, 16)
+	ns.SetBorderColor(pick, ACCENT[1], ACCENT[2], ACCENT[3], 1)
+	pick:SetPoint("TOP", fullNote, "BOTTOM", 0, -36)
+	f.pickButton = pick
+	local later = FlatButton(intro, "Later", 120, function() f:Hide() end)
+	later:SetPoint("BOTTOM", 0, 24)
+	local laterNote = Label(intro, "Open this again with /stinkie modules or /stinkie setup.", 12, { 0.6, 0.6, 0.6 })
+	laterNote:SetPoint("BOTTOM", later, "TOP", 0, 8)
+
+	-- second view: every module by category
+	local list = CreateFrame("Frame", nil, f)
+	list:SetPoint("TOPLEFT", 0, -HEADER_H)
+	list:SetPoint("BOTTOMRIGHT")
+	f.list = list
+	local scroll = CreateFrame("ScrollFrame", nil, list)
+	scroll:SetPoint("TOPLEFT", 16, -12)
+	scroll:SetPoint("BOTTOMRIGHT", -16, 84)
+	scroll:EnableMouseWheel(true)
+	local child = CreateFrame("Frame", nil, scroll)
+	child:SetWidth(MOD_W - 40)
+	scroll:SetScrollChild(child)
+	scroll:SetScript("OnMouseWheel", function(self, delta)
+		local max = math.max(0, child:GetHeight() - self:GetHeight())
+		self:SetVerticalScroll(math.max(0, math.min(max, self:GetVerticalScroll() - delta * 40)))
+	end)
+	f.warn = Label(list, "", 12, { BRAND.orange[1], BRAND.orange[2], BRAND.orange[3] })
+	f.warn:SetPoint("BOTTOMLEFT", 18, 52)
+	f.warn:SetPoint("BOTTOMRIGHT", -18, 52)
+	f.warn:SetWordWrap(true)
+	local apply = FlatButton(list, "Apply & Reload", 160, function()
+		Mods.Apply(f.choices)
+		ReloadUI()
+	end)
+	apply:SetPoint("BOTTOMRIGHT", -18, 18)
+	AccentFill(apply)
+	f.applyButton = apply
+	local laterList = FlatButton(list, "Later", 100, function() f:Hide() end)
+	laterList:SetPoint("RIGHT", apply, "LEFT", -8, 0)
+	local allOn = FlatButton(list, "All on", 90, function()
+		for id, on in pairs(Mods.FullChoices()) do f.choices[id] = on end
+		f.warn:SetText("")
+		f:Render()
+	end)
+	allOn:SetPoint("BOTTOMLEFT", 18, 18)
+	local report = FlatButton(list, "Copy report", 110, function()
+		if ns.Report then ns.Report.Show() else ns.NeedsRestart() end
+	end)
+	report:SetPoint("LEFT", allOn, "RIGHT", 8, 0)
+	f.reportButton = report
+
+	-- ticking pulls in what a module needs; unticking drops what needs it, and says so
+	local function Set(id, on, dropped)
+		f.choices[id] = on
+		if on then
+			for _, req in ipairs(Mods.byId[id].requires or {}) do
+				if not f.choices[req] then Set(req, true, dropped) end
+			end
+		else
+			for _, dep in ipairs(Mods.Dependents(id)) do
+				if f.choices[dep.id] then
+					dropped[#dropped + 1] = dep.name .. " (needs " .. Mods.byId[id].name .. ")"
+					Set(dep.id, false, dropped)
+				end
+			end
+		end
+	end
+	f.Set = Set
+
+	f.rows = {}
+	local y = 0
+	for _, cat in ipairs(Mods.CATEGORIES) do
+		local header
+		for _, m in ipairs(Mods.LIST) do
+			if m.category == cat and Mods.Available(m.id) then
+				if not header then
+					header = Label(child, cat, 15, { ACCENT[1], ACCENT[2], ACCENT[3] })
+					header:SetPoint("TOPLEFT", 0, -y - 6)
+					y = y + 30
+				end
+				local row = CreateFrame("Frame", nil, child)
+				row:SetPoint("TOPLEFT", 0, -y)
+				row:SetSize(MOD_W - 40, 38)
+				row.id = m.id
+				row.box = CheckBox(row, function(on)
+					local dropped = {}
+					Set(m.id, on, dropped)
+					f.warn:SetText(#dropped > 0 and ("Also off: " .. table.concat(dropped, ", ")) or "")
+					f:Render()
+				end)
+				row.box:SetPoint("TOPLEFT", 4, -2)
+				row.name = Label(row, m.name, 14)
+				row.name:SetPoint("TOPLEFT", row.box, "TOPRIGHT", 10, 1)
+				row.desc = Label(row, m.desc, 12, { 0.62, 0.62, 0.62 })
+				row.desc:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -3)
+				row.desc:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+				row.desc:SetWordWrap(false)
+				row.off = Label(row, "", 12, { 0.55, 0.55, 0.55 })
+				row.off:SetPoint("LEFT", row.name, "RIGHT", 10, 0)
+				f.rows[#f.rows + 1] = row
+				y = y + 40
+			end
+		end
+	end
+	child:SetHeight(y + 8)
+
+	function f:Render()
+		for _, row in ipairs(self.rows) do
+			local other = Mods.Conflict(row.id)
+			if other then
+				row.box:SetChecked(false)
+				row.box:EnableMouse(false)
+				row.box:SetAlpha(0.35)
+				row.name:SetTextColor(0.55, 0.55, 0.55)
+				row.off:SetText("Off: " .. other .. " is loaded")
+			else
+				row.box:SetChecked(self.choices[row.id])
+				row.box:EnableMouse(true)
+				row.box:SetAlpha(1)
+				row.name:SetTextColor(1, 1, 1)
+				row.off:SetText("")
+			end
+		end
+	end
+	f:Hide()
+	return f
+end
+
+-- view: "picker" (the two big choices first) or "list"
+function O.ShowModules(view)
+	local Mods = ns.Modules
+	local f = O.modules or BuildModulesPanel()
+	O.modules = f
+	-- fresh choices unless we're just stepping from the picker to the list
+	if not f.choices or not (view == "list" and f:IsShown()) then
+		f.choices = {}
+		for _, m in ipairs(Mods.LIST) do
+			if Mods.Available(m.id) then f.choices[m.id] = Mods.FeatureOn(m.id) end
+		end
+		f.warn:SetText("")
+	end
+	f.view = view == "list" and "list" or "picker"
+	f.intro:SetShown(f.view == "picker")
+	f.list:SetShown(f.view == "list")
+	f.sub:SetText(f.view == "list" and "Ticked modules load after Apply & Reload" or "Choose what loads")
+	f:Render()
+	f:Show()
+end
+
+-- from a button: only outside combat
+function O.OpenModules(view)
+	if InCombatLockdown() then
+		ns:Print("Modules opens after combat.")
+		return
+	end
+	O.ShowModules(view)
 end
 
 -- shared with the Match History window (StinkieUI_History)

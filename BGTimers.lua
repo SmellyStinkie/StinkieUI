@@ -407,7 +407,7 @@ local function OnUpdate(_, elapsed)
 			T:UpdatePrediction(now)
 			T:UpdateRespawn(now)
 		end)
-		if not ok and not T.errored then T.errored = true; geterrorhandler()(err) end
+		if not ok and not T.errored then T.errored = true; ns.Error(err) end
 	end
 	-- Blitz bases move through their phases on the clock
 	for id, node in pairs(nodes) do

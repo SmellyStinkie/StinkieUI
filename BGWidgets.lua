@@ -32,7 +32,8 @@ local function Pin(p)
 	end
 	p.busy = true
 	p.frame:ClearAllPoints()
-	p.frame:SetPoint("TOP", p.use or p.anchor, "TOP", 0, 0)
+	-- dx: the arena info's centering nudge (see W:CenterArena)
+	p.frame:SetPoint("TOP", p.use or p.anchor, "TOP", p.use and (p.dx or 0) or 0, 0)
 	p.busy = false
 end
 
@@ -115,6 +116,67 @@ function W:UpdateFlagRow()
 	end
 end
 
+---------------------------------------------------------------------------
+-- Arena info centering. Our bigger font makes Blizzard's round and wins texts wider than the
+-- slots it sized for them, so they spill to one side. Measure where the text really is and
+-- nudge the whole block so it sits centered under our anchor.
+---------------------------------------------------------------------------
+local issecret = ns.issecret
+
+-- the left and right edge of every visible text in a widget (and its children), in screen pixels
+local function TextBounds(frame, b, depth)
+	if not frame or not frame.GetRegions then return end
+	for _, r in ipairs({ frame:GetRegions() }) do
+		if r:IsObjectType("FontString") and r:IsVisible() then
+			local text = r:GetText()
+			local l, rt = r:GetLeft(), r:GetRight()
+			if type(text) == "string" and text ~= "" and type(l) == "number" and type(rt) == "number"
+				and not issecret(l) and not issecret(rt) then
+				-- a wide box with short text: only the text's own width counts, placed by its justify
+				local w = r:GetStringWidth()
+				if type(w) == "number" and not issecret(w) and w < rt - l then
+					local j = r:GetJustifyH()
+					if j == "LEFT" then rt = l + w
+					elseif j == "RIGHT" then l = rt - w
+					else local mid = (l + rt) / 2; l, rt = mid - w / 2, mid + w / 2 end
+				end
+				local s = r:GetEffectiveScale()
+				b.l = math.min(b.l or math.huge, l * s)
+				b.r = math.max(b.r or -math.huge, rt * s)
+			end
+		end
+	end
+	if (depth or 0) < 2 and frame.GetChildren then
+		for _, child in ipairs({ frame:GetChildren() }) do TextBounds(child, b, (depth or 0) + 1) end
+	end
+end
+W.TextBounds = TextBounds
+
+-- the nudge (in the container's own units) that puts text spanning left..right (screen pixels)
+-- centered on center (screen pixels)
+function W.CenterNudge(left, right, center, scale)
+	if not (left and right and center and scale and scale > 0) then return 0 end
+	return (center - (left + right) / 2) / scale
+end
+
+function W:CenterArena()
+	local p = pins.bgScore
+	if not (p and p.active and p.use and p.frame) then return end
+	local container = p.frame
+	if type(container.widgetFrames) ~= "table" then return end
+	local b = {}
+	for _, widget in pairs(container.widgetFrames) do
+		if widget:IsShown() then TextBounds(widget, b, 0) end
+	end
+	local cx = W.arenaAnchor:GetCenter()
+	if not (b.l and type(cx) == "number") or issecret(cx) then return end
+	local dx = W.CenterNudge(b.l, b.r, cx * W.arenaAnchor:GetEffectiveScale(), container:GetEffectiveScale())
+	-- under a pixel is close enough, and keeps a ticking timer from jiggling it
+	if math.abs(dx) < 1 then return end
+	p.dx = (p.dx or 0) + dx
+	Pin(p)
+end
+
 function W:SkinScore()
 	W:UpdateFlagRow()
 	local c = cfg()
@@ -132,6 +194,15 @@ function W:SkinScore()
 		end
 		-- arena and Solo Shuffle: match timer, "Round 3 of 6" and the rest in our font and size
 		if inArena and c.arenaText then pcall(RestyleText, widget, c.arenaTextSize or 16, 0) end
+	end
+	-- measure after Blizzard has placed the new text
+	if inArena and not W.centerQueued then
+		W.centerQueued = true
+		C_Timer.After(0, function()
+			W.centerQueued = nil
+			local ok, err = pcall(W.CenterArena, W)
+			if not ok then ns.Error(err) end
+		end)
 	end
 end
 
@@ -244,6 +315,7 @@ function W:Apply()
 			W.arenaAnchor:SetScale(ns.db.scale)
 			W.arenaAnchor.SUIActive = c.enabled and true or false
 		end
+		if not arena then p.dx = nil end -- a fresh measure each arena
 		p.use = arena and W.arenaAnchor or nil
 		if p.frame then
 			if want then

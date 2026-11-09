@@ -101,13 +101,6 @@ function D.Delete(index)
 	D.dirty = true
 end
 
-function D.DeleteAll()
-	local a = D.Archive()
-	a.records, a.dict, a.statNames = {}, {}, {}
-	reverse = nil
-	D.dirty = true
-end
-
 function D.SizeBytes()
 	local n = 0
 	local a = D.Archive()

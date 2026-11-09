@@ -208,9 +208,11 @@ function WM.ResetAll()
 	ns:Print("All windows reset. Blizzard places them again the next time they open.")
 end
 
+WM.CONFLICTS = { "BlizzMove" } -- also shown in the module list
+
 function WM:Init()
 	local isLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
-	if isLoaded and isLoaded("BlizzMove") then
+	if isLoaded and isLoaded(WM.CONFLICTS[1]) then
 		WM.blocked = true
 		if cfg().enabled then ns:Print("Window Mover is off while BlizzMove is enabled. Disable BlizzMove to use it.") end
 		return

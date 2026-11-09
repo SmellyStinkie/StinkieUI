@@ -59,6 +59,11 @@ Published on CurseForge (project 1780262) and Wago (rNkgx3Na) by the GitHub Acti
   navigation list is at the bottom. `ShowPopup` is the shared dropdown list.
 - One file per module, each registered with `ns:RegisterModule(name, mod)` and having `Init` and
   `Refresh`.
+- `Modules.lua`: the module registry (`M.LIST`: id, files, pages, requires, conflicts, available).
+  A new module needs an entry there, or it's treated as core and always loads. A module that's off
+  never runs Init. A game setting a module forces needs `ns.Modules.Remember(id, cvar)` before the
+  write, so it can be put back once the module is off. `dev/tests/modules.lua` boots each case
+  (fresh install, upgrade, each module off, Forever) in its own mock client.
 - `MatchRecorder.lua`: reads the scoreboard at the end of a match and saves one compact line
   (codec `C.TOP` / `C.PLAYER`). **Only ever add new fields at the end of `C.TOP` or `C.PLAYER`,
   and never remove one.** Saved lines are positional, and the player list is always the last part
@@ -83,7 +88,8 @@ Published on CurseForge (project 1780262) and Wago (rNkgx3Na) by the GitHub Acti
 ## In-game debug commands
 
 `/stinkie dmg`, `/stinkie cpu`, `/stinkie score`, `/stinkie plates`, `/stinkie auras`,
-`/stinkie flags`, `/stinkie timers`, `/stinkie fontcheck`, `/stinkie quest`, `/stinkie tooltip`, `/stinkie map`. They print what the game reports, so a
+`/stinkie flags`, `/stinkie timers`, `/stinkie fontcheck`, `/stinkie quest`, `/stinkie tooltip`, `/stinkie map`,
+`/stinkie report` (support block; errors caught in our pcalls go through `ns.Error`, which records them for it). They print what the game reports, so a
 pasted result tells you what this client actually has. `/st` is short for `/stinkie`.
 
 ## Releasing

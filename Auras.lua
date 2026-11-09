@@ -23,7 +23,7 @@ end
 local pending = {}
 local function RunSafe(fn)
 	local ok, err = pcall(fn)
-	if not ok then geterrorhandler()(err) end
+	if not ok then ns.Error(err) end
 end
 
 -- Runs fn now if aura buttons can be touched, otherwise once they can (latest fn per key wins).
@@ -140,7 +140,7 @@ local function StyleButton(size, opts, button)
 	ns.inAuraInit = true -- fonts set now are skipped by font retries while auras are secret
 	local ok, err = pcall(StyleButtonBody, size, opts, button)
 	ns.inAuraInit = false
-	if not ok then geterrorhandler()(err) end
+	if not ok then ns.Error(err) end
 end
 
 -- Creates one AuraContainer with one or more groups.
@@ -223,7 +223,7 @@ function ns.SetAuraGroupCandidates(container, index, filters)
 	local key = container and container.SUIGroupKeys[index]
 	if not key then return end
 	local ok, err = pcall(container.SetAuraGroupCandidateFilters, container, key, filters)
-	if not ok then geterrorhandler()(err) end
+	if not ok then ns.Error(err) end
 end
 
 -- list of spell IDs (numbers or "123 Name" strings) -> { [id] = true } or nil when empty
@@ -257,7 +257,7 @@ function ns.RestyleAuraButtons(container, glowCfg, size, assistCountdown)
 	ns.WhenAurasOpen(container, function()
 		for _, b in ipairs(container.SUIButtons) do
 			local ok, err = pcall(RestyleOne, b, glowCfg, size, assistCountdown)
-			if not ok then geterrorhandler()(err); return end
+			if not ok then ns.Error(err); return end
 		end
 	end)
 end

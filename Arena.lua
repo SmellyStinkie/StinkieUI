@@ -34,10 +34,12 @@ local anchorGuard = setmetatable({}, { __mode = "k" })
 
 local function cfg() return ns.db.arena end
 
+A.CONFLICTS = { "sArena_Reloaded", "sArena", "sArena_Updated2_by_sammers", "Gladius", "GladiusEx" }
+
 local function OtherArenaAddon()
 	local loaded = C_AddOns and C_AddOns.IsAddOnLoaded
 	if not loaded then return nil end
-	for _, name in ipairs({ "sArena_Reloaded", "sArena", "sArena_Updated2_by_sammers", "Gladius", "GladiusEx" }) do
+	for _, name in ipairs(A.CONFLICTS) do
 		if loaded(name) then return name end
 	end
 end

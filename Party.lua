@@ -360,7 +360,8 @@ end
 -- Hidden in battlegrounds / Blitz (the battleground frames cover your team there)
 ---------------------------------------------------------------------------
 -- Hidden in battlegrounds / Blitz (option) and in raid groups (option). The raid rule is a
--- state driver, so joining or leaving a raid switches it even in combat.
+-- state driver, so joining or leaving a raid switches it even in combat. Arenas never use it:
+-- Solo Shuffle puts you in a raid-type group, and there the party frames are your team.
 function Party:UpdateVisibility()
 	local holder = Party.holder
 	if not holder then return end
@@ -372,7 +373,7 @@ function Party:UpdateVisibility()
 		UnregisterStateDriver(holder, "visibility")
 		if hideBG then
 			holder:Hide()
-		elseif cfg.hideInRaid and not preview then
+		elseif cfg.hideInRaid and not preview and t ~= "arena" then
 			RegisterStateDriver(holder, "visibility", "[group:raid] hide; show")
 		else
 			holder:Show()
@@ -461,7 +462,7 @@ function Party:Refresh()
 	for i, f in ipairs(Party.frames) do
 		-- a layout error must never leave a frame unanchored (that hides it for the whole match)
 		local ok, err = pcall(LayoutPartyFrame, f, i)
-		if not ok then geterrorhandler()(err) end
+		if not ok then ns.Error(err) end
 		f:ClearAllPoints()
 		if cfg.growth == "UP" then
 			f:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 0, (i - 1) * step + castH)
@@ -470,7 +471,7 @@ function Party:Refresh()
 		end
 		if f.preview then
 			local ok, err = pcall(Party.FillPreview, f, i)
-			if not ok then geterrorhandler()(err) end
+			if not ok then ns.Error(err) end
 		else
 			UF.SafeUpdateAll(f)
 		end
@@ -660,7 +661,7 @@ function Party:SetTestMode(on, preset)
 			f.preview = true
 			f:Show()
 			local ok, err = pcall(Party.FillPreview, f, i)
-			if not ok then geterrorhandler()(err) end
+			if not ok then ns.Error(err) end
 		else
 			f.preview = nil
 			f.previewData = nil

@@ -101,7 +101,7 @@ local function StyleHealerButtons(container)
 	ns.WhenAurasOpen(container, function()
 		for _, b in ipairs(container.SUIButtons) do
 			local ok, err = pcall(StyleHealerButton, b)
-			if not ok then geterrorhandler()(err); return end
+			if not ok then ns.Error(err); return end
 		end
 	end)
 end
@@ -485,7 +485,7 @@ function AA:Refresh()
 	-- each part on its own, so a failure in one can't switch off the others
 	for _, fn in ipairs({ AA.UpdateHealers, AA.UpdatePrecog, AA.UpdateKickEvents, AA.LayoutKicks }) do
 		local ok, err = pcall(fn, AA)
-		if not ok then geterrorhandler()(err) end
+		if not ok then ns.Error(err) end
 	end
 end
 

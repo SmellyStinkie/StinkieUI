@@ -234,10 +234,12 @@ local function OnTick()
 	UpdateHotkeyHover()
 end
 
+AB.CONFLICTS = { "Bartender4", "Dominos", "ElvUI" } -- also shown in the module list
+
 function AB:Init()
 	if not ns.db.actionBars.enabled then return end
 	if C_AddOns and C_AddOns.IsAddOnLoaded then
-		for _, other in ipairs({ "Bartender4", "Dominos", "ElvUI" }) do
+		for _, other in ipairs(AB.CONFLICTS) do
 			if C_AddOns.IsAddOnLoaded(other) then
 				ns:Print("Action bar skin is off because " .. other .. " is loaded.")
 				return

@@ -592,7 +592,7 @@ local function OnUpdate(_, elapsed)
 	local ok, err = pcall(FC.Poll, FC)
 	if not ok then
 		FC.errors = (FC.errors or 0) + 1
-		if FC.errors == 1 then geterrorhandler()(err) end
+		if FC.errors == 1 then ns.Error(err) end
 	end
 end
 

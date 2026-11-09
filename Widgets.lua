@@ -87,10 +87,6 @@ function ns.UpdateMarker(tex, unit)
 	tex:SetShown(pcall(SetRaidTargetIconTexture, tex, index))
 end
 
-function ns.SetFontSize(fs, size, flags)
-	ns.SetFont(fs, size, flags or "OUTLINE")
-end
-
 ---------------------------------------------------------------------------
 -- Colors
 ---------------------------------------------------------------------------
@@ -135,10 +131,6 @@ function ns.GetPowerColor(unit)
 	if not c and not issecret(pType) and pType ~= nil then c = PowerBarColor[pType] end
 	c = c or PowerBarColor.MANA
 	return c.r, c.g, c.b
-end
-
-function ns.ColorFromTable(t)
-	return CreateColor(t[1], t[2], t[3], t[4] or 1)
 end
 
 ---------------------------------------------------------------------------
@@ -212,13 +204,20 @@ end
 -- immediate: snap instead of animating (new target/focus/unit), so bars never "fill up".
 function ns.UpdateHealthBar(owner, unit, immediate)
 	local health = owner.Health
+	-- disconnected: a full grey bar. The game can report 0 max health for an offline player,
+	-- which would leave the bar empty, so it's drawn on its own 0..1 scale.
+	local connected = UnitIsConnected(unit)
+	if not issecret(connected) and not connected then
+		health:SetMinMaxValues(0, 1)
+		health:SetValue(1, IMMEDIATE)
+		if health.SetToTargetValue then health:SetToTargetValue() end
+		owner.Absorb:SetValue(0)
+		owner.OverAbsorb:SetAlpha(0)
+		return
+	end
 	local max = UnitHealthMax(unit)
 	health:SetMinMaxValues(0, max)
-	if UnitIsConnected(unit) then
-		health:SetValue(UnitHealth(unit), immediate and IMMEDIATE or SMOOTH)
-	else
-		health:SetValue(max, IMMEDIATE)
-	end
+	health:SetValue(UnitHealth(unit), immediate and IMMEDIATE or SMOOTH)
 	if immediate and health.SetToTargetValue then health:SetToTargetValue() end
 
 	local total = UnitGetTotalAbsorbs(unit)

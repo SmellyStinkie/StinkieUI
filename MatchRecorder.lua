@@ -453,14 +453,14 @@ function R.Save(m)
 	local ok, err = pcall(R.RememberMMR, m)
 	if not ok then
 		R.Note("mmr failed", m, err)
-		geterrorhandler()(err)
+		ns.Error(err)
 	end
 	local box = Inbox()
 	local line = C.Encode(m)
 	if R.receiver then
 		-- the history window is loaded: hand it over directly
 		local ok, err = pcall(R.receiver, line, box.statNames)
-		if not ok then geterrorhandler()(err); table.insert(box.records, line) end
+		if not ok then ns.Error(err); table.insert(box.records, line) end
 	else
 		table.insert(box.records, line)
 	end

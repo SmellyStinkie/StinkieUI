@@ -80,7 +80,8 @@ function Frame:GetFont() return "font", 12, "" end
 function Frame:IsObjectType(t) return self._kind == t end
 function Frame:GetObjectType() return self._kind end
 function Frame:GetStatusBarTexture() self._sbt = self._sbt or NewObj("Texture", nil, self); return self._sbt end
-function Frame:GetMinMaxValues() return 0, 1 end
+function Frame:GetMinMaxValues() return self._min or 0, self._max or 1 end
+function Frame:SetMinMaxValues(a, b) self._min, self._max = a, b end
 function Frame:GetValue() return self._value or 0 end
 function Frame:SetValue(v) self._value = v end
 function Frame:GetTextureFileID() return self._fileID end
@@ -229,7 +230,13 @@ function GetSpecialization() return 3 end
 function GetSpecializationInfo(i) return 267, "Destruction" end
 function GetPvpTalentInfoByID(id) return id, "Talent" .. id end
 function LoggingCombat() return false end
-function GetCVar() return "0" end
+function GetCVar(name) return MOCK.cvars and MOCK.cvars[name] or "0" end
+-- settings with a stored value and Blizzard's default (MOCK.cvarDefaults, else "0")
+C_CVar = {
+	GetCVar = function(name) return MOCK.cvars and MOCK.cvars[name] or "0" end,
+	SetCVar = function(name, value) MOCK.cvars = MOCK.cvars or {}; MOCK.cvars[name] = tostring(value) end,
+	GetCVarDefault = function(name) return MOCK.cvarDefaults and MOCK.cvarDefaults[name] or "0" end,
+}
 function GetCVarBool(name) return MOCK.cvars ~= nil and MOCK.cvars[name] == "1" end
 function SetCVar(name, value) MOCK.cvars = MOCK.cvars or {}; MOCK.cvars[name] = value end
 NUM_TOTAL_EQUIPPED_BAG_SLOTS = 5

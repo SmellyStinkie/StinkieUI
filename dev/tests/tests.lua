@@ -210,7 +210,7 @@ flushErrors("blitz cycle")
 -- Blitz Map
 do
 	local BM, L, c = ns.BlitzMap, ns.BlitzMap.Logic, ns.db.blitzMap
-	check("blitz map is off by default", c.enabled == false and not BM.frame:IsShown())
+	check("blitz map is on in the preset, hidden outside Blitz", c.enabled == true and not BM.frame:IsShown())
 	check("map is clipped", BM.view._clips == true)
 
 	-- markers
@@ -670,6 +670,27 @@ ns.PartyTargets:SetTestMode(true)
 check("party target preview", ns.PartyTargets.frames[2].Name._text == "Pinkie")
 ns.PartyTargets:SetTestMode(false)
 flushErrors("partytargets")
+
+-- Boss frames
+do
+	local BF = ns.BossFrames
+	check("boss frames: five", BF.active and #BF.frames == 5 and BF.frames[5].unit == "boss5")
+	BF:SetTestMode(true)
+	check("boss test mode fills them", BF.frames[1].Name._text == "Test Boss 1" and BF.frames[3]:IsShown())
+	check("boss target outline on the first stand-in", BF.frames[1].Highlight:GetAlpha() == 1 and BF.frames[2].Highlight:GetAlpha() == 0)
+	ns.db.bossFrames.growth = "UP"
+	ns.db.bossFrames.castbar.enabled = false
+	ns:Refresh()
+	check("castbar off: no unit", BF.frames[1].Castbar.unit == nil)
+	ns.db.bossFrames.castbar.enabled = true
+	ns.db.bossFrames.growth = "DOWN"
+	ns:Refresh()
+	check("castbar back on", BF.frames[1].Castbar.unit == "boss1")
+	BF:SetTestMode(false)
+	MOCK.Fire("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
+	MOCK.Fire("PLAYER_TARGET_CHANGED")
+	flushErrors("boss frames")
+end
 
 ---------------------------------------------------------------------------
 -- Options: open every page
@@ -3646,6 +3667,60 @@ do
 end
 flushErrors("final score")
 
+-- Party frames in Solo Shuffle (a raid-type group): the raid rule doesn't apply in arenas
+do
+	local drivers = {}
+	local oldReg, oldUnreg = RegisterStateDriver, UnregisterStateDriver
+	RegisterStateDriver = function(f, k, v) drivers[f] = v end
+	UnregisterStateDriver = function(f) drivers[f] = nil end
+	local holder = ns.Party.holder
+	ns.db.party.hideInRaid = true
+	MOCK.instanceType = "arena"
+	ns.Party:UpdateVisibility()
+	check("shuffle: no raid rule, party shown", drivers[holder] == nil and holder:IsShown())
+	MOCK.instanceType = "none"
+	ns.Party:UpdateVisibility()
+	check("outside arenas the raid rule stays", drivers[holder] == "[group:raid] hide; show")
+	RegisterStateDriver, UnregisterStateDriver = oldReg, oldUnreg
+	ns.Party:UpdateVisibility()
+	flushErrors("party shuffle")
+end
+
+-- A disconnected player: a full grey bar, even when the game says 0 max health
+do
+	local f = ns.Party.frames[1]
+	local oldConn, oldMax = UnitIsConnected, UnitHealthMax
+	UnitIsConnected = function() return false end
+	UnitHealthMax = function() return 0 end
+	ns.UF.UpdateHealthColor(f)
+	ns.UF.UpdateHealth(f, true)
+	local lo, hi = f.Health:GetMinMaxValues()
+	check("offline: full bar", lo == 0 and hi == 1 and f.Health:GetValue() == 1)
+	UnitIsConnected, UnitHealthMax = oldConn, oldMax
+	ns.UF.UpdateHealth(f, true)
+	lo, hi = f.Health:GetMinMaxValues()
+	check("back online: real health", hi == 1000)
+	flushErrors("offline")
+end
+
+-- Arena info centering
+do
+	local W = ns.BGWidgets
+	-- text spanning 900..1100 screen px, anchor centered at 960: move left 40 px (scale 1)
+	check("arena nudge left", math.abs(W.CenterNudge(900, 1100, 960, 1) - (-40)) < 1e-9)
+	-- the same at container scale 2: half as many of its own units
+	check("arena nudge scaled", math.abs(W.CenterNudge(900, 1100, 960, 2) - (-20)) < 1e-9)
+	check("arena nudge centered", W.CenterNudge(860, 1060, 960, 1.3) == 0)
+	check("arena nudge without bounds", W.CenterNudge(nil, nil, 960, 1) == 0)
+	-- a pass through a (mock) arena runs clean
+	MOCK.instanceType, MOCK.instanceName = "arena", "Nagrand Arena"
+	MOCK.Fire("ZONE_CHANGED_NEW_AREA")
+	W:SkinScore(); MOCK.Advance(0.1)
+	MOCK.instanceType, MOCK.instanceName = "none", "Dornogal"
+	MOCK.Fire("ZONE_CHANGED_NEW_AREA"); MOCK.Advance(0.1)
+	flushErrors("arena centering")
+end
+
 -- calls to names the mock doesn't know: any that match one of our own local functions means a
 -- function used before (or outside) its definition, which is a real error in the game
 local locals = {}
@@ -3658,5 +3733,5 @@ end
 table.sort(unknown)
 print("unknown globals called (mocked as no-ops): " .. table.concat(unknown, ", "))
 
-print(string.format("\n%d passed, %d failed", passed, failed))
-if failed > 0 then os.exit(1) end
+-- run.py adds these to the module scenarios and prints the total
+RESULT = { passed = passed, failed = failed }

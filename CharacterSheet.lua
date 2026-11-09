@@ -427,7 +427,7 @@ local function Queue(prefix, unit)
 	C_Timer.After(0.05, function()
 		pending[prefix] = nil
 		local ok, err = pcall(UpdateAll, prefix, unit)
-		if not ok then geterrorhandler()(err) end
+		if not ok then ns.Error(err) end
 		if prefix == "Character" then CS.UpdateItemLevel() else CS.UpdateInspectItemLevel() end
 	end)
 end

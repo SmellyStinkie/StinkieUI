@@ -261,7 +261,7 @@ local function Hook(def)
 		local c = cfg()
 		if not (c.enabled and c[def.key]) then return end
 		local ok, err = pcall(SK.SkinWindow, def)
-		if not ok then geterrorhandler()(err) end
+		if not ok then ns.Error(err) end
 	end)
 	if frame:IsShown() and cfg().enabled and cfg()[def.key] then pcall(SK.SkinWindow, def) end
 end

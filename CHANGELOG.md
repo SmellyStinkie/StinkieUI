@@ -1,5 +1,23 @@
 # Stinkie UI changelog
 
+## 0.43.0
+- Modules: Stinkie UI is now split into modules you can turn on and off. A module that's off doesn't load at all: no frames, no events, no changes to your game settings. Open the list with `/stinkie modules` or the new Modules button at the top right of the options window. Changes take effect after a reload, and the panel has an Apply & Reload button.
+- New installs start with a setup screen: one button for Stinkie's Full UI (everything on), or pick the modules you want. Open it again any time with `/stinkie setup`.
+- Already using Stinkie UI? Nothing changes. Every module stays on, and a chat line points you to `/stinkie modules`.
+- Modules that need another one turn it on with them (Party Targets needs Party Frames, for example). Turning a module off also turns off the ones that need it, and the panel tells you which.
+- Modules another addon replaces (chat, action bars, arena frames, window mover) show as off while that addon is loaded.
+- When you turn off a module that changes game settings, those settings go back the next time you log in: nameplate spacing, stacking and target size, damage number tuning, chat timestamps and whisper mode, and the master volume from the queue pop sound. Settings Stinkie UI only mirrors from Blizzard's options (enemy pets and totems, scrolling combat text, cursor size and the like) stay as they are.
+- Options pages of a module that's off stay in the list and in search, with a banner and a button to turn it on.
+- Blitz Map is now on for new profiles.
+- New: Boss Frames. Flat frames for up to five bosses, in the same look as the other unit frames: health, power, name, health text, raid marker, a castbar under each and an outline on your target. They replace Blizzard's boss frames, and test mode or `/stinkie unlock` shows stand-ins to place them. Settings are under Unit Frames > Boss Frames, or turn the module off in Modules.
+- New: a profile per spec. Under General > Profile per spec, tick "Switch profile with your spec" and pick a profile for each spec, such as one for Destruction and another for Affliction. When you change spec, Stinkie UI asks before it reloads into that spec's profile, and waits until you're out of combat. A spec left on "Character profile" uses this character's usual profile.
+- New: `/stinkie report`. A box to copy with your Stinkie UI version, game client, modules on and off, addons that turned a module off, other addons loaded, and recent Stinkie UI errors (also from BugSack if you use it). It leaves out character names. Paste it when you ask for help on Discord. There's a Copy report button in the Modules list and a Support report button on the General page.
+- Fixed: party frames are back in Solo Shuffle. Shuffle counts as a raid group, so "Hide in raid groups" was hiding them. That option no longer applies in arenas.
+- Fixed: a disconnected player's health bar now shows as a full grey bar instead of an empty one.
+- Arena and Solo Shuffle: the round and wins info at the top is centered again with the Stinkie UI font.
+- If a party frame hits an error during a match, the frames still show.
+- Cleanup: removed a few unused bits of code.
+
 ## 0.42.5
 - Cooldowns: custom bars can now show a spell only while a proc upgrades it. Add `proc:Slam` to a bar and it appears as Heroic Strike when Master of Warfare procs, and stays out of sight the rest of the time. It works for any spell that turns into another one.
 - Fixed: an error in Arena.lua during matches.

@@ -201,7 +201,10 @@ end
 function DT.Apply()
 	local c = cfg()
 	for _, name in ipairs(DT.HEALING) do
-		if HasCVar(name) then pcall(C_CVar.SetCVar, name, c.healing and "1" or "0") end
+		if HasCVar(name) then
+			ns.Modules.Remember("damageText", name)
+			pcall(C_CVar.SetCVar, name, c.healing and "1" or "0")
+		end
 	end
 	c.touched = c.touched or {}
 	-- settings an earlier version changed that no option drives any more go back to the default
@@ -218,6 +221,7 @@ function DT.Apply()
 		for _, name in ipairs(names) do
 			if HasCVar(name) then
 				if v and v ~= 0 then
+					ns.Modules.Remember("damageText", name)
 					pcall(C_CVar.SetCVar, name, tostring(v))
 					c.touched[name] = true
 				elseif c.touched[name] then

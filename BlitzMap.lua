@@ -663,9 +663,9 @@ function BM.Debug()
 	end
 	unitLine("player")
 	if IsInRaid() then
-		for i = 1, GetNumGroupMembers() do unitLine("raid" .. i) end
+		for i = 1, GetNumGroupMembers() or 0 do unitLine("raid" .. i) end
 	else
-		for i = 1, GetNumSubgroupMembers() do unitLine("party" .. i) end
+		for i = 1, GetNumSubgroupMembers() or 0 do unitLine("party" .. i) end
 	end
 	for i = 1, mapID and GetNumBattlefieldFlagPositions() or 0 do
 		local x, y, texture = C_PvP.GetBattlefieldFlagPosition(i, mapID)
