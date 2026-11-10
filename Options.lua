@@ -1136,8 +1136,6 @@ end
 
 local function BuildMiscPage(page)
 	local function gcd() return ns.db.misc.gcd end
-	local function decor() return ns.db.misc.decor end
-	local function auto() return ns.db.misc.auto end
 	page:Column(1)
 	page:Header("GCD History")
 	page:Check("Enabled", Getter(gcd, "enabled"), Setter(gcd, "enabled"))
@@ -1154,6 +1152,8 @@ local function BuildMiscPage(page)
 	page:Position(nil, function() return "gcdHistory" end)
 	page:TextList("Ignored spells", 90, function() return SpellListText(gcd().ignore) end,
 		function(text) gcd().ignore = ParseSpellList(text) end, "One spell ID or name per line. Auto Attack and Auto Shot are ignored by default.")
+
+	page:Column(2)
 	local function apm() return ns.db.misc.apm end
 	page:Header("APM")
 	page:Check("Enabled", Getter(apm, "enabled"), Setter(apm, "enabled"))
@@ -1166,8 +1166,13 @@ local function BuildMiscPage(page)
 	page:Check("Fight average next to it", Getter(apm, "showFight"), Setter(apm, "showFight"))
 	page:TextStyle("APM text", function() return apm().textStyle end)
 	page:Position(nil, function() return "apm" end)
+end
 
-	page:Column(2)
+-- things done for you: each one is off until it's asked for
+local function BuildAutomationPage(page)
+	local function decor() return ns.db.misc.decor end
+	local function auto() return ns.db.misc.auto end
+	page:Column(1)
 	page:Header("Auto-Confirm Decor Purchases")
 	page:Check("Enabled", Getter(decor, "enabled"), Setter(decor, "enabled"))
 	page:Note("Buying housing decor from a vendor skips the \"are you sure\" popup. Other items still ask. Never used for the in-game shop.", 50)
@@ -1176,6 +1181,7 @@ local function BuildMiscPage(page)
 	page:Header("Error messages")
 	page:Check("Hide error messages", Getter(auto, "hideErrors"), Setter(auto, "hideErrors"))
 	page:Note("Hides the red text like Not enough mana, and its voice line. Yellow quest progress text stays.", 36)
+	page:Column(2)
 	page:Header("Quests")
 	page:Check("Accept quests", Getter(auto, "questAccept"), Setter(auto, "questAccept"))
 	page:Check("Turn in quests", Getter(auto, "questTurnIn"), Setter(auto, "questTurnIn"))
@@ -1628,6 +1634,21 @@ local function BuildCharacterPage(page)
 	page:TextStyle("Item level / enchant text", function() return cfg().infoStyle end, {})
 end
 
+local function BuildQuestMarkerPage(page)
+	page:Column(1)
+	local function arrow() return ns.db.misc.questArrow end
+	page:Header("Quest marker")
+	page:Check("Enabled", Getter(arrow, "enabled"), Setter(arrow, "enabled"))
+	page:Note("A small nameplate in the world on the quest you're actively tracking, or your corpse while you're dead, with the distance in yards, in place of Blizzard's marker. Off screen it becomes an arrow at the edge of the screen. It goes wherever Blizzard's marker would.", 76)
+	page:Slider("Height above the spot", 0, 300, 5, Getter(arrow, "height"), Setter(arrow, "height"))
+	page:Slider("Hide this close to an objective (yards)", 0, 100, 5, Getter(arrow, "hideYards"), Setter(arrow, "hideYards"))
+	page:Slider("Off-screen arrow: gap to screen edge", 20, 300, 5, Getter(arrow, "edgeMargin"), Setter(arrow, "edgeMargin"))
+	page:Slider("Arrow size", 12, 64, 1, Getter(arrow, "size"), Setter(arrow, "size"))
+	page:Color("Arrow color", Getter(arrow, "color"), Setter(arrow, "color"))
+	page:Check("Show quest name", Getter(arrow, "showName"), Setter(arrow, "showName"))
+	page:TextStyle("Quest marker text", function() return arrow().textStyle end)
+end
+
 local function BuildObjectivesPage(page)
 	local function cfg() return ns.db.objectives end
 	page:Column(1)
@@ -1643,7 +1664,7 @@ local function BuildObjectivesPage(page)
 	page:Slider("Scale", 0.5, 2, 0.05, Getter(cfg, "scale"), Setter(cfg, "scale"))
 	page:Header("Quests")
 	page:Check("Group quests by zone", Getter(cfg, "zoneGroups"), Setter(cfg, "zoneGroups"), true)
-	page:Note("Click the plus or minus on a zone to fold it. Right-click a quest to focus it or stop tracking it.", 36)
+	page:Note("Click the plus or minus on a zone to fold it. Click a quest to focus it (the quest marker and the map point at it); click again to take the focus off. Right-click for more. Clicking no longer opens the map: open it yourself with M.", 36)
 	page:Header("Look")
 	page:Check("Flat headers, bars and quest item buttons", Getter(cfg, "flat"), Setter(cfg, "flat"), true)
 	page:Note("Headers get a thin accent line instead of Blizzard's gradient; progress bars a flat fill with a 1px border.", 36)
@@ -1662,18 +1683,6 @@ local function BuildObjectivesPage(page)
 	page:Check("Mythic+", Getter(cfg, "hideMPlus"), Setter(cfg, "hideMPlus"))
 	page:Check("Other dungeons", Getter(cfg, "hideDungeon"), Setter(cfg, "hideDungeon"))
 	page:Note("Hidden means invisible (it stays where it is). New text sizes show on the tracker's next update or a /reload.", 36)
-	local function arrow() return ns.db.misc.questArrow end
-	page:Header("Quest marker")
-	if not ns.Modules.Loaded("questArrow") then page:Note("|cff999999The Quest Marker module is off. Turn it on in Modules (top right).|r", 36) end
-	page:Check("Enabled", Getter(arrow, "enabled"), Setter(arrow, "enabled"))
-	page:Note("A small nameplate in the world on the quest you're actively tracking, or your corpse while you're dead, with the distance in yards, in place of Blizzard's marker. Off screen it becomes an arrow at the edge of the screen. It goes wherever Blizzard's marker would.", 76)
-	page:Slider("Height above the spot", 0, 300, 5, Getter(arrow, "height"), Setter(arrow, "height"))
-	page:Slider("Hide this close to an objective (yards)", 0, 100, 5, Getter(arrow, "hideYards"), Setter(arrow, "hideYards"))
-	page:Slider("Off-screen arrow: gap to screen edge", 20, 300, 5, Getter(arrow, "edgeMargin"), Setter(arrow, "edgeMargin"))
-	page:Slider("Arrow size", 12, 64, 1, Getter(arrow, "size"), Setter(arrow, "size"))
-	page:Color("Arrow color", Getter(arrow, "color"), Setter(arrow, "color"))
-	page:Check("Show quest name", Getter(arrow, "showName"), Setter(arrow, "showName"))
-	page:TextStyle("Quest marker text", function() return arrow().textStyle end)
 	local function qt() return cfg().questText end
 	page:Header("Quest progress text")
 	page:Check("Move and size it", Getter(qt, "enabled"), Setter(qt, "enabled"))
@@ -2164,7 +2173,7 @@ local function BuildGeneralPage(page)
 	if not ns.Modules.Loaded("gameFonts") then page:Note("|cff999999The Game Fonts module is off. Turn it on in Modules (top right).|r", 36) end
 	page:Check("Use it for Blizzard's UI too", Getter(db, "globalFont"), Setter(db, "globalFont"))
 	page:Check("Names above characters (yours too)", Getter(db, "worldNameFont"), Setter(db, "worldNameFont"), true)
-	page:Note("Blizzard UI: tooltips, buff timers, spec names, character sheet, damage meter, zone text, settings. Names above characters need a full logout, not just a reload. Damage numbers: Miscellaneous > Damage Numbers.", 62)
+	page:Note("Blizzard UI: tooltips, buff timers, spec names, character sheet, damage meter, zone text, settings. Names above characters need a full logout, not just a reload. Damage numbers: Interface > Damage Numbers.", 62)
 	page:Slider("Scale", 0.5, 2, 0.05, Getter(db, "scale"), Setter(db, "scale"))
 	page:Check("Class-colored health", Getter(db, "classColorHealth"), Setter(db, "classColorHealth"))
 	page:Color("Health color (when not class colored)", function() return ns.db.colors.health end, function(c) ns.db.colors.health = c end)
@@ -2447,6 +2456,8 @@ StaticPopupDialogs["STINKIEUI_RESET"] = {
 -- Window
 ---------------------------------------------------------------------------
 -- Top-level pages; an entry with children opens a group in the list.
+-- The same four groups as the Modules screen (plus General and Nameplates), so a module and its
+-- page are found in the same place.
 local pages = {
 	{ "General", BuildGeneralPage },
 	{ "Unit Frames", children = {
@@ -2458,6 +2469,9 @@ local pages = {
 		{ "Party", BuildPartyPage },
 		{ "Party Targets", BuildPartyTargetsPage },
 		{ "Boss Frames", BuildBossPage },
+		{ "Castbars", BuildCastbarPage },
+		{ "Class Resource", BuildClassPowerPage },
+		{ "Combat Indicator", BuildCombatPage },
 	} },
 	{ "Nameplates", children = {
 		{ "General", BuildPlateGeneralPage },
@@ -2467,42 +2481,41 @@ local pages = {
 		{ "Icons", BuildPlateIconsPage },
 		{ "Auras & Units", BuildPlateAurasPage },
 	} },
-	{ "Action Bars", BuildActionBarPage },
-	{ "Cooldowns", BuildCooldownPage },
-	{ "PvP Assist", BuildArenaAssistPage },
-	{ "Arena Frames", BuildArenaPage },
-	{ "BGs & Blitz", children = {
-		{ "Blitz Map", BuildBlitzMapPage },
+	{ "PvP", children = {
+		{ "Arena Frames", BuildArenaPage },
+		{ "PvP Assist", BuildArenaAssistPage },
 		{ "Battleground Frames", BuildBGPage },
 		{ "BG Score", BuildBGScorePage },
 		{ "BG Timers", BuildBGTimersPage },
-	} },
-	{ "Character Sheet", BuildCharacterPage },
-	{ "Combat Indicator", BuildCombatPage },
-	{ "Match History", children = {
-		{ "History & Import", BuildMatchHistoryPage },
+		{ "Blitz Map", BuildBlitzMapPage },
+		{ "Match History", BuildMatchHistoryPage },
 		{ "Queue Time & MMR", BuildQueueInfoPage },
 	} },
-	{ "Castbars", BuildCastbarPage },
-	{ "Class Resource", BuildClassPowerPage },
-	{ "Chat", BuildChatPage },
-	{ "Combat Logging", BuildCombatLogPage },
-	{ "Cursor", BuildCursorPage },
-	{ "Miscellaneous", children = {
-		{ "GCD, APM & Decor", BuildMiscPage },
+	{ "Interface", children = {
+		{ "Action Bars", BuildActionBarPage },
+		{ "Cooldowns", BuildCooldownPage },
+		{ "Chat", BuildChatPage },
 		{ "Minimap", BuildMinimapPage },
-		{ "Damage Meter", BuildDamageMeterPage },
-		{ "Objectives", BuildObjectivesPage },
 		{ "Buff Frame", BuildBuffsPage },
 		{ "Tooltip", BuildTooltipPage },
-		{ "Window Skins", BuildSkinsPage },
+		{ "Objectives", BuildObjectivesPage },
+		{ "Character Sheet", BuildCharacterPage },
+		{ "Damage Meter", BuildDamageMeterPage },
 		{ "Damage Numbers", BuildDamageTextPage },
+		{ "Window Skins", BuildSkinsPage },
+	} },
+	{ "Quality of Life", children = {
+		{ "GCD History & APM", BuildMiscPage },
+		{ "Automation", BuildAutomationPage },
+		{ "Quest Marker", BuildQuestMarkerPage },
+		{ "Cursor", BuildCursorPage },
+		{ "Combat Logging", BuildCombatLogPage },
 		{ "Window Mover", BuildWindowMoverPage },
 	} },
 }
 
 local HEADER_H, WIN_H = 92, 700
-local NAV_STEP, NAV_CHILD_STEP = 20, 18 -- search box + 20 entries + the largest open group (8) fit the 588px column
+local NAV_STEP, NAV_CHILD_STEP = 20, 18 -- search box + 6 entries + the largest open group (11) fit the 588px column
 
 local function CreateWindow()
 	local w = CreateFrame("Frame", "StinkieUIOptions", UIParent)

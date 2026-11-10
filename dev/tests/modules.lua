@@ -233,7 +233,7 @@ elseif SCENARIO == "all-on" or SCENARIO == "all-off" then
 	end
 	play()
 	local idx = buildPages()
-	check("every page is still searchable", indexHas(idx, "Nameplates > Enemy") and indexHas(idx, "Chat") and indexHas(idx, "BGs & Blitz > Blitz Map"))
+	check("every page is still searchable", indexHas(idx, "Nameplates > Enemy") and indexHas(idx, "Interface > Chat") and indexHas(idx, "General") and indexHas(idx, "PvP > Blitz Map") and indexHas(idx, "Quality of Life > Automation") and indexHas(idx, "Quality of Life > Quest Marker"))
 	check("off banner " .. (on and "absent" or "shown"), (banners() > 0) == not on, banners())
 
 elseif SCENARIO == "one-off" then

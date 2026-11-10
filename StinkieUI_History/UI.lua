@@ -977,7 +977,7 @@ local function CreateWindow()
 	local close = FlatButton(band, "x", 22, function() w:Hide() end)
 	close:SetPoint("TOPRIGHT", -10, -10)
 	-- no delete buttons (an accidental click can't lose history); importing Rated Tracker data is
-	-- on the Stinkie UI options page (Match History > History & Import)
+	-- on the Stinkie UI options page (PvP > Match History)
 	w.loadAll = FlatButton(band, "Load all", 80, function()
 		D.loadAll = true
 		D.summaries = nil

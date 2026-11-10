@@ -230,7 +230,7 @@ local function ScanGroup()
 end
 
 local function ScanGuild()
-	if not (IsInGuild and IsInGuild()) or type(GetNumGuildMembers) ~= "function" then return end
+	if not (IsInGuild and IsInGuild()) or type(GetNumGuildMembers) ~= "function" or type(GetGuildRosterInfo) ~= "function" then return end
 	local n = GetNumGuildMembers()
 	if type(n) ~= "number" then return end
 	for i = 1, n do

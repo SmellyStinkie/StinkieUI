@@ -245,16 +245,10 @@ local function SecuredQuests()
 	return rule and C_GameRules and C_GameRules.IsGameRuleActive(rule) or false
 end
 
--- The one place this calls Blizzard UI code: nothing else opens the quest log. It runs from your own
--- click and never in combat, when the map can't open from an addon.
-function QL.OpenQuest(questID)
-	if InCombatLockdown() then return end
-	if SecuredQuests() then
-		QuestUtil.OpenQuestDetails(questID)
-	else
-		QuestMapFrame_OpenToQuestDetails(questID)
-	end
-end
+-- A click never opens the map or the quest log. An addon can only do that by running Blizzard's
+-- own code as the addon, and that code writes the quest log's settings: from then on Blizzard's
+-- map ran as Stinkie UI and its quest pins were blocked in combat. A click focuses the quest (the
+-- game's own call, like the dot); the map is yours to open.
 
 function QL.ClickOffer(offer)
 	if offer.kind == "OFFER" then ShowQuestOffer(offer.id) else ShowQuestComplete(offer.id) end
@@ -273,7 +267,6 @@ function QL.Menu(row, quest)
 		root:CreateTitle(quest.title)
 		local tracked = C_SuperTrack.GetSuperTrackedQuestID() == id
 		root:CreateButton(tracked and _G.STOP_SUPER_TRACK_QUEST or _G.SUPER_TRACK_QUEST, function() QL.ToggleTracked(id) end)
-		root:CreateButton(_G.OBJECTIVES_VIEW_IN_QUESTLOG, function() QL.OpenQuest(id) end)
 		if not SecuredQuests() and QuestUtil.CanRemoveQuestWatch() then
 			root:CreateButton(_G.OBJECTIVES_STOP_TRACKING, function() C_QuestLog.RemoveQuestWatch(id) end)
 		end
@@ -293,7 +286,7 @@ function QL.ClickQuest(row, quest, button)
 		RemoveAutoQuestPopUp(id)
 		ShowQuestComplete(id)
 	else
-		QL.OpenQuest(id)
+		QL.ToggleTracked(id)
 	end
 end
 

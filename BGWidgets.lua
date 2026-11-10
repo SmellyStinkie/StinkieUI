@@ -413,10 +413,17 @@ function W:UpdateRaidFrames()
 		HideRaidNow()
 	elseif raidHidden then
 		raidHidden = false
-		ns:RunOOC(function()
-			if CompactRaidFrameManager_UpdateContainerVisibility then CompactRaidFrameManager_UpdateContainerVisibility() end
-		end)
+		ns:RunOOC(function() W.ShowRaidAgain(container) end)
 	end
+end
+
+-- Put back what we hid, without running Blizzard's own update as the addon (it also re-lays out
+-- the party frames, and anything it writes would then count as ours). The same rule as Blizzard's:
+-- in a raid group, and raid frames not switched off in its raid manager. Out of a raid there's
+-- nothing to show, and Blizzard's next roster update settles it either way.
+function W.ShowRaidAgain(container)
+	if WantRaidHidden() or not IsInRaid() or container.enabled == false then return end
+	if not container:IsShown() then container:Show() end
 end
 
 function W:Init()

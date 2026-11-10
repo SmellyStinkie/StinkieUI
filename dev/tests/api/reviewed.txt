@@ -1,0 +1,53 @@
+# Names the API check flags that someone has looked at, each with the reason it's accepted.
+# Format: name  # reason. Anything the check flags that isn't here fails the tests.
+# "RISK:" marks a call that is known to be able to taint and is still to be fixed; the check
+# counts those on its summary line so they stay in view.
+
+# --- calls that can taint: still to fix ---
+# (none)
+
+# --- Blizzard Lua helpers that only compute or read; nothing of Blizzard's is written ---
+CreateColor  # builds a color object
+GenerateClosure  # builds a closure
+GetCreatureDifficultyColor  # returns a color for a level
+SetRaidTargetIconTexture  # sets tex coords on our own texture
+SetQuestTitleLevelAndDifficultyColor  # only builds the title text (tested for before use)
+PixelUtil.ConvertPixelsToUIForRegion  # math on our own region
+FCF_GetChatWindowInfo  # reads a chat window's saved settings
+PanelTemplates_GetSelectedTab  # reads which tab is selected
+GetInspectSpecialization  # reads the inspected unit's spec (tested for before use)
+EditModeManagerFrame:IsEditModeActive  # reads a flag (tested for before use)
+QuestUtil.CanRemoveQuestWatch  # reads a game rule
+GetCVar  # Lua wrapper over C_CVar
+GetCVarBool  # Lua wrapper over C_CVar
+GetCVarBitfield  # Lua wrapper over C_CVar
+SetCVar  # Lua wrapper over C_CVar; settings writes go through ns.Modules.Remember
+PlaySound  # Lua wrapper over the sound call
+
+# --- Blizzard functions made for addons to call ---
+RegisterStateDriver  # secure state drivers, out of combat
+UnregisterStateDriver  # secure state drivers, out of combat
+RegisterUnitWatch  # unit frames show and hide with their unit
+UnregisterUnitWatch  # unit frames show and hide with their unit
+StaticPopup_Show  # our own popups (STINKIEUI_*)
+StaticPopup_Hide  # hides the vendor confirm popup after we answer it, from a hook
+Settings.RegisterCanvasLayoutCategory  # registers our page in the game's AddOns settings
+Settings.RegisterAddOnCategory  # registers our page in the game's AddOns settings
+ColorPickerFrame:SetupColorPickerAndShow  # the game's color picker, opened from our options
+ColorPickerFrame:GetPreviousValues  # the game's color picker, read on cancel
+MenuUtil.CreateContextMenu  # the game's context menu, on a right-click of our quest row
+GameTooltip_SetDefaultAnchor  # places the tooltip for our unit frames
+GameTooltip:SetOwner  # tooltip widget method; a Blizzard mixin happens to define the same name
+GameTooltip:GetOwner  # tooltip widget method
+GameTooltip:GetUnit  # tooltip widget method
+GameTooltip:AddLine  # tooltip widget method
+ReloadUI  # reloads the interface on your click
+HideUIPanel  # closes the game's settings window when you click Open Stinkie UI in it
+ChatFrameUtil.TryInsertQuestLinkForQuestID  # shift-click a quest row to link it in chat
+QuestUtil.ShareQuest  # Share quest in our row's right-click menu
+
+# --- not in the game's lists, with the reason ---
+Fetch  # LibSharedMedia method (another addon's library, tested for before use)
+List  # LibSharedMedia method (another addon's library, tested for before use)
+HasSwingTimer  # method of Forever's swing timer frames; only called on those frames, which retail doesn't have
+IsOutOfRange  # method of Forever's swing timer frames; only called on those frames, which retail doesn't have

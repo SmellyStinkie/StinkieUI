@@ -3,3 +3,8 @@ __pycache__/
 .release/
 .DS_Store
 Thumbs.db
+
+# Personal AI assistant notes and settings: kept on this machine only
+CLAUDE.md
+CLAUDE.local.md
+.claude/

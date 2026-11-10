@@ -133,5 +133,12 @@ for name, arg, before in scenarios:
     passed, failed = passed + p, failed + f
 print("module scenarios: %d" % len(scenarios))
 
+# every game function, method and event the addon uses, against the real clients' lists
+sys.path.insert(0, HERE)
+import check_api
+p, f, lines = check_api.check()
+print("\n".join(lines))
+passed, failed = passed + p, failed + f
+
 print("\n%d passed, %d failed" % (passed, failed))
 sys.exit(1 if failed > 0 else 0)

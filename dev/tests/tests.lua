@@ -1119,21 +1119,25 @@ do
 
 	-- quest clicks
 	do
-		local opened, removed, shown
+		local opened, removed, shown, focused
 		stub(_G, "QuestMapFrame_OpenToQuestDetails", function(id) opened = id end)
+		stub(C_SuperTrack, "SetSuperTrackedQuestID", function(id) focused = id; tracked = id end)
 		stub(_G, "ShowQuestComplete", function(id) shown = id end)
 		stub(_G, "RemoveAutoQuestPopUp", function() end)
 		stub(_G, "IsModifiedClick", function() return false end)
 		stub(C_QuestLog, "RemoveQuestWatch", function(id) removed = id end)
 		QL.ClickQuest({}, { id = 1 }, "LeftButton")
-		check("click opens the quest", opened == 1)
-		opened = nil
+		check("click focuses the quest", focused == 1)
+		check("click never opens the map", opened == nil)
+		QL.ClickQuest({}, { id = 1 }, "LeftButton")
+		check("click again takes the focus off", focused == 0)
 		inCombat = true
 		QL.ClickQuest({}, { id = 1 }, "LeftButton")
 		inCombat = false
-		check("in combat it doesn't try", opened == nil)
+		check("works in combat too", focused == 1 and opened == nil)
 		QL.ClickQuest({}, { id = 2, autoComplete = true, complete = true }, "LeftButton")
 		check("auto-complete quest completes", shown == 2 and opened == nil)
+		tracked = 0 -- the checks below start with nothing focused
 	end
 
 	-- the focus button sets the quest the marker points at
@@ -3773,6 +3777,44 @@ do
 	lo, hi = f.Health:GetMinMaxValues()
 	check("back online: real health", hi == 1000)
 	flushErrors("offline")
+end
+
+-- One module's event handler failing doesn't stop the others
+do
+	local got = 0
+	ns:On("STINKIE_TEST_EVENT", function() error("first handler broke") end)
+	ns:On("STINKIE_TEST_EVENT", function(_, a) got = a end)
+	MOCK.errors = {}
+	MOCK.Fire("STINKIE_TEST_EVENT", 7)
+	check("later handlers still run", got == 7)
+	check("the error is still reported", #MOCK.errors == 1 and tostring(MOCK.errors[1]):find("first handler broke", 1, true) ~= nil)
+	MOCK.errors = {}
+end
+
+-- Raid frames come back without running Blizzard's update as the addon
+do
+	local W = ns.BGWidgets
+	local shows, called = 0, false
+	local box = { enabled = true, IsShown = function() return false end, Show = function() shows = shows + 1 end }
+	local oldRaid, oldUpdate = IsInRaid, rawget(_G, "CompactRaidFrameManager_UpdateContainerVisibility")
+	CompactRaidFrameManager_UpdateContainerVisibility = function() called = true end
+	local keepHide = ns.db.bgWidgets.hideRaidFrames
+	ns.db.bgWidgets.hideRaidFrames = false
+	IsInRaid = function() return false end
+	W.ShowRaidAgain(box)
+	check("not in a raid: nothing to show", shows == 0)
+	IsInRaid = function() return true end
+	box.enabled = false
+	W.ShowRaidAgain(box)
+	check("raid frames switched off in Blizzard's manager: left alone", shows == 0)
+	box.enabled = true
+	W.ShowRaidAgain(box)
+	check("in a raid: shown again", shows == 1)
+	check("Blizzard's update is never called", called == false)
+	IsInRaid = oldRaid
+	CompactRaidFrameManager_UpdateContainerVisibility = oldUpdate
+	ns.db.bgWidgets.hideRaidFrames = keepHide
+	flushErrors("raid frames back")
 end
 
 -- /stinkie taint

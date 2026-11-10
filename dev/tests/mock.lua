@@ -2,6 +2,17 @@
 -- Unknown globals resolve to a permissive stub; frames record text, shown state and scripts.
 MOCK = { unknownCalls = {}, time = 1000, timers = {}, events = {}, frames = {}, errors = {}, prints = {} }
 
+-- the game's xpcall passes extra arguments on to the function; plain Lua 5.1's doesn't
+do
+	local plain = xpcall
+	xpcall = function(fn, handler, ...)
+		local n = select("#", ...)
+		if n == 0 then return plain(fn, handler) end
+		local args = { ... }
+		return plain(function() return fn(unpack(args, 1, n)) end, handler)
+	end
+end
+
 local stubMT = {}
 local STUB = setmetatable({}, stubMT)
 stubMT.__index = function() return STUB end

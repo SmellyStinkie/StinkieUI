@@ -1,5 +1,6 @@
 # Publishes Stinkie UI when a version tag (like v0.20.0) is pushed:
-# builds the zip, then uploads it to CurseForge, Wago and GitHub Releases.
+# runs the tests, and only if they pass builds the zip and uploads it to CurseForge, Wago and
+# GitHub Releases.
 # A site whose secret isn't set is simply skipped.
 name: Release
 
@@ -12,7 +13,26 @@ permissions:
   contents: write # lets the workflow create the GitHub release
 
 jobs:
+  # the same checks as the Tests workflow; a tag whose tests fail is never published
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: pip install lupa cbor2
+
+      - name: Run the tests
+        run: python dev/tests/run.py
+
   release:
+    needs: tests
     runs-on: ubuntu-latest
     env:
       CF_API_KEY: ${{ secrets.CF_API_KEY }}

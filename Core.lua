@@ -1364,16 +1364,21 @@ function ns.Timed(key, fn)
 	end
 end
 
+-- Each handler runs on its own: an error in one module's handler is reported (with its stack, as
+-- it's raised inside the handler) and the other modules still get the event. Before this, the
+-- first error stopped every handler after it for that event.
+local function HandlerError(err) ns.Error(err) end
+
 eventFrame:SetScript("OnEvent", function(_, event, ...)
 	local list = handlers[event]
 	if list then
 		if profile.on then
 			local start = debugprofilestop()
-			for i = 1, #list do list[i](event, ...) end
+			for i = 1, #list do xpcall(list[i], HandlerError, event, ...) end
 			Account("events: " .. event, start)
 			return
 		end
-		for i = 1, #list do list[i](event, ...) end
+		for i = 1, #list do xpcall(list[i], HandlerError, event, ...) end
 	end
 end)
 

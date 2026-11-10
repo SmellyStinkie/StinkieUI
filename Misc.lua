@@ -272,7 +272,14 @@ function APM.ApplyKeys()
 	if not APM.keys then
 		if not want then return end
 		APM.keys = CreateFrame("Frame", nil, UIParent)
-		APM.keys:SetScript("OnUpdate", function() APM.PollKeys(GetTime()) end)
+		-- 50 times a second is enough to see a tap, and at high frame rates it's far fewer checks
+		local since = 0
+		APM.keys:SetScript("OnUpdate", function(_, dt)
+			since = since + dt
+			if since < 0.02 then return end
+			since = 0
+			APM.PollKeys(GetTime())
+		end)
 	end
 	if want and not APM.keysOn then APM.down = {} end
 	APM.keys:SetShown(want)

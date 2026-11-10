@@ -1,5 +1,14 @@
 # Stinkie UI changelog
 
+## 0.45.0
+- Options: the page list is regrouped so settings are easier to find. The groups are General, Unit Frames, Nameplates, PvP, Interface and Quality of Life. Search still finds every setting.
+- Options: the old Miscellaneous page is now two pages under Quality of Life: GCD History & APM, and Automation (decor, error messages, quests, vendors, battlegrounds). Quest Marker has its own page there too, and Match History is under PvP.
+- Objectives: clicking a quest in the zone-grouped quest list now focuses it, and clicking again takes the focus off. It no longer opens the map, and "View in quest log" is gone from the right-click menu. Opening the map from an addon is the likely cause of the "blocked" map pin errors in combat. Open the map yourself with M.
+- Battlegrounds: when Blizzard's raid frames come back after being hidden, Stinkie UI shows them itself instead of running Blizzard's update. This lowers the chance of "tainted by StinkieUI" errors.
+- An error in one part of Stinkie UI no longer stops the other parts from handling the same game event.
+- APM counter: the key press count uses less CPU.
+- Behind the scenes: every game function Stinkie UI calls is now checked against both game versions before a release, and a release only goes out if all tests pass.
+
 ## 0.44.0
 - New: APM counter, on the Miscellaneous page (now called GCD, APM & Decor). It shows your actions per minute over the last few seconds, with your average for the current or last fight next to it. Count your casts (auto attacks and auto shots left out) or every key press. Set the text size, color and outline, choose when it shows, and drag it with `/stinkie unlock`. It's off by default.
 - Match History: matches save again when the game hides names on the scoreboard. Your own line is found by its numbers, and your character name is kept from before the match. This also keeps the MMR on the queue display up to date.
