@@ -3689,6 +3689,56 @@ do
 end
 flushErrors("final score")
 
+-- Match recording when the game hides names, and when you leave early
+do
+	local R = ns.MatchRecorder
+	local SECRET = { __secret = true }
+	MOCK.bracket = "arena"
+	for _, sc in ipairs(MOCK.scores) do sc.stats = {} end
+	local saved = {}
+	for i, sc in ipairs(MOCK.scores) do saved[i] = { sc.name, sc.guid } end
+	-- every name and GUID hidden; your own line still comes by GUID
+	for _, sc in ipairs(MOCK.scores) do sc.name, sc.guid = SECRET, SECRET end
+	local mine = MOCK.scores[1]
+	local oldByGuid = C_PvP.GetScoreInfoByPlayerGuid
+	rawset(C_PvP, "GetScoreInfoByPlayerGuid", function(g) return g == "Player-1-ABC" and mine or nil end)
+	local oldName = UnitName
+	UnitName = function(u) if u == "player" then return SECRET end return oldName(u) end
+	local before = #D.Archive().records
+	MOCK.Fire("PVP_MATCH_ACTIVE")
+	MOCK.Fire("PVP_MATCH_COMPLETE", 0, 312)
+	MOCK.Advance(1.1)
+	check("hidden names: still saved", #D.Archive().records == before + 1 and StinkieUIDB.lastRecord.status == "saved",
+		StinkieUIDB.lastRecord.status .. " " .. tostring(StinkieUIDB.lastRecord.why))
+	check("hidden names: your character from before", StinkieUIDB.lastRecord.char == "Stinkie-Tichondrius", tostring(StinkieUIDB.lastRecord.char))
+	UnitName = oldName
+	rawset(C_PvP, "GetScoreInfoByPlayerGuid", oldByGuid)
+	for i, sc in ipairs(MOCK.scores) do sc.name, sc.guid = saved[i][1], saved[i][2] end
+	-- rated, waiting for the rating change, and you leave: what was read is saved
+	local oldChg = {}
+	for i, sc in ipairs(MOCK.scores) do oldChg[i] = { sc.ratingChange, sc.mmrChange }; sc.ratingChange, sc.mmrChange = 0, 0 end
+	before = #D.Archive().records
+	MOCK.Fire("PVP_MATCH_ACTIVE")
+	MOCK.Fire("PVP_MATCH_COMPLETE", 0, 312)
+	MOCK.Advance(2.1)
+	check("waiting for the rating change", #D.Archive().records == before and R.state.candidate ~= nil)
+	MOCK.Fire("PLAYER_ENTERING_WORLD", false, false)
+	check("left during the wait: saved anyway", #D.Archive().records == before + 1 and R.state.pending == false)
+	for i, sc in ipairs(MOCK.scores) do sc.ratingChange, sc.mmrChange = oldChg[i][1], oldChg[i][2] end
+	-- unreadable, and you leave: the reason is kept
+	local oldN = GetNumBattlefieldScores
+	GetNumBattlefieldScores = function() return 0 end
+	MOCK.Fire("PVP_MATCH_ACTIVE")
+	MOCK.Fire("PVP_MATCH_COMPLETE", 0, 312)
+	MOCK.Advance(3.1)
+	check("each failed try is noted", StinkieUIDB.lastRecord.status == "retrying" and StinkieUIDB.lastRecord.why == "no scores yet")
+	MOCK.Fire("PLAYER_ENTERING_WORLD", false, false)
+	check("left before it could read: says why", StinkieUIDB.lastRecord.status:find("left before", 1, true) and StinkieUIDB.lastRecord.why == "no scores yet")
+	GetNumBattlefieldScores = oldN
+	MOCK.bracket = nil
+	flushErrors("recorder hidden")
+end
+
 -- Party frames in Solo Shuffle (a raid-type group): the raid rule doesn't apply in arenas
 do
 	local drivers = {}
@@ -3723,6 +3773,93 @@ do
 	lo, hi = f.Health:GetMinMaxValues()
 	check("back online: real health", hi == 1000)
 	flushErrors("offline")
+end
+
+-- /stinkie taint
+do
+	local old = issecurevariable
+	WorldMapFrame = WorldMapFrame or {}
+	WorldMapFrame.pinPools = { quest = { active = {} } }
+	WorldMapFrame.SUIMove = true
+	BlizzardThing = 1
+	issecurevariable = function(t, k)
+		if k == nil then k, t = t, nil end
+		if (t == WorldMapFrame.pinPools.quest and k == "active") or (t == WorldMapFrame and k == "SUIMove") or (t == nil and k == "BlizzardThing") then
+			return false, "StinkieUI"
+		end
+		return true
+	end
+	local found, own = ns.TaintScan(4)
+	local text = table.concat(found, " ")
+	check("taint scan finds a tainted Blizzard value", text:find("WorldMapFrame.pinPools.quest.active", 1, true) ~= nil, text)
+	check("taint scan finds a tainted global", text:find("_G.BlizzardThing", 1, true) ~= nil)
+	check("our own markers counted apart", own == 1 and not text:find("SUIMove", 1, true))
+	SlashCmdList.STINKIEUI("taint")
+	issecurevariable = nil
+	check("taint scan without the API", ns.TaintScan(4) == nil)
+	issecurevariable, BlizzardThing = old, nil
+	WorldMapFrame.pinPools, WorldMapFrame.SUIMove = nil, nil
+	flushErrors("taint")
+end
+
+-- APM
+do
+	local APM, c = ns.Misc.APM, ns.db.misc.apm
+	check("APM off by default", ns.defaults.misc.apm.enabled == false and not APM.frame:IsShown())
+	APM.times = {}
+	for i = 1, 10 do APM.Add(116858, 100 + i) end
+	APM.Add(6603, 105)
+	APM.Add({ __secret = true }, 106)
+	check("APM: 11 casts in 30s = 22", APM.Current(111) == 22)
+	check("APM: old casts drop out", APM.Current(135) == 14 and APM.Current(200) == 0)
+	APM.StartFight(300)
+	for i = 1, 20 do APM.Add(686, 300 + i) end
+	check("fight average", APM.FightAverage(320) == 60)
+	check("too early: no fight number", (function() APM.StartFight(400); return APM.FightAverage(402) == nil end)())
+	APM.StartFight(300); APM.fightCount = 20
+	APM.EndFight(330)
+	check("last fight kept", APM.FightAverage(500) == 40 and APM.fightStart == nil)
+	check("text", APM.Text(500):find("APM 0", 1, true) and APM.Text(500):find("fight 40", 1, true))
+	c.label = false; c.showFight = false
+	check("text without label or fight", APM.Text(500) == "0")
+	c.label = true; c.showFight = true
+	c.enabled = true
+	ns:Refresh()
+	check("on: shows", APM.frame:IsShown())
+	c.where = "pvp"
+	APM.UpdateShown()
+	check("pvp only: hidden in the world", not APM.frame:IsShown())
+	APM.times = {}
+	ns:SetLocked(false)
+	check("unlocked: a sample", APM.frame:IsShown() and APM.frame.text._text:find("APM 42", 1, true))
+	ns:SetLocked(true)
+	-- key presses: polled, no keyboard frame
+	local held, focus = {}, nil
+	local oldDown, oldFocus = IsKeyDown, GetCurrentKeyBoardFocus
+	IsKeyDown = function(k) return held[k] or false end
+	GetCurrentKeyBoardFocus = function() return focus end
+	APM.keyList = nil
+	APM.times, APM.down = {}, {}
+	held["1"] = true; APM.PollKeys(600); APM.PollKeys(600.1)
+	held["1"] = nil; APM.PollKeys(600.2)
+	held["1"] = true; held.W = true; held.LSHIFT = true; APM.PollKeys(600.3)
+	check("keys: held key once, modifiers skipped", #APM.times == 3, #APM.times)
+	held = {}; APM.PollKeys(601)
+	focus = {}; held.H = true; APM.PollKeys(602)
+	check("keys: typing in chat doesn't count", #APM.times == 3)
+	focus = nil; held = {}
+	c.count = "keys"
+	ns:Refresh()
+	check("keys on: polling", APM.keysOn and APM.keys:IsShown() and APM.keys:GetScript("OnUpdate") ~= nil)
+	check("no keyboard frame", not (APM.keys.keyboardEnabled))
+	c.count = "casts"
+	ns:Refresh()
+	check("keys off: polling stops", not APM.keysOn and not APM.keys:IsShown())
+	IsKeyDown, GetCurrentKeyBoardFocus = oldDown, oldFocus
+	c.enabled, c.where = false, "always"
+	ns:Refresh()
+	check("off: hidden", not APM.frame:IsShown())
+	flushErrors("apm")
 end
 
 -- Quest progress text

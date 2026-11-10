@@ -654,6 +654,17 @@ ns.defaults = {
 			ignore = { 6603, 75 }, -- Auto Attack, Auto Shot
 			point = { "BOTTOM", 0, 330 },
 		},
+		-- your casts per minute
+		apm = {
+			enabled = false,
+			count = "casts", -- casts | keys
+			window = 30, -- seconds counted for the number, scaled to a minute
+			where = "always", -- always | combat | pvp
+			label = true, -- "APM 42" or just "42"
+			showFight = true, -- the current (or last) fight's average next to it
+			textStyle = text(18),
+			point = { "BOTTOM", 0, 290 },
+		},
 		decor = {
 			enabled = false,
 			maxGold = 0, -- 0: no limit
@@ -1827,6 +1838,72 @@ ns.NeedsRestart = NeedsRestart
 SLASH_STINKIERELOAD1 = "/rl"
 SlashCmdList.STINKIERELOAD = function() ReloadUI() end
 
+---------------------------------------------------------------------------
+-- /stinkie taint: which values in Blizzard's own tables Stinkie UI wrote (the game marks each one
+-- with who wrote it). Blizzard code that reads one of them runs as Stinkie UI from then on, which
+-- is what "blocked" and "tainted by StinkieUI" errors mean. Read-only: it only looks.
+---------------------------------------------------------------------------
+local TAINT_ROOTS = { "WorldMapFrame", "QuestMapFrame", "ObjectiveTrackerFrame", "ObjectiveTrackerManager",
+	"EditModeManagerFrame", "UIParentPanelManager", "UIPanelWindows", "UISpecialFrames", "GameTooltip", "UIErrorsFrame",
+	"FADEFRAMES", "FLASHFRAMES", "ChatFrame1", "ChatFrame2", "ChatFrame1Tab", "ChatFrame2Tab", "GeneralDockManager", "EventRegistry" }
+local OWN_KEY = { "^SUI", "^StinkieUI", "^STINKIEUI", "^SLASH_STINKIEUI" }
+
+local function OwnKey(k)
+	if type(k) ~= "string" then return false end
+	for _, p in ipairs(OWN_KEY) do if k:find(p) then return true end end
+	return false
+end
+
+function ns.TaintScan(maxDepth, budget)
+	local check = _G.issecurevariable
+	if not check then return nil, "this client has no issecurevariable" end
+	local found, own, seen, left = {}, 0, {}, budget or 300000
+	local addon = "StinkieUI"
+	local function walk(t, path, depth)
+		if seen[t] or left <= 0 then return end
+		seen[t] = true
+		for k, v in pairs(t) do
+			left = left - 1
+			if left <= 0 then return end
+			local kt = type(k)
+			if kt == "string" or kt == "number" then
+				local ok, secure, who = pcall(check, t, k)
+				if ok and not secure and who == addon then
+					if OwnKey(k) then own = own + 1 else found[#found + 1] = path .. "." .. tostring(k) end
+				end
+				if type(v) == "table" and depth < maxDepth and not OwnKey(k) then
+					walk(v, path .. "." .. tostring(k), depth + 1)
+				end
+			end
+		end
+	end
+	for _, name in ipairs(TAINT_ROOTS) do
+		local t = rawget(_G, name)
+		if type(t) == "table" then walk(t, name, 1) end
+	end
+	-- Blizzard globals (ours have our own names)
+	for k in pairs(_G) do
+		if type(k) == "string" and not OwnKey(k) then
+			local ok, secure, who = pcall(check, k)
+			if ok and not secure and who == addon then found[#found + 1] = "_G." .. k end
+		end
+	end
+	table.sort(found)
+	return found, own
+end
+
+function ns.PrintTaint()
+	local found, own = ns.TaintScan(4)
+	if not found then ns:Print("Taint check: " .. tostring(own)) return end
+	if #found == 0 then
+		ns:Print(("Taint check: nothing of Blizzard's is marked as written by Stinkie UI (%d of our own markers, harmless)."):format(own))
+		return
+	end
+	ns:Print(("Taint check: %d Blizzard values written by Stinkie UI. Paste these to Stinkie:"):format(#found))
+	for i = 1, math.min(#found, 30) do print("  " .. found[i]) end
+	if #found > 30 then print(("  ... and %d more"):format(#found - 30)) end
+end
+
 SLASH_STINKIEUI1 = "/stinkie"
 SLASH_STINKIEUI2 = "/sui"
 SLASH_STINKIEUI3 = "/st"
@@ -1857,6 +1934,8 @@ SlashCmdList.STINKIEUI = function(msg)
 		ns.BlitzMap.Debug()
 	elseif msg == "tooltip" then
 		ns.Tooltip.Debug()
+	elseif msg == "taint" then
+		ns.PrintTaint()
 	elseif msg == "dmg" then
 		if ns.DamageText then ns.DamageText.Print() end
 	elseif msg == "cpu" then

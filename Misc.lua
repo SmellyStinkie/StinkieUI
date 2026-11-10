@@ -1,5 +1,5 @@
 -- StinkieUI: miscellaneous. GCD History (a strip of the spells you just cast, sliding along as
--- you cast more), Auto-Confirm Decor Purchases (skips the "are you sure" popup when buying
+-- you cast more), APM (your casts per minute), Auto-Confirm Decor Purchases (skips the "are you sure" popup when buying
 -- housing decor from a vendor) and small errands: quests, repairs, junk and releasing in PvP.
 local _, ns = ...
 
@@ -141,11 +141,11 @@ local function Animate(self, elapsed)
 	end
 end
 
-local function ShouldShow()
-	local c = gcfg()
-	if ns.unlocked or MISC.testing then return true end
-	if c.where == "combat" then return UnitAffectingCombat("player") and true or false end
-	if c.where == "pvp" then
+-- where: always | combat | pvp
+local function ShouldShow(where, forced)
+	if forced then return true end
+	if where == "combat" then return UnitAffectingCombat("player") and true or false end
+	if where == "pvp" then
 		local _, kind = IsInInstance()
 		return kind == "arena" or kind == "pvp"
 	end
@@ -155,7 +155,7 @@ end
 local function UpdateShown()
 	if not holder then return end
 	holder.SUIActive = gcfg().enabled -- no mover box while it's off
-	holder:SetShown(gcfg().enabled and ShouldShow())
+	holder:SetShown(gcfg().enabled and ShouldShow(gcfg().where, ns.unlocked or MISC.testing))
 end
 MISC.UpdateGCDShown = UpdateShown
 
@@ -208,6 +208,164 @@ local function InitGCD()
 	ns:On("PLAYER_ENTERING_WORLD", UpdateShown)
 	table.insert(ns.lockCallbacks, UpdateShown)
 	UpdateShown()
+end
+
+---------------------------------------------------------------------------
+-- APM: your actions per minute, counted from your own successful casts (auto attacks and auto
+-- shots left out) or from your key presses. The number is the casts of the last few seconds scaled to a minute; next to it
+-- the average over the current fight, or the last one once it's over.
+---------------------------------------------------------------------------
+local function apcfg() return ns.db.misc.apm end
+local APM = { times = {} }
+MISC.APM = APM
+local AUTO = { [6603] = true, [75] = true } -- Auto Attack, Auto Shot
+APM.SAMPLE = "42"
+APM.SAMPLE_FIGHT = "38"
+
+function APM.Add(spellID, now)
+	if spellID ~= nil and not issecret(spellID) and AUTO[spellID] then return end
+	APM.times[#APM.times + 1] = now
+	if APM.fightStart then APM.fightCount = APM.fightCount + 1 end
+end
+
+-- Key presses. The game only hands keys to an addon frame by routing them through it, and a key
+-- bind run from there runs as the addon: protected actions then fail (the world map in combat)
+-- and Blizzard code it touches is tainted. So no keyboard frame: each frame we ask whether the
+-- keys people bind are down, and count a key when it goes down. A held key counts once; Shift,
+-- Ctrl and Alt alone aren't in the list. While you type in a chat box nothing is counted.
+local function KeyList()
+	local keys = {}
+	for c = string.byte("A"), string.byte("Z") do keys[#keys + 1] = string.char(c) end
+	for i = 0, 9 do keys[#keys + 1] = tostring(i); keys[#keys + 1] = "NUMPAD" .. i end
+	for i = 1, 12 do keys[#keys + 1] = "F" .. i end
+	for _, k in ipairs({ "SPACE", "TAB", "ENTER", "BACKSPACE", "ESCAPE", "UP", "DOWN", "LEFT", "RIGHT",
+		"INSERT", "DELETE", "HOME", "END", "PAGEUP", "PAGEDOWN", "NUMPADPLUS", "NUMPADMINUS",
+		"NUMPADMULTIPLY", "NUMPADDIVIDE", "NUMPADDECIMAL", "-", "=", "[", "]", ";", "'", ",", ".", "/",
+		"`", "\\", "BUTTON3", "BUTTON4", "BUTTON5" }) do keys[#keys + 1] = k end
+	-- a name this client doesn't know is dropped once, here
+	local ok = {}
+	for _, k in ipairs(keys) do
+		local fine, down = pcall(IsKeyDown, k)
+		if fine and (down == true or down == false or down == nil) then ok[#ok + 1] = k end
+	end
+	return ok
+end
+
+APM.down = {}
+
+function APM.PollKeys(now)
+	if not APM.keyList then APM.keyList = KeyList() end
+	local typing = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
+	local down = APM.down
+	for _, k in ipairs(APM.keyList) do
+		local d = IsKeyDown(k) and true or false
+		if d and not down[k] and not typing then APM.Add(nil, now) end
+		down[k] = d or nil
+	end
+end
+
+local function WantKeys() return apcfg().enabled and apcfg().count == "keys" end
+
+-- its own frame, so polling stops whenever key presses are off (no combat rules involved)
+function APM.ApplyKeys()
+	local want = WantKeys() and true or false
+	if not APM.keys then
+		if not want then return end
+		APM.keys = CreateFrame("Frame", nil, UIParent)
+		APM.keys:SetScript("OnUpdate", function() APM.PollKeys(GetTime()) end)
+	end
+	if want and not APM.keysOn then APM.down = {} end
+	APM.keys:SetShown(want)
+	APM.keysOn = want
+end
+
+function APM.Current(now)
+	local t, window = APM.times, apcfg().window
+	local cutoff = now - window
+	while t[1] and t[1] < cutoff do table.remove(t, 1) end
+	return math.floor(#t * 60 / window + 0.5)
+end
+
+-- nil for the first few seconds of a fight, when one cast would read as a huge number
+function APM.FightAverage(now)
+	if not APM.fightStart then return APM.lastFight end
+	local secs = now - APM.fightStart
+	if secs < 5 then return APM.lastFight end
+	return math.floor(APM.fightCount * 60 / secs + 0.5)
+end
+
+function APM.StartFight(now) APM.fightStart, APM.fightCount = now, 0 end
+function APM.EndFight(now)
+	if not APM.fightStart then return end
+	local secs = now - APM.fightStart
+	if secs >= 5 then APM.lastFight = math.floor(APM.fightCount * 60 / secs + 0.5) end
+	APM.fightStart = nil
+end
+
+function APM.Text(now)
+	local c = apcfg()
+	local cur, fight
+	if ns.unlocked and #APM.times == 0 then
+		cur, fight = APM.SAMPLE, APM.SAMPLE_FIGHT -- something to place it by
+	else
+		cur, fight = APM.Current(now), APM.FightAverage(now)
+	end
+	local s = (c.label and "APM " or "") .. cur
+	if c.showFight and fight then s = s .. "  |cff999999fight " .. fight .. "|r" end
+	return s
+end
+
+function APM.Paint()
+	if not APM.frame then return end
+	APM.frame.text:SetText(APM.Text(GetTime()))
+end
+
+function APM.Layout()
+	local f, c = APM.frame, apcfg()
+	ns.ApplyText(f.text, c.textStyle)
+	local size = c.textStyle.size or 16
+	f:SetSize(size * 8, size + 8)
+	f.text:ClearAllPoints()
+	f.text:SetPoint("CENTER")
+	ns:ApplyPoint(f, c.point)
+end
+
+function APM.UpdateShown()
+	if not APM.frame then return end
+	local on = apcfg().enabled
+	APM.frame.SUIActive = on
+	APM.frame:SetShown(on and ShouldShow(apcfg().where, ns.unlocked) or false)
+	APM.Paint()
+end
+
+local function InitAPM()
+	local f = CreateFrame("Frame", "StinkieUI_APM", UIParent)
+	f:SetFrameStrata("MEDIUM")
+	f.text = f:CreateFontString(nil, "OVERLAY")
+	APM.frame = f
+	APM.Layout()
+	ns:RegisterMover("apm", f, "APM",
+		function() return apcfg().point end,
+		function(p) apcfg().point = p end)
+	-- the number moves while you're idle too (old casts drop out), so repaint twice a second
+	local acc = 0
+	f:SetScript("OnUpdate", function(_, dt)
+		acc = acc + dt
+		if acc < 0.5 then return end
+		acc = 0
+		APM.Paint()
+	end)
+	local events = CreateFrame("Frame")
+	events:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+	events:SetScript("OnEvent", function(_, _, unit, _, spellID)
+		if unit == "player" and apcfg().enabled and apcfg().count ~= "keys" then APM.Add(spellID, GetTime()) end
+	end)
+	ns:On("PLAYER_REGEN_DISABLED", function() APM.StartFight(GetTime()); APM.UpdateShown() end)
+	ns:On("PLAYER_REGEN_ENABLED", function() APM.EndFight(GetTime()); APM.UpdateShown() end)
+	ns:On("PLAYER_ENTERING_WORLD", APM.UpdateShown)
+	table.insert(ns.lockCallbacks, APM.UpdateShown)
+	APM.UpdateShown()
+	APM.ApplyKeys()
 end
 
 ---------------------------------------------------------------------------
@@ -432,6 +590,7 @@ end
 ---------------------------------------------------------------------------
 function MISC:Init()
 	InitGCD()
+	InitAPM()
 	InitDecor()
 	InitAuto()
 end
@@ -446,6 +605,11 @@ function MISC:Refresh()
 		ns.IconBorder(e.frame)
 	end
 	UpdateShown()
+	if APM.frame then
+		APM.Layout()
+		APM.UpdateShown()
+		APM.ApplyKeys()
+	end
 end
 
 ns:RegisterModule("Misc", MISC)

@@ -143,7 +143,19 @@ end
 ---------------------------------------------------------------------------
 -- realm names the way the scoreboard writes them: spaces removed ("Area52", "Mal'Ganis")
 function R.Realm(r) return (tostring(r or ""):gsub("%s", "")) end
-local function MyRealm() return R.Realm(GetRealmName and GetRealmName() or "") end
+-- Your own name and realm, kept from when they were readable: in a match the game can hide them,
+-- and a hidden name can't be joined into the character key or compared.
+local function MyRealm()
+	local r = GetRealmName and GetRealmName()
+	if readable(r) and r ~= "" then R.myRealm = R.Realm(r) end
+	return R.myRealm or ""
+end
+local function MyName()
+	local n = UnitName("player")
+	if readable(n) then R.myName = n end
+	return R.myName
+end
+R.MyName = MyName
 
 local specByClassAndName = {}
 local function SpecID(classID, specName)
@@ -288,7 +300,7 @@ function R.Read(statNames)
 	local n = GetNumBattlefieldScores() or 0
 	if n == 0 then return nil, "no scores yet" end
 	local myGUID = UnitGUID("player")
-	local myName = UnitName("player")
+	local myName = MyName()
 	local players, me = {}, nil
 	for i = 1, n do
 		local s = C_PvP.GetScoreInfo(i)
@@ -316,7 +328,20 @@ function R.Read(statNames)
 			if isMe and not me then me = #players end
 		end
 	end
+	-- names and GUIDs on the scoreboard can be hidden: ask for your own line and find it by its numbers
+	if not me and C_PvP.GetScoreInfoByPlayerGuid and readable(myGUID) then
+		local ok, s = pcall(C_PvP.GetScoreInfoByPlayerGuid, myGUID)
+		if ok and s and readable(s.damageDone) and readable(s.healingDone) then
+			local hits = {}
+			for i, p in ipairs(players) do
+				if p.dmg == s.damageDone and p.heal == s.healingDone and p.kb == s.killingBlows
+					and p.class == ClassID(s.classToken) then hits[#hits + 1] = i end
+			end
+			if #hits == 1 then me = hits[1] end
+		end
+	end
 	if not me then return nil, "you aren't on the scoreboard yet" end
+	if not MyName() then return nil, "your name is hidden" end
 	local mine = players[me]
 	local myTeam = GetBattlefieldArenaFaction and GetBattlefieldArenaFaction() or mine.team
 	if bracket == "arena" or bracket == "skirmish" then
@@ -363,7 +388,7 @@ function R.Read(statNames)
 	pcall(function() hero = C_ClassTalents.GetActiveHeroTalentSpec() end)
 	local m = {
 		t = time(),
-		char = UnitName("player") .. "-" .. MyRealm(),
+		char = MyName() .. "-" .. MyRealm(),
 		bracket = bracket,
 		map = readable(instName) and instName or "?",
 		mapID = readable(instanceID) and instanceID or nil,
@@ -436,7 +461,7 @@ function R.RememberMMR(m)
 	if m.spec then put(m.bracket .. ":" .. m.spec) end
 end
 
-function R.MyChar() return UnitName("player") .. "-" .. MyRealm() end
+function R.MyChar() return (MyName() or "?") .. "-" .. MyRealm() end
 
 -- what happened to the last match, kept in the saved variables to read when a match goes missing
 function R.Note(status, m, why)
@@ -486,6 +511,22 @@ function R.HasChanges(m)
 end
 
 local state = { done = false, tries = 0 }
+R.state = state
+R.MAX_TRIES = 45
+
+local function Reset() state.done, state.pending, state.tries, state.candidate = false, false, 0, nil end
+
+local function Finish(m)
+	state.done, state.pending, state.candidate = true, false, nil
+	local key = R.BRACKET_SETTING[m.bracket]
+	-- queue time (waiting outside other matches only), taken even if this bracket isn't saved
+	local queued = ns.QueueInfo and ns.QueueInfo.TakeQueue and ns.QueueInfo.TakeQueue(m.bracket)
+	if key and cfg()[key] == false then R.Note("bracket off", m) return end
+	if queued and not m.queue then m.queue = queued end
+	R.Note("saved", m)
+	R.Save(m)
+end
+R.Finish = Finish
 
 local function TryRecord()
 	if state.done or not state.pending then return end
@@ -494,25 +535,20 @@ local function TryRecord()
 	local ok, m, why = pcall(R.Read, box.statNames)
 	-- rated: the game fills in rating and MMR changes a moment after the scoreboard appears.
 	-- Saved too early, a win or loss looked like +0. Wait for them (up to ~8 s), then save anyway.
-	if ok and m and R.RATED[m.bracket] and state.tries < 8 and not R.HasChanges(m) then
+	-- What was read so far is kept, so leaving the match during the wait still saves it.
+	local waitOk, waiting = pcall(function() return m and R.RATED[m.bracket] and state.tries < 8 and not R.HasChanges(m) end)
+	if ok and m and waitOk and waiting then
+		state.candidate = m
 		RequestBattlefieldScoreData()
 		C_Timer.After(1, TryRecord)
 		return
 	end
-	if ok and m then
-		state.done, state.pending = true, false
-		local key = R.BRACKET_SETTING[m.bracket]
-		-- queue time (waiting outside other matches only), taken even if this bracket isn't saved
-		local queued = ns.QueueInfo and ns.QueueInfo.TakeQueue and ns.QueueInfo.TakeQueue(m.bracket)
-		if key and cfg()[key] == false then R.Note("bracket off", m) return end
-		if queued and not m.queue then m.queue = queued end
-		R.Note("saved", m)
-		R.Save(m)
-		return
-	end
+	if ok and m then return Finish(m) end
 	if not ok then why = m end
 	R.lastFailure = why
-	if state.tries < 20 then
+	-- written each time, so a match that went missing says why in the saved variables
+	R.Note("retrying", nil, why)
+	if state.tries < R.MAX_TRIES then
 		C_Timer.After(1, TryRecord)
 	else
 		state.pending = false
@@ -520,11 +556,22 @@ local function TryRecord()
 		ns:Print("Match History: couldn't read the final scoreboard (" .. tostring(why) .. ").")
 	end
 end
+R.TryRecord = TryRecord
 
 function R:Init()
-	ns:On("PVP_MATCH_ACTIVE", function() state.done, state.pending, state.tries = false, false, 0 end)
+	MyName(); MyRealm()
+	ns:On("PVP_MATCH_ACTIVE", Reset)
 	ns:On("PLAYER_ENTERING_WORLD", function()
-		if not (C_PvP.IsMatchComplete and C_PvP.IsMatchComplete()) then state.done, state.pending, state.tries = false, false, 0 end
+		MyName(); MyRealm()
+		if C_PvP.IsMatchComplete and C_PvP.IsMatchComplete() then return end
+		-- left while waiting for the rating changes: save what was read
+		if state.pending and state.candidate and not state.done then
+			local ok, err = pcall(Finish, state.candidate)
+			if not ok then ns.Error(err) end
+		elseif state.pending and not state.done then
+			R.Note("left before the scoreboard could be read", nil, R.lastFailure)
+		end
+		Reset()
 	end)
 	ns:On("PVP_MATCH_COMPLETE", function()
 		if not cfg().enabled or state.done or state.pending then return end

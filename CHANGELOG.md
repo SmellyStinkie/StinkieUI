@@ -1,5 +1,11 @@
 # Stinkie UI changelog
 
+## 0.44.0
+- New: APM counter, on the Miscellaneous page (now called GCD, APM & Decor). It shows your actions per minute over the last few seconds, with your average for the current or last fight next to it. Count your casts (auto attacks and auto shots left out) or every key press. Set the text size, color and outline, choose when it shows, and drag it with `/stinkie unlock`. It's off by default.
+- Match History: matches save again when the game hides names on the scoreboard. Your own line is found by its numbers, and your character name is kept from before the match. This also keeps the MMR on the queue display up to date.
+- Match History: leaving a rated match while it waits for the rating change no longer loses the match. It saves what it has read. It also tries for longer, and notes why if a match can't be read.
+- New: `/stinkie taint` lists the Blizzard values Stinkie UI has changed. Paste it with "blocked" or "tainted by StinkieUI" errors.
+
 ## 0.43.1
 - New: move and size the yellow quest progress text ("Boars slain: 3/10"). Under Objectives > Quest progress text, tick "Move and size it" to show those messages in their own box, with its own text size, color, outline and time on screen. Drag it with `/stinkie unlock`. Red error messages stay where Blizzard puts them.
 - Objectives: hovering a quest in the zone-grouped quest list shows your party's progress on it again when you're in a group.

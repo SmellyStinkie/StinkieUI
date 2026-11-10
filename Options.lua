@@ -1154,6 +1154,18 @@ local function BuildMiscPage(page)
 	page:Position(nil, function() return "gcdHistory" end)
 	page:TextList("Ignored spells", 90, function() return SpellListText(gcd().ignore) end,
 		function(text) gcd().ignore = ParseSpellList(text) end, "One spell ID or name per line. Auto Attack and Auto Shot are ignored by default.")
+	local function apm() return ns.db.misc.apm end
+	page:Header("APM")
+	page:Check("Enabled", Getter(apm, "enabled"), Setter(apm, "enabled"))
+	page:Note("Actions per minute over the last few seconds, scaled to a minute.", 22)
+	page:Choice("Count", { { "casts", "Casts" }, { "keys", "Key presses" } }, Getter(apm, "count"), Setter(apm, "count"))
+	page:Note("Casts: your successful casts, without auto attacks and auto shots. Key presses: every key you press, movement too; a held key counts once and Shift, Ctrl and Alt alone don't count. Typing in chat doesn't count.", 76)
+	page:Slider("Seconds counted", 10, 60, 5, Getter(apm, "window"), Setter(apm, "window"))
+	page:Choice("Show", { { "always", "Always" }, { "combat", "In combat" }, { "pvp", "Arena + BGs" } }, Getter(apm, "where"), Setter(apm, "where"))
+	page:Check("\"APM\" label", Getter(apm, "label"), Setter(apm, "label"))
+	page:Check("Fight average next to it", Getter(apm, "showFight"), Setter(apm, "showFight"))
+	page:TextStyle("APM text", function() return apm().textStyle end)
+	page:Position(nil, function() return "apm" end)
 
 	page:Column(2)
 	page:Header("Auto-Confirm Decor Purchases")
@@ -2477,7 +2489,7 @@ local pages = {
 	{ "Combat Logging", BuildCombatLogPage },
 	{ "Cursor", BuildCursorPage },
 	{ "Miscellaneous", children = {
-		{ "GCD History & Decor", BuildMiscPage },
+		{ "GCD, APM & Decor", BuildMiscPage },
 		{ "Minimap", BuildMinimapPage },
 		{ "Damage Meter", BuildDamageMeterPage },
 		{ "Objectives", BuildObjectivesPage },

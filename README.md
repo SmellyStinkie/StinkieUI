@@ -26,6 +26,7 @@ Unzip so the folders are `World of Warcraft/_retail_/Interface/AddOns/StinkieUI/
 - `/stinkie quest`: what the Quest marker can see right now (for bug reports)
 - `/stinkie tooltip`: what the game reports for the tooltip under your mouse (for bug reports)
 - `/stinkie map`: what the Blitz Map can see right now (for bug reports)
+- `/stinkie taint`: lists Blizzard values Stinkie UI changed, for "blocked" or "tainted by StinkieUI" errors (for bug reports)
 - `/stinkie reset`: restore all defaults and reload
 
 ## What's in it

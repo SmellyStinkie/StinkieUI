@@ -88,7 +88,7 @@ Published on CurseForge (project 1780262) and Wago (rNkgx3Na) by the GitHub Acti
 ## In-game debug commands
 
 `/stinkie dmg`, `/stinkie cpu`, `/stinkie score`, `/stinkie plates`, `/stinkie auras`,
-`/stinkie flags`, `/stinkie timers`, `/stinkie fontcheck`, `/stinkie quest`, `/stinkie tooltip`, `/stinkie map`,
+`/stinkie flags`, `/stinkie timers`, `/stinkie fontcheck`, `/stinkie quest`, `/stinkie tooltip`, `/stinkie map`, `/stinkie taint` (Blizzard values marked as written by Stinkie UI),
 `/stinkie report` (support block; errors caught in our pcalls go through `ns.Error`, which records them for it). They print what the game reports, so a
 pasted result tells you what this client actually has. `/st` is short for `/stinkie`.
 
