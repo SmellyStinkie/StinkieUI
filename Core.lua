@@ -733,6 +733,43 @@ ns.defaults = {
 		quiet = false,
 		startedByUs = false,
 	},
+	-- Raid frames: what Blizzard's show, on our own buttons. Off until switched on.
+	raid = {
+		enabled = false,
+		width = 80, height = 44, spacing = 2, groupSpacing = 6,
+		layout = "COLUMNS",   -- COLUMNS (each group top to bottom, groups side by side) | ROWS
+		keepGroups = true,    -- each raid group on its own; off = one list, sorted
+		sort = "GROUP",       -- GROUP | ROLE (tanks, healers, damage) | NAME; ROLE and NAME also order inside groups
+		perColumn = 5,        -- the one list: how many before a new column / row
+		maxColumns = 8,       -- the one list: columns / rows at most
+		groups = 8,           -- raid groups shown
+		compact = true,       -- close the gaps empty groups leave (when out of combat)
+		showParty = false,    -- also in a 5-player party (raid-style party frames)
+		pets = false, petHeight = 20,
+		mainTanks = false,    -- a block for main tanks and main assists
+		classColor = true,
+		power = "healer", powerHeight = 4, -- all | healer | none
+		showName = true, nameFormat = "full", namePosition = "TOPLEFT", -- TOPLEFT | TOP
+		nameMaxChars = 0,     -- 0 = whole names
+		healthText = "none", healthPosition = "CENTER", -- CENTER | BOTTOM | TOPRIGHT ("Dead" and "Offline" always show)
+		nameStyle = text(11), healthStyle = text(11),
+		roleIcon = "all", roleSize = 11, -- all | tankHealer | none
+		marker = true, markerSize = 14, leaderIcon = false,
+		rangeFade = true, rangeAlpha = 0.45,
+		shields = true, healPrediction = true,
+		aggro = true, targetHighlight = true,
+		readyCheck = true, centerIcons = true, statusIconSize = 18, -- summon / resurrect / phased / other group
+		debuffs = "all", debuffSize = 16, debuffMax = 3, -- all | dispellable | none
+		buffs = true, buffSize = 14, buffMax = 3,
+		defensiveIcon = true, defensiveSize = 20,
+		dispelHighlight = true,
+		privateAuras = true, privateSize = 18, privateMax = 2, -- boss debuffs the game draws itself
+		auraTooltips = false, -- on: icons show tooltips but take clicks meant for the player
+		vehicles = true,
+		hideBlizzard = true, hideInArena = true, hideInBattlegrounds = false,
+		previewSize = 20,
+		point = { "TOPLEFT", 20, -220 },
+	},
 	-- party members' targets: a small frame beside each party frame. Blank in arenas and
 	-- battlegrounds (Blizzard refuses compound unit tokens there), so hidden there by default.
 	bossFrames = {
@@ -756,6 +793,7 @@ ns.defaults = {
 		nameFormat = "full", showLevel = false,
 		nameStyle = text(10, true), healthStyle = text(10),
 		hideInPvP = true,
+		hideInRaid = true, -- hidden while you're in a raid group
 		attachAbove = false, attachGap = 3, -- each row on top of its own party frame
 		point = { "LEFT", 560, 120 },
 	},
@@ -851,10 +889,14 @@ ns.defaults = {
 		flat = true, -- flat headers, progress bars and quest item buttons (no gradients)
 		hideArena = true, hideBG = true, hideRaid = true, hideMPlus = false, hideDungeon = false,
 		zoneGroups = false, -- our own quest list, grouped by zone, in place of Blizzard's quest sections
+		focusSize = 14, -- the focus box in front of each quest in that list
+		clickOpensLog = true, -- left click on a quest opens it on the map (out of combat)
+		readyBox = true, preyBox = true, -- yellow box on a quest a click completes, red on the prey hunt
 		collapsedZones = {}, -- zone name -> true
 		questsCollapsed = false, -- in dungeons: the whole list folded under its Quests header
 		-- the yellow quest progress messages ("Boars slain: 3/10") in our own movable frame
 		questText = { enabled = false, duration = 3, point = { "TOP", 0, -170 },
+			bgAnnounce = true, -- battleground announcements come to this box too
 			textStyle = { size = 20, outline = "OUTLINE", color = { 1, 0.82, 0 }, classColor = false } },
 	},
 	-- Damage Numbers: floating combat text over targets (0 = the game's default for each)
@@ -907,7 +949,7 @@ ns.defaults = {
 	queueInfo = {
 		enabled = true,
 		estimate = true, mmr = true, mmrChange = true, rating = false,
-		specIcon = true, header = true, hideInPvP = true, -- queued spec icon per row, "Queued as" line
+		specIcon = true, header = true, hideInPvP = true, -- queued spec icon per row, column names on top
 		popSound = false, popVolume = 1, -- master volume while the queue pop sound plays
 		width = 440, height = 22, spacing = 2, scale = 1,
 		background = true, bgColor = { 0.04, 0.04, 0.05 }, bgAlpha = 0.65, border = true,
@@ -1800,6 +1842,19 @@ end)
 -- -> "Stormwind" / "Guard". A title after a comma isn't part of the name ("Thrall, Warchief of the
 -- Horde" -> "Thrall"). A hidden (secret) name can't be read, so it's returned whole. Spaces are
 -- matched literally: %s can take a byte of an accented letter for a space.
+-- The first n characters of a string (whole characters, not bytes), and whether anything was cut.
+function ns.Utf8Head(str, n)
+	local count, i, len = 0, 1, #str
+	while i <= len do
+		local b = str:byte(i)
+		local size = b < 0x80 and 1 or b < 0xE0 and 2 or b < 0xF0 and 3 or 4
+		count = count + 1
+		if count > n then return str:sub(1, i - 1), true end
+		i = i + size
+	end
+	return str, false
+end
+
 function ns.ShortenName(name, format)
 	if format ~= "first" and format ~= "last" then return name end
 	if ns.issecret(name) or type(name) ~= "string" then return name end

@@ -491,6 +491,12 @@ local PREVIEW = {
 		{ name = "Winkie", class = "ROGUE", hp = 0.88, def = 31224, dispel = 1 },
 		{ name = "Dinkie", class = "SHAMAN", hp = 1.00, dispel = 0 },
 	},
+	-- a team of three: you, then two teammates
+	three = {
+		{ name = "Stinkie", class = "WARRIOR", hp = 0.78, def = 871, dispel = 0 },
+		{ name = "Pinkie", class = "PRIEST", hp = 0.62, healer = true, cc = 118, dispel = 1 },
+		{ name = "Minkie", class = "MAGE", hp = 0.41, cc = 5782, def = 45438, dispel = 0, trinketCD = 74 },
+	},
 	arena = {
 		{ name = "Pinkie", class = "PRIEST", hp = 0.62, healer = true, cc = 118, dispel = 1 },
 		{ name = "Minkie", class = "MAGE", hp = 0.41, cc = 5782, def = 45438, dispel = 0, trinketCD = 74 },
@@ -612,7 +618,8 @@ end
 
 function Party.FillPreview(f, i)
 	local list = PREVIEW[Party.testPreset or "party"] or PREVIEW.party
-	local d = list[i]
+	-- the team of three starts with you: without "Include me" only the two teammates show
+	local d = list[i + ((Party.testPreset == "three" and not ns.db.party.showPlayer) and 1 or 0)]
 	if not d then
 		f:Hide()
 		return
@@ -646,7 +653,12 @@ function Party.FillPreview(f, i)
 	Party.LayoutPreview(f)
 end
 
--- preset: "party" (tank, healer, two damage) or "arena" (two teammates)
+-- preset: "party" (tank, healer, two damage), "three" (you and two teammates) or "arena" (two teammates)
+function Party.PreviewCount()
+	if Party.testPreset ~= "three" then return nil end
+	return ns.db.party.showPlayer and 3 or 2
+end
+
 function Party:SetTestMode(on, preset)
 	if not Party.holder then return end
 	if InCombatLockdown() then
@@ -685,7 +697,7 @@ function Party:SetTestMode(on, preset)
 	castTicker:SetShown(on and true or false)
 	if not on then RequestTrinkets() end
 	Party:UpdateVisibility()
-	if ns.PartyTargets and ns.PartyTargets.holder and not ns.unlocked then ns.PartyTargets:SetTestMode(on) end
+	if ns.PartyTargets and ns.PartyTargets.holder and not ns.unlocked then ns.PartyTargets:SetTestMode(on, Party.PreviewCount()) end
 end
 
 ns:RegisterModule("Party", Party)

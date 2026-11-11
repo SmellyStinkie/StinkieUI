@@ -14,11 +14,12 @@ ns.QuestList = QL
 local ITEM_SIZE = 26
 local ZONE_GAP, QUEST_GAP, TEXT_GAP = 7, 4, 1
 local BOX = 9 -- plus/minus
-local FOCUS_DOT = 10
+local BOX_PAD, BOX_GAP = 2, 3 -- a boxed quest: the box stands this far out, with this much more room around it
+local READY_COLOR, PREY_COLOR = { 1, 0.85, 0 }, { 1, 0.15, 0.15 }
 local FOCUS_COLOR, UNFOCUSED_COLOR = { 1, 0.9, 0 }, { 0.42, 0.38, 0.05 }
 local OUTLINE = { repeatable = { 0.2, 0.6, 1 }, campaign = { 0.75, 0.4, 1 } }
 local EMPTY = { 0, 0, 0 }
-local INDENT = { offer = 0, header = 7, zone = BOX + 5, quest = 22, line = 30 }
+local INDENT = { offer = 0, header = 7, zone = BOX + 5 }
 local GOLD, GREEN, RED, GRAY = { 1, 0.82, 0 }, { 0.25, 1, 0.25 }, { 1, 0.2, 0.2 }, { 0.8, 0.8, 0.8 }
 
 QL.zoneOf = {} -- a quest under a header collapsed in the quest log isn't listed: keep what we saw
@@ -26,6 +27,15 @@ QL.rows, QL.buttons, QL.itemRows = {}, {}, {}
 QL.shownItems = 0
 
 local function cfg() return ns.db.objectives end
+
+function QL.FocusSize() return cfg().focusSize or 14 end
+
+-- where a row's text starts: quests and their lines make room for the focus box
+function QL.Indent(kind)
+	if kind == "quest" then return QL.FocusSize() + 10 end
+	if kind == "line" then return QL.FocusSize() + 18 end
+	return INDENT[kind]
+end
 
 -- Blizzard's own tracker colors, so the list matches the sections around it
 local function TrackerColor(key, fallback)
@@ -133,6 +143,23 @@ function QL.QuestType(id, info)
 	return nil
 end
 
+-- The box around a whole quest: yellow when a click on it right here completes it, red for the prey
+-- you're hunting. A quest that's done but has to be handed in somewhere gets none. Yellow wins, as
+-- that's the one to act on. nil = no box.
+function QL.BoxColor(quest)
+	local c = cfg()
+	if quest.complete and quest.autoComplete and c.readyBox then return READY_COLOR end
+	if quest.prey and c.preyBox then return PREY_COLOR end
+	return nil
+end
+
+-- the same for any row: the game's "Complete:" pop-up line is a click to complete too
+function QL.RowBox(data)
+	if data.kind == "quest" then return QL.BoxColor(data.quest) end
+	if data.kind == "offer" and data.offer.kind ~= "OFFER" and cfg().readyBox then return READY_COLOR end
+	return nil
+end
+
 -- outline and middle of the focus box
 function QL.FocusColors(quest)
 	local outline = OUTLINE[quest.questType]
@@ -156,6 +183,7 @@ function QL.Build()
 	local rank = QL.ScanZones()
 	local groups, byZone = {}, {}
 	local tracked = C_SuperTrack.GetSuperTrackedQuestID()
+	local prey = C_QuestLog.GetActivePreyQuest and C_QuestLog.GetActivePreyQuest() -- Midnight only
 	local fallback = _G.OTHER or "Other"
 	for i = 1, C_QuestLog.GetNumQuestWatches() or 0 do
 		local id = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
@@ -176,6 +204,7 @@ function QL.Build()
 				failed = C_QuestLog.IsFailed(id) and true or false,
 				autoComplete = info and info.isAutoComplete and true or false,
 				tracked = id == tracked,
+				prey = prey ~= nil and id == prey,
 				questType = QL.QuestType(id, info),
 			}
 			quest.display = QL.DisplayTitle(id, quest.title)
@@ -340,6 +369,147 @@ local function OnRowLeave(row)
 end
 
 ---------------------------------------------------------------------------
+-- Left click opens the quest log (an option). An addon that opens the map itself leaves its mark on
+-- everything the map builds, and in combat the game then blocks the map's own pins. So the click
+-- isn't ours: an unseen secure button lies under the quest rows, and what it does is press one of
+-- Blizzard's own buttons, which the game carries out as its own. Blizzard's quest sections are
+-- still there, moved off screen, and each quest in them has the button that opens the map at that
+-- quest: the layer is aimed at the one for the quest under the mouse (its Quest Log button when
+-- the quest has none). The quest rows let their clicks fall through to the layer; everything else
+-- about a click (focus, the menu, the tooltip) is done from the layer by finding that row.
+-- Out of combat only: a secure button can't follow the list around in a fight, so the game takes
+-- it away then (a state driver) and the rows take their clicks back.
+---------------------------------------------------------------------------
+local LAYER_MODIFIERS = { "alt-", "ctrl-", "shift-", "alt-ctrl-", "alt-shift-", "ctrl-shift-", "alt-ctrl-shift-" }
+
+-- does this row leave its clicks to the layer?
+function QL.RowToLayer(data)
+	if not (QL.layerUp and not QL.inCombat and data) then return false end
+	if data.kind ~= "quest" and data.kind ~= "line" then return false end
+	local quest = data.quest
+	-- a quest a click completes keeps that click
+	return quest ~= nil and not (quest.autoComplete and quest.complete)
+end
+
+function QL.UpdateRowMouse()
+	for _, row in ipairs(QL.rows) do
+		if row.data then row:EnableMouse(not QL.RowToLayer(row.data)) end
+		if row.over and not QL.RowToLayer(row.data) then row.over:Hide() end
+	end
+end
+
+function QL.RowUnderMouse()
+	for _, row in ipairs(QL.rows) do
+		if row.data and row:IsShown() and QL.RowToLayer(row.data) and row:IsMouseOver() then return row end
+	end
+end
+
+-- Blizzard's button for a quest in its own (off-screen) quest sections. Only reads their tables.
+function QL.BlizzardButton(questID)
+	local t = Tracker()
+	if not (t and type(t.modules) == "table") then return nil end
+	for _, m in ipairs(t.modules) do
+		if IsQuestModule(m) and type(m.usedBlocks) == "table" then
+			for _, blocks in pairs(m.usedBlocks) do
+				local block = type(blocks) == "table" and blocks[questID]
+				if block and block.HeaderButton then return block.HeaderButton end
+			end
+		end
+	end
+	return nil
+end
+
+-- Which button the layer presses: the hovered quest's own, or nothing between quests. Out of
+-- combat only, which is the only time the layer is up.
+function QL.AimLayer(row)
+	local b = QL.layer
+	if not b or InCombatLockdown() then return end
+	local target = nil
+	if row then target = QL.BlizzardButton(row.data.quest.id) or _G.QuestLogMicroButton end
+	if b.target ~= target then
+		b.target = target
+		b:SetAttribute("clickbutton", target)
+	end
+end
+
+-- what's ours to do on a click the layer took (the map itself is already open or closed by now)
+function QL.LayerClick(button)
+	local row = QL.RowUnderMouse()
+	local quest = row and row.data.quest
+	if not quest then return end
+	if button == "RightButton" or IsModifierKeyDown() then return QL.ClickQuest(row, quest, button) end
+	-- the quest you clicked is the one the map and the marker point at
+	if C_SuperTrack.GetSuperTrackedQuestID() ~= quest.id then C_SuperTrack.SetSuperTrackedQuestID(quest.id) end
+end
+
+local function LayerHover(row)
+	local old = QL.hoverRow
+	if old == row then return end
+	if old then
+		old.over:Hide()
+		if old.tip and GameTooltip:IsOwned(old) then GameTooltip:Hide() end
+		old.tip = nil
+	end
+	QL.hoverRow = row
+	if row then
+		row.over:Show()
+		row.tip = QL.ShowPartyProgress(row, row.data.quest) or nil
+	end
+end
+
+local function CreateLayer()
+	local b = CreateFrame("Button", "StinkieUI_QuestLogLayer", UIParent, "SecureActionButtonTemplate")
+	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	b:SetAttribute("useOnKeyDown", false) -- act on the release, whatever the action bars are set to
+	b:SetAttribute("type1", "click") -- which button it presses: see AimLayer
+	-- with a modifier held (link to chat, stop tracking) the log stays shut
+	for _, m in ipairs(LAYER_MODIFIERS) do b:SetAttribute(m .. "type1", "") end
+	b:SetScript("PostClick", function(_, button, down)
+		if down then return end
+		local ok, err = pcall(QL.LayerClick, button)
+		if not ok then ns.Error(err) end
+	end)
+	local since = 0
+	b:SetScript("OnUpdate", function(self, elapsed)
+		since = since + elapsed
+		if since < 0.05 then return end
+		since = 0
+		local row = self:IsMouseOver() and QL.RowUnderMouse() or nil
+		LayerHover(row)
+		QL.AimLayer(row)
+	end)
+	b:SetScript("OnHide", function() LayerHover(nil) end)
+	b:Hide()
+	QL.layer = b
+	return b
+end
+
+-- Puts the layer over the list, or takes it away. Out of combat only.
+function QL.PlaceLayer(listShown)
+	local list = QL.list
+	local want = listShown and cfg().clickOpensLog and _G.QuestLogMicroButton ~= nil and list ~= nil
+	local b = QL.layer
+	if want then
+		b = b or CreateLayer()
+		b:SetFrameStrata(list:GetFrameStrata())
+		b:SetFrameLevel(list:GetFrameLevel()) -- under the rows, which are the list's children
+		b:SetScale(list:GetEffectiveScale() / UIParent:GetEffectiveScale())
+		b:ClearAllPoints()
+		b:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", list:GetLeft() or 0, list:GetTop() or 0)
+		b:SetSize(math.max(list:GetWidth() or 1, 1), math.max(list:GetHeight() or 1, 1))
+		RegisterStateDriver(b, "visibility", "[combat] hide; show")
+	elseif b then
+		UnregisterStateDriver(b, "visibility")
+		b:Hide()
+	end
+	local up = want and true or false
+	if up ~= (QL.layerUp or false) then
+		QL.layerUp = up
+		QL.UpdateRowMouse()
+	end
+end
+
+---------------------------------------------------------------------------
 -- Rows
 ---------------------------------------------------------------------------
 local function GetRow(i)
@@ -356,6 +526,11 @@ local function GetRow(i)
 	local glow = row:CreateTexture(nil, "HIGHLIGHT")
 	glow:SetAllPoints()
 	glow:SetColorTexture(1, 1, 1, 0.06)
+	-- the same glow for a row whose clicks go to the quest log layer (it takes no mouse itself)
+	row.over = row:CreateTexture(nil, "BACKGROUND")
+	row.over:SetAllPoints()
+	row.over:SetColorTexture(1, 1, 1, 0.06)
+	row.over:Hide()
 	-- plus/minus as two lines: every font has its own idea of how wide those are
 	row.dash = row:CreateTexture(nil, "OVERLAY")
 	row.dash:SetSize(BOX, 1)
@@ -369,20 +544,15 @@ local function GetRow(i)
 	row.rule:SetPoint("BOTTOMRIGHT", -24, 0)
 	-- focus: the quest the quest marker points at
 	local focus = CreateFrame("Button", nil, row)
-	focus:SetSize(16, 16)
-	focus:SetPoint("TOPLEFT", row, "TOPLEFT", 3, 2)
 	focus:RegisterForClicks("LeftButtonUp")
 	focus.dot = focus:CreateTexture(nil, "ARTWORK")
-	focus.dot:SetSize(FOCUS_DOT, FOCUS_DOT)
 	focus.dot:SetPoint("CENTER")
 	-- outline and middle, set for each quest
 	focus.hole = focus:CreateTexture(nil, "OVERLAY")
-	focus.hole:SetSize(FOCUS_DOT - 4, FOCUS_DOT - 4)
 	focus.hole:SetPoint("CENTER")
-	local focusGlow = focus:CreateTexture(nil, "HIGHLIGHT")
-	focusGlow:SetSize(FOCUS_DOT + 4, FOCUS_DOT + 4)
-	focusGlow:SetPoint("CENTER")
-	focusGlow:SetColorTexture(1, 1, 1, 0.25)
+	focus.glow = focus:CreateTexture(nil, "HIGHLIGHT")
+	focus.glow:SetPoint("CENTER")
+	focus.glow:SetColorTexture(1, 1, 1, 0.25)
 	focus:SetScript("OnClick", function(self)
 		local data = self:GetParent().data
 		if data and data.quest then QL.ToggleTracked(data.quest.id) end
@@ -390,6 +560,77 @@ local function GetRow(i)
 	row.focus = focus
 	QL.rows[i] = row
 	return row
+end
+
+-- The focus box at the size setting, centered on the quest's first line. The button around it is
+-- bigger than the box, so it's easy to hit.
+local function SizeFocus(row, size, lineSize)
+	if row.focusSize == size and row.focusLine == lineSize then return end
+	row.focusSize, row.focusLine = size, lineSize
+	local focus = row.focus
+	local button = size + 8
+	focus:SetSize(button, button)
+	focus:ClearAllPoints()
+	focus:SetPoint("TOPLEFT", row, "TOPLEFT", 1, math.floor((button - lineSize) / 2))
+	focus.dot:SetSize(size, size)
+	focus.hole:SetSize(size - 4, size - 4)
+	focus.glow:SetSize(size + 4, size + 4)
+end
+
+-- the outline (and a faint fill) around a quest and its lines; made the first time a row needs one
+local function GetBox(row)
+	if row.box then return row.box end
+	local box = { edges = {} }
+	box.fill = row:CreateTexture(nil, "BACKGROUND")
+	box.fill:SetPoint("TOPLEFT", row, "TOPLEFT", -BOX_PAD, BOX_PAD)
+	box.fill:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, BOX_PAD)
+	for _, side in ipairs({ "top", "bottom", "left", "right" }) do
+		local edge = row:CreateTexture(nil, "BORDER")
+		box.edges[#box.edges + 1] = edge
+		box[side] = edge
+	end
+	box.top:SetHeight(1)
+	box.top:SetPoint("TOPLEFT", row, "TOPLEFT", -BOX_PAD, BOX_PAD)
+	box.top:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, BOX_PAD)
+	box.bottom:SetHeight(1)
+	box.left:SetWidth(1)
+	box.left:SetPoint("TOPLEFT", row, "TOPLEFT", -BOX_PAD, BOX_PAD)
+	box.right:SetWidth(1)
+	box.right:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, BOX_PAD)
+	row.box = box
+	return box
+end
+
+-- height: the quest's title and lines (and item button), top of the title to the bottom of the last
+local function SetBoxHeight(row, height)
+	local box = GetBox(row)
+	local h = height + BOX_PAD * 2
+	box.height = h
+	box.fill:SetHeight(h)
+	box.left:SetHeight(h)
+	box.right:SetHeight(h)
+	box.bottom:ClearAllPoints()
+	box.bottom:SetPoint("TOPLEFT", row, "TOPLEFT", -BOX_PAD, BOX_PAD - h + 1)
+	box.bottom:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, BOX_PAD - h + 1)
+end
+
+local function PaintBox(row, color)
+	row.boxOn = color ~= nil
+	if not color then
+		if row.box then
+			row.box.fill:Hide()
+			for _, edge in ipairs(row.box.edges) do edge:Hide() end
+		end
+		return
+	end
+	local box = GetBox(row)
+	if not box.height then SetBoxHeight(row, row:GetHeight() or 0) end
+	box.fill:SetColorTexture(color[1], color[2], color[3], 0.1)
+	box.fill:Show()
+	for _, edge in ipairs(box.edges) do
+		edge:SetColorTexture(color[1], color[2], color[3], 0.9)
+		edge:Show()
+	end
 end
 
 local function SetRowFont(row, size, flags)
@@ -400,6 +641,7 @@ end
 
 local function Paint(row, data)
 	row.data = data
+	row:EnableMouse(not QL.RowToLayer(data))
 	row.text:SetText(data.text)
 	row.text:SetTextColor(data.color[1], data.color[2], data.color[3])
 	local isQuest = data.kind == "quest"
@@ -409,6 +651,7 @@ local function Paint(row, data)
 		row.focus.dot:SetColorTexture(outline[1], outline[2], outline[3], 1)
 		row.focus.hole:SetColorTexture(middle[1], middle[2], middle[3], 1)
 	end
+	PaintBox(row, QL.RowBox(data))
 end
 
 -- returns the list's height
@@ -417,6 +660,8 @@ local function Layout(rows)
 	local flags = ns.OutlineFlags(c.outline) or ""
 	local width = QL.list:GetWidth() or 0
 	local y, blockEnd = 0, 0
+	local focusSize = QL.FocusSize()
+	local boxRow, boxTop, boxMin, lastBoxed = nil, 0, 0, false
 	wipe(QL.itemRows)
 	for i, data in ipairs(rows) do
 		local row = GetRow(i)
@@ -425,12 +670,17 @@ local function Layout(rows)
 		if isZone or data.kind == "quest" or data.kind == "offer" then
 			y = math.max(y, blockEnd) -- a quest item stands taller than a short quest
 			if i > 1 then y = y + (isZone and ZONE_GAP or QUEST_GAP) end
+			-- a box stands out past its quest: keep it clear of what's above and below
+			local boxed = QL.RowBox(data) ~= nil
+			if boxed or lastBoxed then y = y + BOX_GAP end
+			lastBoxed = boxed
 		else
 			y = y + TEXT_GAP
 		end
 		SetRowFont(row, isZone and c.headerSize or c.lineSize, flags)
 		local item = data.quest and data.quest.item
-		local indent = INDENT[data.kind]
+		local indent = QL.Indent(data.kind)
+		SizeFocus(row, focusSize, c.lineSize)
 		row.text:ClearAllPoints()
 		row.text:SetPoint("TOPLEFT", indent, 0)
 		row.text:SetWidth(math.max(1, width - indent - (item and ITEM_SIZE + 4 or 0)))
@@ -460,13 +710,20 @@ local function Layout(rows)
 			QL.itemRows[#QL.itemRows + 1] = { row = row, quest = data.quest }
 			blockEnd = y + ITEM_SIZE
 		end
+		-- the box starts on the quest's row and grows with each of its lines
+		if data.kind == "quest" or data.kind == "offer" then
+			boxRow, boxTop, boxMin = row.boxOn and row or nil, y, item and ITEM_SIZE or 0
+		elseif data.kind ~= "line" then
+			boxRow = nil
+		end
+		if boxRow then SetBoxHeight(boxRow, math.max(y + h - boxTop, boxMin)) end
 		y = y + h
 	end
 	for i = #rows + 1, #QL.rows do
 		QL.rows[i].data = nil
 		QL.rows[i]:Hide()
 	end
-	return math.max(y, blockEnd)
+	return math.max(y, blockEnd) + (lastBoxed and BOX_PAD or 0)
 end
 
 -- in combat with an item button up: the words change, nothing moves
@@ -548,6 +805,7 @@ function QL.PlaceItems()
 	for i = n + 1, #QL.buttons do QL.buttons[i]:Hide() end
 	QL.shownItems = n
 	QL.placedLeft, QL.placedTop = list and list:GetLeft(), list and list:GetTop()
+	QL.PlaceLayer(show)
 	QL.UpdateCooldowns()
 end
 
@@ -640,7 +898,7 @@ function QL.Setup()
 		since = since + elapsed
 		if since < 0.25 then return end
 		since = 0
-		if #QL.itemRows > 0 and not InCombatLockdown()
+		if (#QL.itemRows > 0 or QL.layerUp) and not InCombatLockdown()
 			and (list:GetLeft() ~= QL.placedLeft or list:GetTop() ~= QL.placedTop) then
 			QL.PlaceItems()
 		end
@@ -660,8 +918,15 @@ function QL.Setup()
 	ns:On("BAG_UPDATE_COOLDOWN", function()
 		if QL.shownItems > 0 then QL.UpdateCooldowns() end
 	end)
+	ns:On("PLAYER_REGEN_DISABLED", function()
+		-- the game hides the quest log layer for the fight: the rows take their clicks back
+		QL.inCombat = true
+		if QL.layerUp then QL.UpdateRowMouse() end
+	end)
 	ns:On("PLAYER_REGEN_ENABLED", function()
-		if QL.dirty then QL.Update() end
+		QL.inCombat = false
+		if QL.dirty then QL.Update() elseif QL.layerUp or cfg().clickOpensLog then QL.PlaceItems() end
+		QL.UpdateRowMouse()
 	end)
 	QL.Update()
 	QL.Place()

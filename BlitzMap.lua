@@ -322,6 +322,53 @@ function BM.UpdateGameDots()
 	layer:FinalizeUnits()
 end
 
+-- Names for the game's own dots. The addon never learns where those are, so a name can't sit beside
+-- each one; the game will say which of them the mouse is over, though, and those get named there.
+BM.HOVER_LINES = 5
+
+-- the units whose game-drawn dot is under the mouse
+function BM.HoverUnits()
+	local layer = BM.gameLayer
+	if not layer or not layer.GetMouseOverUnits or #BM.gameDots == 0 then return nil end
+	if not cfg().names or not BM.frame:IsMouseOver() then return nil end
+	local found = { pcall(layer.GetMouseOverUnits, layer) }
+	if not found[1] then return nil end
+	local units = {}
+	for i = 2, #found do
+		local unit = found[i]
+		if readable(unit) and type(unit) == "string" and #units < BM.HOVER_LINES then units[#units + 1] = unit end
+	end
+	return #units > 0 and units or nil
+end
+
+function BM.UpdateHover()
+	local hover = BM.hover
+	if not hover then return end
+	local units = BM.HoverUnits()
+	if not units then
+		hover:Hide()
+		return
+	end
+	if hover.styled ~= BM.styleRound then
+		hover.styled = BM.styleRound
+		for _, line in ipairs(hover.lines) do ns.ApplyText(line, cfg().nameStyle) end
+	end
+	for i, line in ipairs(hover.lines) do
+		local unit = units[i]
+		line:SetShown(unit ~= nil)
+		if unit then
+			local c = ns.GetUnitClassColor(unit)
+			line:SetText(UnitName(unit)) -- can be hidden: it goes straight to the text
+			line:SetTextColor(c.r, c.g, c.b)
+		end
+	end
+	local x, y = GetCursorPosition()
+	local scale = UIParent:GetEffectiveScale()
+	hover:ClearAllPoints()
+	hover:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x / scale + 10, y / scale + 6)
+	hover:Show()
+end
+
 local function Draw(mapID)
 	local c = cfg()
 	local pins = BM.Collect(mapID)
@@ -488,6 +535,7 @@ local function OnUpdate(_, elapsed)
 		BM.Check()
 	end
 	if BM.frame:IsShown() and BM.mapID then Draw(BM.mapID) end
+	BM.UpdateHover()
 end
 
 function BM.UpdateTicker()
@@ -592,6 +640,24 @@ function BM:Init()
 	-- the game's dots stay on the canvas to zoom with the map, but draw over the bases (level +0
 	-- on the pins) and under you and the flags (+3 and +5)
 	if BM.gameLayer then BM.gameLayer:SetFrameLevel(BM.pins:GetFrameLevel() + 2) end
+
+	-- names of the game-drawn dots under the mouse (not clipped by the view, so it's on the window)
+	local hover = CreateFrame("Frame", nil, f)
+	hover:SetSize(1, 1)
+	hover:SetFrameStrata("TOOLTIP")
+	hover.lines = {}
+	for i = 1, BM.HOVER_LINES do
+		local line = hover:CreateFontString(nil, "OVERLAY")
+		ns.ApplyText(line, cfg().nameStyle)
+		if i == 1 then
+			line:SetPoint("BOTTOMLEFT", hover, "BOTTOMLEFT", 0, 0)
+		else
+			line:SetPoint("BOTTOMLEFT", hover.lines[i - 1], "TOPLEFT", 0, 1)
+		end
+		hover.lines[i] = line
+	end
+	hover:Hide()
+	BM.hover = hover
 
 	-- on its own frame: the clipped view would draw over a border on this one
 	BM.edge = CreateFrame("Frame", nil, f)

@@ -49,7 +49,36 @@ for _, e in ipairs({ "ADDON_RESTRICTION_STATE_CHANGED", "PLAYER_ENTERING_WORLD",
 	ns:On(e, FlushSoon)
 end
 
+-- An aura "icon" that's only an outline in the debuff's dispel color, the size of the frame it's
+-- on: nothing else is drawn. Blizzard's code picks the color, so it works while aura details are
+-- hidden from addons.
+local function StyleOutlineBody(opts, button)
+	local w, h = opts.outlineWidth or 1, opts.outlineHeight or 1
+	button:SetSize(w, h)
+	button.SUISize = math.min(w, h)
+	button:EnableMouse(false)
+	local icon = button:CreateTexture(nil, "BORDER")
+	icon:SetAllPoints()
+	icon:SetAlpha(0)
+	button.Icon = icon
+	button:SetIcon(icon)
+	local border = button:CreateTexture(nil, "OVERLAY")
+	border:SetAllPoints()
+	button.DispelBorder = border
+	button:AddDispelTypeTexture(border, {
+		style = Enum.CustomAuraButtonDispelTypeTextureStyle.Border,
+		showWhenHarmful = true,
+		showWhenHelpful = false,
+	})
+	local owner = opts.owner
+	if owner then
+		owner.SUIButtons = owner.SUIButtons or {}
+		table.insert(owner.SUIButtons, button)
+	end
+end
+
 local function StyleButtonBody(size, opts, button)
+	if opts.outlineOnly then return StyleOutlineBody(opts, button) end
 	button:SetSize(size, size)
 	button.SUISize = size -- our own record: an aura button's GetWidth can be a secret value
 	button:EnableMouse(not opts.disableMouse)
@@ -144,7 +173,8 @@ local function StyleButton(size, opts, button)
 end
 
 -- Creates one AuraContainer with one or more groups.
--- groups: list of { filter = string, max = n, decorate = its own decorate (optional) }
+-- groups: list of { filter = string, max = n, decorate = its own decorate (optional),
+--          dispelBorder = its own answer to opts.dispelBorder (optional) }
 -- opts: { size, spacing, growthX ("RIGHT"|"LEFT"), growthY ("UP"|"DOWN"), anchor, maxWidth, dispelBorder, disableMouse,
 --         magicGlow (function -> true to add the blue Magic glow; read once, at creation),
 --         glow (function -> glow settings), onShow (icon appeared), decorate(button, textParent) }
@@ -163,7 +193,8 @@ function ns.CreateAuraContainer(parent, groups, opts)
 	container.SUIGroupKeys = {}
 	for i, g in ipairs(groups) do
 		local key = "SUIGroup" .. i
-		local groupOpts = g.decorate and setmetatable({ decorate = g.decorate }, { __index = opts }) or opts
+		local groupOpts = (g.decorate or g.dispelBorder ~= nil)
+			and setmetatable({ decorate = g.decorate, dispelBorder = g.dispelBorder }, { __index = opts }) or opts
 		container:AddAuraGroup(key, g.filter, {
 			maxFrameCount = g.max or 4,
 			sortMethod = AuraContainerSortMethod.ExpirationOnly,

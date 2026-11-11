@@ -1,5 +1,23 @@
 # Stinkie UI changelog
 
+## 0.46.0
+- New: Raid Frames (Unit Frames > Raid Frames), a module that's off by default. Turn it on in `/stinkie modules`. It replaces Blizzard's raid frames with flat ones you can size freely:
+  - Groups as columns or rows, or one list with your own players per column and number of columns. Order by raid group, by tanks then healers then damage, or by name.
+  - Health with heal prediction, shields and heal absorbs, power bars for healers or everyone, names (with a maximum length), role icons, target markers, ready checks, aggro and target outlines, and range fading.
+  - Summon, resurrection and phasing icons, debuffs (all or only ones you can dispel), your own buffs, big defensives, a dispel outline, and boss debuffs the game draws itself.
+  - Optional pets and main tank blocks, vehicles, a test mode with stand-in players and auras, and a mover (`/stinkie unlock`).
+  - It's new and has had little testing in real raids. Report anything odd.
+- Objectives: a left click on a quest in the zone-grouped quest list opens the map at that quest again, out of combat. The click is carried out by the game's own button, so it doesn't bring back the "blocked" map pin errors. In combat a click still sets the focus. Switch it off under Objectives if you only want the focus.
+- Objectives: a yellow box around a quest you can complete by clicking it, and a red box around your prey hunt. Both can be switched off.
+- Objectives: the focus boxes are bigger and easier to click, with a size slider.
+- Quest progress text: battleground announcements ("The mine cart has arrived...") now show in the same box while you're in a battleground, in their team's color. Switch it off under Objectives > Quest progress text.
+- Quest Marker: the distance is on its own line under the quest's name.
+- Queue Time & MMR: the "Queued as" option now shows column names on top (Queue, In queue, Estimate, MMR, Rating) and the values lose their repeated labels.
+- Party Targets: hidden in raid groups by default, with an option.
+- Party Frames: a second test button shows a team of three.
+- Blitz Map: teammates the game draws itself (it won't tell addons where they are) now show their names when you hover their dots.
+- Nameplates: a totem that had just dropped could get the thin friendly plate and stay that way, so it never turned pink. Each new plate is now checked again a moment later. In rated PvP the game still hides totem names, so only the aura icon (Grounding by default) can mark them there.
+
 ## 0.45.0
 - Options: the page list is regrouped so settings are easier to find. The groups are General, Unit Frames, Nameplates, PvP, Interface and Quality of Life. Search still finds every setting.
 - Options: the old Miscellaneous page is now two pages under Quality of Life: GCD History & APM, and Automation (decor, error messages, quests, vendors, battlegrounds). Quest Marker has its own page there too, and Match History is under PvP.

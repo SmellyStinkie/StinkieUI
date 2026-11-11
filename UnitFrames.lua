@@ -46,7 +46,11 @@ end
 
 function UF.UpdateName(f)
 	if f.Name:IsShown() then
-		f.Name:SetText(ns.UnitDisplayName(f.unit, f.nameFormat))
+		local name = ns.UnitDisplayName(f.unit, f.nameFormat)
+		local limit = f.nameMaxChars or 0
+		-- a hidden (secret) name can't be cut: it's clipped to the frame's width instead
+		if limit > 0 and not ns.issecret(name) and type(name) == "string" then name = ns.Utf8Head(name, limit) end
+		f.Name:SetText(name)
 		local style = f.nameStyle
 		if style and style.classColor then
 			f.Name:SetTextColor(ns.GetHealthColor(f.unit, true):GetRGB())
@@ -125,7 +129,8 @@ function UF.UpdateElite(f)
 end
 
 function UF.UpdateAll(f)
-	if f.preview or not UnitExists(f.unit) then return end
+	-- a raid button has no unit while its slot in the group is empty
+	if f.preview or not f.unit or not UnitExists(f.unit) then return end
 	UF.UpdateElite(f)
 	UF.UpdateHealthColor(f)
 	UF.UpdateHealth(f, true) -- full refresh (new target, focus, roster): snap, don't animate
@@ -157,7 +162,8 @@ UF.SafeUpdateAll = SafeUpdateAll
 
 local function OnEvent(f, event, unit)
 	if f.preview then return end -- test mode: keep the stand-in values
-	if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
+	if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED"
+		or event == "UNIT_HEAL_PREDICTION" or event == "UNIT_HEAL_ABSORB_AMOUNT_CHANGED" then -- (raid frames ask for these two)
 		UF.UpdateHealth(f)
 		if event == "UNIT_HEALTH" then UF.UpdateHealthColor(f) end
 	elseif event == "UNIT_POWER_FREQUENT" or event == "UNIT_MAXPOWER" or event == "UNIT_DISPLAYPOWER" then
@@ -205,6 +211,7 @@ end
 -- Frame construction
 ---------------------------------------------------------------------------
 local function OnEnter(self)
+	if not self.unit then return end
 	GameTooltip_SetDefaultAnchor(GameTooltip, self)
 	GameTooltip:SetUnit(self.unit)
 	GameTooltip:Show()
@@ -231,13 +238,23 @@ local function PingTargetInfo(self) return { guid = PingGUID(self) } end
 local LEADER_ATLAS = "UI-HUD-UnitFrame-Player-Group-LeaderIcon"
 local LEADER_FILE = [[Interface\GroupFrame\UI-Group-LeaderIcon]]
 
+UF.BUTTON_TEMPLATE = "SecureUnitButtonTemplate, PingableUnitFrameTemplate"
+
 function UF.CreateFrame(unit, name, noUnitWatch)
-	local f = CreateFrame("Button", name, UIParent, "SecureUnitButtonTemplate, PingableUnitFrameTemplate")
+	local f = CreateFrame("Button", name, UIParent, UF.BUTTON_TEMPLATE)
+	UF.Dress(f, unit)
+	if not noUnitWatch then RegisterUnitWatch(f) end
+	return f
+end
+
+-- Everything a unit button has, on a button that already exists. The raid frames' buttons are made
+-- by the game's group header, which also gives each one its unit (so unit is nil here for those).
+function UF.Dress(f, unit)
 	f.GetIsPingable = PingIsPingable
 	f.GetTargetInfo = PingTargetInfo
 	f.unit = unit
-	f.compound = unit:match("%wtarget$") ~= nil
-	f:SetAttribute("unit", unit)
+	f.compound = unit ~= nil and unit:match("%wtarget$") ~= nil
+	if unit then f:SetAttribute("unit", unit) end
 	f:SetAttribute("*type1", "target")
 	f:SetAttribute("*type2", "togglemenu")
 	f:RegisterForClicks("AnyUp")
@@ -273,7 +290,7 @@ function UF.CreateFrame(unit, name, noUnitWatch)
 	end
 	f.Leader:SetSize(14, 14)
 	f.Leader:Hide()
-	if unit == "target" or unit == "focus" then
+	if unit == "target" or unit == "focus" then -- (never a raid button: those have no unit yet)
 		f.Elite = textLayer:CreateTexture(nil, "OVERLAY", nil, 7)
 		f.Elite:SetTexture(ns.MEDIA.star, "CLAMP", "CLAMP", "TRILINEAR")
 		f.Elite:Hide()
@@ -295,8 +312,7 @@ function UF.CreateFrame(unit, name, noUnitWatch)
 		end)
 	end
 
-	UF.RegisterUnitEvents(f)
-	if not noUnitWatch then RegisterUnitWatch(f) end
+	if unit then UF.RegisterUnitEvents(f) end
 	return f
 end
 
@@ -337,6 +353,7 @@ function UF.Layout(f, cfg)
 
 	f.nameStyle = cfg.nameStyle
 	f.nameFormat = cfg.nameFormat
+	f.nameMaxChars = cfg.nameMaxChars
 	f.leaderShown = cfg.leaderIcon
 	f.Leader:ClearAllPoints()
 	f.Leader:SetPoint("CENTER", f, "TOPRIGHT", -8, 0)

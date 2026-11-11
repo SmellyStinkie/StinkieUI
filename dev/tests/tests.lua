@@ -399,6 +399,28 @@ do
 		BM.UpdateGameDots()
 		check("a hidden role stays a dot", art == ns.MEDIA.dot, tostring(art))
 		UnitGroupRolesAssigned = oldRole
+		-- the game's dots have no name beside them: the ones under the mouse are named at the cursor
+		local oldOver = BM.frame.IsMouseOver
+		BM.frame.IsMouseOver = function() return true end
+		layer.GetMouseOverUnits = function() return "raid3", { __secret = true }, "raid4" end
+		local units = BM.HoverUnits()
+		check("the game says whose dots are under the mouse", units and #units == 2 and units[1] == "raid3" and units[2] == "raid4")
+		BM.UpdateHover()
+		check("their names show at the cursor", BM.hover:IsShown() and BM.hover.lines[1]:IsShown() and BM.hover.lines[2]:IsShown()
+			and not BM.hover.lines[3]:IsShown())
+		c.names = false
+		BM.UpdateHover()
+		check("not with names switched off", not BM.hover:IsShown())
+		c.names = true
+		layer.GetMouseOverUnits = function() error("refused") end
+		BM.UpdateHover()
+		check("a refusal just shows nothing", not BM.hover:IsShown())
+		layer.GetMouseOverUnits = function() return "raid3" end
+		BM.frame.IsMouseOver = function() return false end
+		BM.UpdateHover()
+		check("nor with the mouse off the map", not BM.hover:IsShown())
+		BM.frame.IsMouseOver = oldOver
+		flushErrors("blitz map hover names")
 		wipe(BM.gameDots)
 		cleared = 0
 		BM.UpdateGameDots()
@@ -669,6 +691,54 @@ end
 ns.PartyTargets:SetTestMode(true)
 check("party target preview", ns.PartyTargets.frames[2].Name._text == "Pinkie")
 ns.PartyTargets:SetTestMode(false)
+-- test mode for a team of three: you and two others
+do
+	local P, PT = ns.Party, ns.PartyTargets
+	local shown = function(list) local n = 0; for _, f in ipairs(list) do if f:IsShown() then n = n + 1 end end; return n end
+	local old = ns.db.party.showPlayer
+	ns.db.party.showPlayer = false
+	P:SetTestMode(true, "three")
+	check("team of three, without me: the two teammates", shown(P.frames) == 2 and P.frames[1].Name._text == "Pinkie", shown(P.frames))
+	check("...and two party targets", shown(PT.frames) == 2, shown(PT.frames))
+	ns.db.party.showPlayer = true
+	check("with me counted it's three", P.PreviewCount() == 3)
+	P.FillPreview(P.frames[1], 1)
+	check("...and I come first", P.frames[1].Name._text == "Stinkie")
+	ns.db.party.showPlayer = old
+	P:SetTestMode(true)
+	check("the usual test mode still fills the party", shown(P.frames) == #P.frames and shown(PT.frames) == #PT.frames)
+	P:SetTestMode(false)
+	flushErrors("party team of three")
+end
+-- hidden in raid groups by default: the game's own visibility rule, so it also works in combat
+do
+	local PT, c = ns.PartyTargets, ns.db.partyTargets
+	local oldReg, oldUnreg, oldType = RegisterStateDriver, UnregisterStateDriver, MOCK.instanceType
+	local rule, cleared
+	RegisterStateDriver = function(f, what, text) if f == PT.holder and what == "visibility" then rule = text end end
+	UnregisterStateDriver = function(f) if f == PT.holder then cleared = true end end
+	check("party targets hide in raids by default", ns.defaults.partyTargets.hideInRaid == true and c.hideInRaid == true)
+	MOCK.instanceType = "none"
+	PT:UpdateVisibility()
+	check("in a raid group they hide", rule == "[group:raid] hide; show" and cleared, tostring(rule))
+	rule = nil
+	MOCK.instanceType = "arena"
+	c.hideInPvP = false
+	PT:UpdateVisibility()
+	check("Solo Shuffle is a raid group: not there", rule == nil and PT.holder:IsShown())
+	MOCK.instanceType = "none"
+	c.hideInRaid = false
+	PT:UpdateVisibility()
+	check("option off: always shown", rule == nil and PT.holder:IsShown())
+	c.hideInRaid = true
+	PT:SetTestMode(true)
+	PT:UpdateVisibility()
+	check("test mode shows them anyway", rule == nil and PT.holder:IsShown())
+	PT:SetTestMode(false)
+	c.hideInPvP = ns.defaults.partyTargets.hideInPvP
+	RegisterStateDriver, UnregisterStateDriver, MOCK.instanceType = oldReg, oldUnreg, oldType
+	PT:UpdateVisibility()
+end
 flushErrors("partytargets")
 
 -- Boss frames
@@ -750,9 +820,18 @@ MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
 qtext = {}
 for _, o in ipairs(MOCK.frames) do if o._kind == "FontString" and o._parent and o._parent._parent == ns.QueueInfo.holder and o._parent:IsShown() then qtext[#qtext + 1] = o._text end end
 joined = table.concat(qtext, " | ")
-check("queued as header", joined:find("Queued as Affliction"), joined)
-check("MMR unknown for spec with no games", joined:find("MMR unknown"), joined)
-check("header spec icon", ns.QueueInfo.header.icon._tex == 365, tostring(ns.QueueInfo.header.icon._tex))
+check("column names on top", joined:find("Queue | In queue | Estimate | MMR", 1, true), joined)
+check("under the names the values drop their labels", joined:find("| 1:00 |", 1, true) and not joined:find("est ", 1, true) and not joined:find("MMR unknown", 1, true), joined)
+check("MMR unknown for spec with no games", joined:find("unknown"), joined)
+check("the names line up with the columns", ns.QueueInfo.header.cells[1]._w == ns.QueueInfo.holder._w / 4 - 6 or ns.QueueInfo.header.cells[1]:GetWidth() > 10)
+ns.db.queueInfo.header = false
+ns.QueueInfo:Refresh()
+qtext = {}
+for _, o in ipairs(MOCK.frames) do if o._kind == "FontString" and o._parent and o._parent._parent == ns.QueueInfo.holder and o._parent:IsShown() then qtext[#qtext + 1] = o._text end end
+joined = table.concat(qtext, " | ")
+check("names off: values keep their labels", joined:find("est 1:00", 1, true) and joined:find("MMR unknown", 1, true) and not joined:find("In queue", 1, true), joined)
+ns.db.queueInfo.header = true
+ns.QueueInfo:Refresh()
 local track = StinkieUIDB.queueTrack["Stinkie-Tichondrius"]
 check("queue tracked", track.live.shuffle and track.live.shuffle.since ~= nil)
 MOCK.time = MOCK.time + 100
@@ -1140,6 +1219,70 @@ do
 		tracked = 0 -- the checks below start with nothing focused
 	end
 
+	-- option: a left click opens the quest log, through a secure button lying under the quest rows
+	do
+		local focused, driver
+		stub(C_SuperTrack, "SetSuperTrackedQuestID", function(id) focused = id; tracked = id end)
+		stub(_G, "IsModifierKeyDown", function() return false end)
+		stub(_G, "RegisterStateDriver", function(_, _, rule) driver = rule end)
+		stub(_G, "UnregisterStateDriver", function() driver = nil end)
+		local micro = CreateFrame("Button")
+		local oldMicro = QuestLogMicroButton
+		QuestLogMicroButton = micro
+		check("opening a quest on the map with a click is on by default", ns.defaults.objectives.clickOpensLog == true)
+		c.clickOpensLog = true
+		QL.Update()
+		local layer = QL.layer
+		check("on: a secure layer that presses a button, aimed at nothing yet", layer ~= nil and QL.layerUp
+			and layer:GetAttribute("type1") == "click" and layer:GetAttribute("clickbutton") == nil)
+		check("with a modifier held the log stays shut", layer:GetAttribute("shift-type1") == "" and layer:GetAttribute("ctrl-type1") == "")
+		check("the game takes the layer away in combat", driver == "[combat] hide; show", driver)
+		local row
+		for _, r in ipairs(QL.rows) do
+			if r.data and r.data.kind == "quest" and r.data.quest.id == 1 then row = r end
+		end
+		check("quest rows leave their clicks to it, zone rows don't", row and QL.RowToLayer(row.data) and not QL.RowToLayer(QL.rows[1].data))
+		check("a quest a click completes keeps its click", not QL.RowToLayer({ kind = "quest", quest = { id = 9, autoComplete = true, complete = true } }))
+		row.IsMouseOver = function() return true end
+		-- Blizzard's own (off-screen) tracker has a button per quest that opens the map at it
+		local header = CreateFrame("Button")
+		local tracker = ObjectiveTrackerFrame
+		local oldModules, oldQuestModule = tracker.modules, QuestObjectiveTracker
+		QuestObjectiveTracker = { usedBlocks = { SomeTemplate = { [1] = { HeaderButton = header } } } }
+		tracker.modules = { QuestObjectiveTracker }
+		check("Blizzard's button for a quest is found", QL.BlizzardButton(1) == header and QL.BlizzardButton(2) == nil)
+		layer.IsMouseOver = function() return true end
+		layer:GetScript("OnUpdate")(layer, 1)
+		check("the layer is aimed at the hovered quest's own button", layer:GetAttribute("clickbutton") == header and row.over:IsShown())
+		QuestObjectiveTracker.usedBlocks = {}
+		layer:GetScript("OnUpdate")(layer, 1)
+		check("a quest Blizzard has no button for: the Quest Log button", layer:GetAttribute("clickbutton") == micro)
+		layer.IsMouseOver = nil
+		layer:GetScript("OnUpdate")(layer, 1)
+		check("between quests it presses nothing", layer:GetAttribute("clickbutton") == nil)
+		tracker.modules, QuestObjectiveTracker = oldModules, oldQuestModule
+		local post = layer:GetScript("PostClick")
+		post(layer, "LeftButton", true)
+		check("nothing on the press", focused == nil)
+		post(layer, "LeftButton", false)
+		check("the click also focuses the quest under the mouse", focused == 1, focused)
+		focused = nil
+		post(layer, "LeftButton", false)
+		check("a second click leaves the focus on", focused == nil)
+		layer:GetScript("OnUpdate")(layer, 1)
+		check("no mouse over the layer: no row lit", not row.over:IsShown())
+		QL.inCombat = true
+		check("in combat the rows take their clicks back", not QL.RowToLayer(row.data))
+		QL.inCombat = false
+		row.IsMouseOver = nil
+		c.clickOpensLog = false
+		QL.Update()
+		check("switched off: the layer is gone", not QL.layerUp and driver == nil and not layer:IsShown())
+		QuestLogMicroButton = oldMicro
+		tracked = 0
+		flushErrors("quest log layer")
+	end
+
 	-- the focus button sets the quest the marker points at
 	do
 		local focused
@@ -1187,6 +1330,69 @@ do
 		QL.Update()
 		check("focused: filled", select(2, QL.FocusColors(row.data.quest))[1] == 1)
 		tracked = 0
+		QL.Update()
+	end
+
+	-- a quest a click completes gets a yellow box, the prey hunt a red one
+	do
+		local function rowOf(id)
+			for _, r in ipairs(QL.rows) do
+				if r.data and r.data.kind == "quest" and r.data.quest.id == id then return r end
+			end
+		end
+		QL.Update()
+		local ready, plain = rowOf(2), rowOf(1)
+		check("click to complete: boxed", ready.boxOn and ready.box.top:IsShown())
+		check("done but handed in elsewhere: no box", QL.BoxColor({ complete = true }) == nil)
+		check("the game's Complete pop-up line is boxed", QL.RowBox({ kind = "offer", offer = { id = 7, kind = "COMPLETE" } }) ~= nil)
+		check("a new quest offer isn't", QL.RowBox({ kind = "offer", offer = { id = 7, kind = "OFFER" } }) == nil)
+		check("zone lines never are", QL.RowBox({ kind = "zone" }) == nil)
+		local r, g, b = QL.BoxColor(ready.data.quest)[1], QL.BoxColor(ready.data.quest)[2], QL.BoxColor(ready.data.quest)[3]
+		check("the ready box is yellow", r == 1 and g > 0.8 and b == 0)
+		check("a quest in progress has no box", not plain.boxOn and plain.box == nil)
+		-- the box covers the title and every line under it
+		local lines, textHeight = 0, 0
+		for _, row in ipairs(QL.rows) do
+			if row.data and row.data.quest and row.data.quest.id == 2 then
+				lines = lines + 1
+				textHeight = textHeight + row:GetHeight()
+			end
+		end
+		check("the box covers the quest's lines", lines > 1 and ready.box.height >= textHeight, ready.box.height)
+		stub(C_QuestLog, "GetActivePreyQuest", function() return 1 end)
+		QL.Update()
+		plain = rowOf(1)
+		local color = QL.BoxColor(plain.data.quest)
+		check("prey hunt: red box", plain.boxOn and color[1] == 1 and color[2] < 0.3 and color[3] < 0.3)
+		c.preyBox = false
+		check("prey box can be off", QL.BoxColor(plain.data.quest) == nil)
+		c.preyBox = true
+		check("ready beats prey", QL.BoxColor({ complete = true, autoComplete = true, prey = true })[2] > 0.8)
+		c.readyBox = false
+		check("ready box can be off", QL.BoxColor({ complete = true, autoComplete = true }) == nil)
+		c.readyBox = true
+		stub(C_QuestLog, "GetActivePreyQuest", function() return nil end)
+		QL.Update()
+		check("the box goes when the hunt does", not rowOf(1).boxOn and not rowOf(1).box.top:IsShown())
+		stub(C_QuestLog, "GetActivePreyQuest", nil)
+		check("no prey on this client: no error", QL.Build()[1].quests[1].prey == false)
+	end
+
+	-- the focus box follows its size setting, and the text makes room
+	do
+		QL.Update()
+		local row
+		for _, r in ipairs(QL.rows) do
+			if r.data and r.data.kind == "quest" then row = r break end
+		end
+		check("focus box is 14 by default", c.focusSize == 14 and row.focus.dot:GetWidth() == 14, row.focus.dot:GetWidth())
+		check("its button is bigger than the box", row.focus:GetWidth() == 22)
+		local before = QL.Indent("quest")
+		c.focusSize = 20
+		QL.Update()
+		check("a bigger focus box", row.focus.dot:GetWidth() == 20 and row.focus:GetWidth() == 28)
+		check("the quest text moves over", QL.Indent("quest") == before + 6 and QL.Indent("line") > QL.Indent("quest"))
+		c.focusSize = 14
 		QL.Update()
 	end
 
@@ -1646,8 +1852,8 @@ local function rowText(r) local t = { r.label._text }; for _, c in ipairs(r.cell
 local all3 = {}
 for _, r in ipairs(qrows) do if r:IsShown() then all3[#all3 + 1] = rowText(r) end end
 local qj = table.concat(all3, " // ")
-check("skirmish MMR N/A", qj:find("Skirmish | 0:05 | est 0:30 | |cffaaaaaaMMR N/A|r", 1, true), qj)
-check("3v3 without MMR is N/A", qj:find("3v3 | 1:05 | est 2:00 | |cffaaaaaaMMR N/A|r", 1, true), qj)
+check("skirmish MMR N/A", qj:find("Skirmish | 0:05 | 0:30 | |cffaaaaaaN/A|r", 1, true), qj)
+check("3v3 without MMR is N/A", qj:find("3v3 | 1:05 | 2:00 | |cffaaaaaaN/A|r", 1, true), qj)
 MOCK.queues = {}
 MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
 flushErrors("queue 0.33")
@@ -1969,6 +2175,25 @@ do
 		nav = true
 		QA.Update()
 		h.SetPoint = nil
+	end
+
+	-- the name on top, the distance centered on its own line under it
+	do
+		local point, rel
+		h.Distance.SetPoint = function(_, p, r) point, rel = p, r end
+		c.showName = true
+		QA.clamped = nil
+		QA.Update()
+		check("distance sits at the bottom of the plate", point == "BOTTOM" and rel == h.Plate, tostring(point))
+		check("the plate is two lines tall", h.Plate:GetHeight() > c.textStyle.size * 2, h.Plate:GetHeight())
+		c.showName = false
+		QA.clamped = nil
+		QA.Update()
+		check("no name: one line, distance in the middle", point == "CENTER" and h.Plate:GetHeight() < c.textStyle.size * 2)
+		c.showName = ns.defaults.misc.questArrow.showName
+		QA.clamped = nil
+		QA.Update()
+		h.Distance.SetPoint = nil
 	end
 
 	-- raised off the spot on screen, but not at the screen edge
@@ -3025,6 +3250,33 @@ do
 		ns.Pixel, np.highlight.outset = oldPixel, oldOutset
 	end
 
+	-- a totem as it drops: "can't be attacked" for a moment, with no event when that changes
+	do
+		local wasTargeted = targeted
+		targeted = false
+		hostile = false
+		UnitName = function() return "Grounding Totem" end
+		NP.BuildImportant()
+		NP.SetupPlate("nameplate8")
+		check("a fresh totem can come up as friendly: the thin plate", f.friendly and not f.important
+			and f.HealthFrame:GetHeight() == np.friendlyHeight)
+		hostile = true
+		MOCK.Advance(0.4)
+		check("a moment later it's asked again: enemy, important, full size", not f.friendly and f.important
+			and f.HealthFrame:GetHeight() > np.height, f.HealthFrame:GetHeight())
+		hostile = { __secret = true }
+		NP.SetupPlate("nameplate8")
+		check("no answer about its side: an enemy plate", f.friendly == false)
+		MOCK.Advance(1.2)
+		check("...and nothing changes it while there's no answer", f.friendly == false)
+		hostile = false
+		NP.SetupPlate("nameplate8")
+		MOCK.Advance(1.2)
+		check("a real friendly plate stays friendly", f.friendly == true)
+		hostile, targeted = true, wasTargeted
+		flushErrors("totem plate side")
+	end
+
 	rawset(C_NamePlate, "GetNamePlateForUnit", oldGet)
 	UnitCanAttack, UnitName, UnitDetailedThreatSituation, GetThreatStatusColor = oldCan, oldName, oldThreat, oldColor
 	UnitThreatSituation = oldSituation
@@ -3931,6 +4183,41 @@ do
 	check("unlocked: a sample to place it", QT.lines[1].fs:IsShown() and QT.lines[1].fs._text == "Boars slain: 3/10")
 	ns:SetLocked(true)
 	check("locked: sample gone", not QT.lines[1].fs:IsShown())
+	-- battleground announcements come to the same box
+	do
+		local oldWarn, oldInfo, oldType = RaidWarningFrame, ChatTypeInfo, MOCK.instanceType
+		local warn = CreateFrame("Frame")
+		warn:RegisterEvent("RAID_BOSS_EMOTE")
+		RaidWarningFrame = warn
+		ChatTypeInfo = { RAID_BOSS_EMOTE = { r = 1, g = 0.9, b = 0.1 }, BG_SYSTEM_HORDE = { r = 1, g = 0, b = 0 } }
+		local run = QT.frame:GetScript("OnEvent")
+		QT.ApplyAnnounce()
+		check("outside a battleground Blizzard keeps its announcements", warn:IsEventRegistered("RAID_BOSS_EMOTE")
+			and not QT.frame:IsEventRegistered("RAID_BOSS_EMOTE"))
+		MOCK.instanceType = "pvp"
+		QT.ApplyAnnounce()
+		check("in a battleground they come to our box", not warn:IsEventRegistered("RAID_BOSS_EMOTE")
+			and QT.frame:IsEventRegistered("RAID_BOSS_EMOTE"))
+		check("one Blizzard wasn't showing is left alone", not QT.frame:IsEventRegistered("CHAT_MSG_BG_SYSTEM_HORDE"))
+		run(QT.frame, "UI_INFO_MESSAGE", 0, "Carts escorted: 1/3")
+		run(QT.frame, "RAID_BOSS_EMOTE", "The mine cart has arrived, %s!", "Pinkie", 5, false)
+		check("the announcement shows, with its name filled in", QT.lines[1].fs._text == "The mine cart has arrived, Pinkie!", QT.lines[1].fs._text)
+		check("in its own color, the quest line keeping its own", QT.lines[1].color[2] == 0.9 and QT.lines[2].fs._text == "Carts escorted: 1/3"
+			and QT.lines[2].color[2] == (c.textStyle.color or { 1, 0.82, 0 })[2])
+		run(QT.frame, "RAID_BOSS_EMOTE", { __secret = true }, { __secret = true }, 5, false)
+		check("a hidden announcement still shows", QT.lines[1].fs:IsShown())
+		flushErrors("battleground announcements")
+		c.bgAnnounce = false
+		ns:Refresh()
+		check("switched off: Blizzard has them back", warn:IsEventRegistered("RAID_BOSS_EMOTE") and not QT.frame:IsEventRegistered("RAID_BOSS_EMOTE"))
+		c.bgAnnounce = true
+		ns:Refresh()
+		MOCK.instanceType = oldType
+		QT.ApplyAnnounce()
+		check("and again on leaving the battleground", warn:IsEventRegistered("RAID_BOSS_EMOTE") and #QT.taking == 0)
+		RaidWarningFrame, ChatTypeInfo = oldWarn, oldInfo
+		MOCK.Advance(5)
+	end
 	c.enabled = false
 	ns:Refresh()
 	check("off: Blizzard gets them back", regs.UI_INFO_MESSAGE == true and not QT.frame:IsShown())
@@ -3960,6 +4247,376 @@ do
 	MOCK.instanceType, MOCK.instanceName = "none", "Dornogal"
 	MOCK.Fire("ZONE_CHANGED_NEW_AREA"); MOCK.Advance(0.1)
 	flushErrors("arena centering")
+end
+
+-- raid frames: our buttons on the game's group header
+do
+	local Raid, c = ns.Raid, ns.db.raid
+	local saved = {}
+	local function stub(name, v) saved[#saved + 1] = { name, rawget(_G, name) }; rawset(_G, name, v) end
+	check("raid frames are off until switched on", ns.defaults.raid.enabled == false and Raid.holder == nil)
+	check("off: Blizzard's raid frames are left alone", Raid.HidesBlizzard() == false)
+
+	-- the mock has no group header. This stands in for the one thing the game's does here: asked
+	-- to start N places before the first unit, it makes N buttons.
+	local function actLikeHeader(h)
+		h.SetAttribute = function(self, k, v)
+			self._attr = self._attr or {}
+			self._attr[k] = v
+			if k == "startingIndex" and v < 1 then
+				for i = 1, 1 - v do
+					if not self._attr["child" .. i] then
+						local b = CreateFrame("Button", nil, self)
+						b:Hide()
+						self._attr["child" .. i] = b
+					end
+				end
+			end
+		end
+	end
+	-- the game tells a button about a new attribute; the mock doesn't
+	local function giveUnit(b, unit)
+		b:SetAttribute("unit", unit)
+		b:GetScript("OnAttributeChanged")(b, "unit", unit)
+	end
+
+	c.enabled = true
+	local oldCreate = CreateFrame
+	CreateFrame = function(kind, name, parent, template)
+		local f = oldCreate(kind, name, parent, template)
+		if template == "SecureGroupHeaderTemplate" or template == "SecureGroupPetHeaderTemplate" then actLikeHeader(f) end
+		return f
+	end
+	Raid:Init()
+	CreateFrame = oldCreate
+	flushErrors("raid init")
+	check("raid holder and its mover", Raid.holder ~= nil and ns.movers.raid ~= nil)
+	check("eight group headers, main tanks and pets", #Raid.headers == 8 and Raid.headers.tanks ~= nil and Raid.headers.pets ~= nil)
+	check("on: Blizzard's raid frames give way", Raid.HidesBlizzard() == true)
+	check("every button is made up front", #Raid.buttons == 8 * 5 + 2, #Raid.buttons)
+	local h1, h3 = Raid.headers[1], Raid.headers[3]
+	check("each header keeps to its raid group", h3:GetAttribute("groupFilter") == "3" and h3:GetAttribute("unitsPerColumn") == 5
+		and h3:GetAttribute("showRaid") == true)
+	check("groups run top to bottom by default", h1:GetAttribute("point") == "TOP" and h1:GetAttribute("yOffset") == -c.spacing)
+	check("not used in a party unless asked", h1:GetAttribute("showParty") == false)
+	check("pets and main tanks are off by default", Raid.headers.pets:GetAttribute("showRaid") == false
+		and Raid.headers.tanks:GetAttribute("showRaid") == false)
+	check("buttons are made at the set size", h1:GetAttribute("initialConfigFunction"):find("SetWidth%(" .. c.width .. "%)") ~= nil)
+	check("a header ends back at its first unit", h1:GetAttribute("startingIndex") == 1)
+
+	local b = h1:GetAttribute("child1")
+	check("a button is a full raid frame", b.SUIRaid == "raid" and b.Health and b.HealPredict and b.HealAbsorb and b.Ready and b.Aggro
+		and b:GetAttribute("toggleForVehicle") == true and b:GetAttribute("*type1") == "target")
+	check("sized from the settings", b:GetWidth() == c.width and b:GetHeight() == c.height)
+	check("no unit yet: nothing to watch", b.unit == nil and not b:IsEventRegistered("UNIT_HEALTH"))
+
+	-- the header hands out units
+	MOCK.unitNames = MOCK.unitNames or {}
+	local oldNames = {}
+	for _, u in ipairs({ "raid1", "raid2", "raidpet1" }) do oldNames[u] = MOCK.unitNames[u] end
+	MOCK.unitNames.raid1, MOCK.unitNames.raid2 = "Pinkie", "Minkie"
+	b:Show()
+	giveUnit(b, "raid1")
+	flushErrors("raid unit")
+	check("the button follows its unit", b.unit == "raid1" and Raid.byUnit.raid1 == b)
+	check("it listens for that unit", b:IsEventRegistered("UNIT_HEALTH") and b:IsEventRegistered("UNIT_HEAL_PREDICTION"))
+	check("aura icons are made once someone is on it", b.aurasBuilt and b.Debuffs ~= nil and b.DispelGlow ~= nil)
+	giveUnit(b, "raid2")
+	check("a new unit replaces the old one", Raid.byUnit.raid1 == nil and Raid.byUnit.raid2 == b and b.unit == "raid2")
+	giveUnit(b, nil)
+	check("an emptied button lets go", b.unit == nil and Raid.byUnit.raid2 == nil and not b:IsEventRegistered("UNIT_HEALTH"))
+	giveUnit(b, "raid1")
+
+	-- vehicles
+	check("pet of a raid member", Raid.PetOf("raid7") == "raidpet7" and Raid.PetOf("party2") == "partypet2" and Raid.PetOf("player") == "pet")
+	local driving = false
+	stub("UnitHasVehicleUI", function() return driving end)
+	check("on foot: the player", Raid.DisplayUnit("raid1") == "raid1")
+	driving = true
+	check("driving, but no vehicle unit: still the player", Raid.DisplayUnit("raid1") == "raid1")
+	MOCK.unitNames.raidpet1 = "Siege Engine"
+	check("driving: the vehicle", Raid.DisplayUnit("raid1") == "raidpet1")
+	MOCK.Fire("UNIT_ENTERED_VEHICLE", "raid1")
+	check("the button switches to the vehicle", b.unit == "raidpet1" and b.realUnit == "raid1" and Raid.byUnit.raid1 == b)
+	c.vehicles = false
+	check("vehicles can be off", Raid.DisplayUnit("raid1") == "raid1")
+	c.vehicles = true
+	driving = false
+	MOCK.Fire("UNIT_EXITED_VEHICLE", "raid1")
+	check("and back to the player", b.unit == "raid1")
+	flushErrors("raid vehicle")
+
+	-- roles and power
+	local role = "HEALER"
+	stub("UnitGroupRolesAssigned", function() return role end)
+	MOCK.Fire("PLAYER_ROLES_ASSIGNED")
+	check("healer: role icon and power bar", b.RoleIcon:IsShown() and b.Power:IsShown())
+	check("the health makes room for the power bar", b.Health:GetHeight() < c.height)
+	role = "DAMAGER"
+	MOCK.Fire("PLAYER_ROLES_ASSIGNED")
+	check("damage: icon, no power bar", b.RoleIcon:IsShown() and not b.Power:IsShown() and b.Health:GetHeight() == c.height)
+	c.roleIcon = "tankHealer"
+	MOCK.Fire("PLAYER_ROLES_ASSIGNED")
+	check("tank and healer icons only", not b.RoleIcon:IsShown())
+	role = { __secret = true }
+	c.roleIcon = "all"
+	MOCK.Fire("PLAYER_ROLES_ASSIGNED")
+	check("a hidden role: no icon, no error", not b.RoleIcon:IsShown())
+	role = "DAMAGER"
+	flushErrors("raid roles")
+
+	-- aggro
+	local threat = 3
+	stub("UnitThreatSituation", function() return threat end)
+	stub("GetThreatStatusColor", function() return 1, 0, 0 end)
+	MOCK.Fire("UNIT_THREAT_SITUATION_UPDATE", "raid1")
+	check("aggro outline", b.Aggro:IsShown())
+	threat = 0
+	MOCK.Fire("UNIT_THREAT_SITUATION_UPDATE", "raid1")
+	check("no threat, no outline", not b.Aggro:IsShown())
+	threat = { __secret = true }
+	MOCK.Fire("UNIT_THREAT_SITUATION_UPDATE", "raid1")
+	check("hidden threat: no outline, no error", not b.Aggro:IsShown())
+	threat = 3
+	c.aggro = false
+	MOCK.Fire("UNIT_THREAT_SITUATION_UPDATE", "raid1")
+	check("aggro outline can be off", not b.Aggro:IsShown())
+	c.aggro = true
+	flushErrors("raid aggro")
+
+	-- the icon in the middle
+	local summon, summonStatus, res, phase, other = false, 1, false, nil, false
+	stub("C_IncomingSummon", { HasIncomingSummon = function() return summon end, IncomingSummonStatus = function() return summonStatus end })
+	local oldSummonEnum = Enum.SummonStatus
+	Enum.SummonStatus = { None = 0, Pending = 1, Accepted = 2, Declined = 3 }
+	stub("UnitHasIncomingResurrection", function() return res end)
+	stub("UnitPhaseReason", function() return phase end)
+	stub("UnitInOtherParty", function() return other end)
+	check("nothing going on: no icon", Raid.CenterState("raid1") == nil)
+	other = true
+	check("in another group", Raid.CenterState("raid1") == "otherGroup")
+	phase = 2
+	check("phased comes first", Raid.CenterState("raid1") == "phase")
+	res = true
+	check("a resurrection comes before that", Raid.CenterState("raid1") == "resurrect")
+	summon = true
+	check("a summon comes first of all", Raid.CenterState("raid1") == "summonPending")
+	summonStatus = 2
+	check("summon accepted", Raid.CenterState("raid1") == "summonAccepted")
+	MOCK.Fire("INCOMING_SUMMON_CHANGED", "raid1")
+	check("the icon shows on the frame", b.CenterIcon:IsShown())
+	summon, res, phase, other = false, false, nil, false
+	MOCK.Fire("UNIT_PHASE", "raid1")
+	check("and goes again", not b.CenterIcon:IsShown())
+	Enum.SummonStatus = oldSummonEnum
+	flushErrors("raid center icon")
+
+	-- ready check
+	local answer = "waiting"
+	stub("GetReadyCheckStatus", function() return answer end)
+	MOCK.Fire("READY_CHECK")
+	check("ready check: waiting", b.Ready:IsShown() and b.readyStatus == "waiting")
+	answer = "ready"
+	MOCK.Fire("READY_CHECK_CONFIRM", "raid1", true)
+	check("ready check: ready", b.readyStatus == "ready")
+	answer = "waiting"
+	MOCK.Fire("READY_CHECK_CONFIRM", "raid1", true)
+	MOCK.Fire("READY_CHECK_FINISHED")
+	check("no answer by the end is not ready", b.readyStatus == "notready" and b.Ready:IsShown())
+	MOCK.Advance(7)
+	check("the answers clear after a few seconds", not b.Ready:IsShown() and b.readyStatus == nil)
+	flushErrors("raid ready check")
+
+	-- incoming heals
+	local calc = { GetIncomingHeals = function() return 250, 100, 150, false end, GetHealAbsorbs = function() return 80, false end }
+	b.calc = calc
+	local healed, eaten
+	b.HealPredict.SetValue = function(_, v) healed = v end
+	b.HealAbsorb.SetValue = function(_, v) eaten = v end
+	Raid.UpdatePrediction(b)
+	check("incoming heals and heal absorbs go to their bars", healed == 250 and eaten == 80)
+	c.healPrediction = false
+	Raid.UpdatePrediction(b)
+	check("heal prediction can be off", healed == 0 and eaten == 0)
+	c.healPrediction = true
+	b.calc = nil
+	Raid.UpdatePrediction(b)
+	check("no calculator on this client: empty, no error", healed == 0)
+	b.HealPredict.SetValue, b.HealAbsorb.SetValue = nil, nil
+
+	-- boss debuffs the game draws itself: spots belong to a unit
+	local added, removed = {}, {}
+	local oldAuras = C_UnitAuras
+	C_UnitAuras = setmetatable({
+		AddPrivateAuraAnchor = function(args) added[#added + 1] = args; return #added end,
+		RemovePrivateAuraAnchor = function(id) removed[#removed + 1] = id end,
+	}, { __index = oldAuras })
+	Raid.UpdatePrivate(b)
+	check("two spots for the unit", #added == 2 and added[1].unitToken == "raid1" and added[2].auraIndex == 2
+		and added[1].iconInfo.iconWidth == c.privateSize)
+	Raid.UpdatePrivate(b)
+	check("old spots are given back first", #removed == 2 and #added == 4)
+	c.privateAuras = false
+	Raid.UpdatePrivate(b)
+	check("boss debuffs can be off", #added == 4 and #b.privateIDs == 0)
+	c.privateAuras = true
+	C_UnitAuras = oldAuras
+	flushErrors("raid private auras")
+
+	-- layout: one list
+	c.keepGroups, c.sort = false, "ROLE"
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("one list: tanks, then healers, then damage", h1:GetAttribute("groupBy") == "ASSIGNEDROLE"
+		and h1:GetAttribute("groupingOrder") == "TANK,HEALER,DAMAGER,NONE" and h1:GetAttribute("groupFilter") == "1,2,3,4,5,6,7,8")
+	check("five to a column, eight columns by default", h1:GetAttribute("unitsPerColumn") == 5 and h1:GetAttribute("maxColumns") == 8)
+	c.perColumn, c.maxColumns = 10, 4
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("players per column and columns can both be set", h1:GetAttribute("unitsPerColumn") == 10 and h1:GetAttribute("maxColumns") == 4)
+	check("the mover is as big as that block", Raid.holder:GetWidth() == 4 * c.width + 3 * c.spacing
+		and Raid.holder:GetHeight() == 10 * c.height + 9 * c.spacing, Raid.holder:GetWidth())
+	c.perColumn, c.maxColumns = 5, 8
+	c.keepGroups = true
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("kept in groups: tanks first inside each group too", h3:GetAttribute("groupBy") == "ASSIGNEDROLE" and h3:GetAttribute("groupFilter") == "3")
+	c.keepGroups = false
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("the other headers stand empty", h3:GetAttribute("showRaid") == false)
+	check("the one list has a button for everyone", #Raid.buttons >= 40)
+	c.sort = "NAME"
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("one list, by name", h1:GetAttribute("groupBy") == nil and h1:GetAttribute("sortMethod") == "NAME")
+	c.groups = 4
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("fewer raid groups shown", h1:GetAttribute("groupFilter") == "1,2,3,4")
+	c.keepGroups, c.sort, c.groups = true, "GROUP", 8
+	c.layout = "ROWS"
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("groups can run across", h1:GetAttribute("point") == "LEFT" and h1:GetAttribute("xOffset") == c.spacing and h1:GetAttribute("yOffset") == 0)
+	c.layout = "COLUMNS"
+	c.pets = true
+	ns:Refresh(); MOCK.Advance(0.2)
+	local pet = Raid.headers.pets:GetAttribute("child1")
+	check("pets get their own smaller frames", Raid.headers.pets:GetAttribute("showRaid") == true and pet.SUIRaid == "pet"
+		and pet:GetHeight() == c.petHeight)
+	c.pets = false
+	ns:Refresh(); MOCK.Advance(0.2)
+	flushErrors("raid layout")
+
+	-- empty groups leave no gap
+	local roster = { 1, 1, 3 } -- subgroup of raid1..3
+	stub("IsInRaid", function() return true end)
+	stub("GetNumGroupMembers", function() return #roster end)
+	stub("GetRaidRosterInfo", function(i) return "Name" .. i, 0, roster[i] end)
+	local at = {}
+	for i = 1, 8 do
+		local h = Raid.headers[i]
+		h.SetPoint = function(_, _, _, _, x) at[i] = x end
+	end
+	Raid.Arrange()
+	check("group 3 moves up next to group 1", at[1] == 0 and at[3] == c.width + c.groupSpacing, at[3])
+	check("nothing to move while the roster is the same", Raid.NeedsArrange() == false)
+	roster[4] = 2
+	check("a group filling up needs a new arrangement", Raid.NeedsArrange() == true)
+	MOCK.Fire("GROUP_ROSTER_UPDATE")
+	check("and gets it", at[2] == c.width + c.groupSpacing and at[3] == 2 * (c.width + c.groupSpacing))
+	c.compact = false
+	Raid.Arrange()
+	check("gaps can be kept", at[3] == 2 * (c.width + c.groupSpacing) and at[5] == 4 * (c.width + c.groupSpacing))
+	c.compact = true
+	for i = 1, 8 do Raid.headers[i].SetPoint = nil end
+	flushErrors("raid arrange")
+
+	-- where it shows
+	local oldType = MOCK.instanceType
+	MOCK.instanceType = "arena"
+	Raid:UpdateVisibility()
+	check("hidden in arenas", not Raid.holder:IsShown())
+	MOCK.instanceType = "pvp"
+	Raid:UpdateVisibility()
+	check("shown in battlegrounds", Raid.holder:IsShown())
+	c.hideInBattlegrounds = true
+	Raid:UpdateVisibility()
+	check("unless that's switched off", not Raid.holder:IsShown())
+	c.hideInBattlegrounds = false
+	MOCK.instanceType = oldType
+	Raid:UpdateVisibility()
+
+	-- test mode
+	Raid:SetTestMode(true)
+	flushErrors("raid test mode")
+	check("test mode: four groups of stand-ins", h1.SUIPreview == 5 and Raid.headers[4].SUIPreview == 5 and Raid.headers[5].SUIPreview == nil)
+	check("the header is asked to show them", h1:GetAttribute("startingIndex") == -4)
+	check("stand-ins have names", b.preview and b.Name:GetText() == "Tankie", b.Name:GetText())
+	check("the first two are tanks, each group has a healer", Raid.PreviewData(1).role == "TANK" and Raid.PreviewData(7).role == "HEALER")
+	check("a stand-in doesn't listen to a real unit", not b:IsEventRegistered("UNIT_HEALTH"))
+	local icons = b.SUIPreviewIcons
+	check("stand-ins: the first has a big defensive up", icons and icons.def:IsShown() and not icons.debuff1:IsShown())
+	local second, fourth = h1:GetAttribute("child2"), h1:GetAttribute("child4")
+	check("some have debuffs, one of them dispellable with its outline", second.SUIPreviewIcons.debuff1:IsShown()
+		and not second.PreviewDispel:IsShown() and fourth.SUIPreviewIcons.debuff2:IsShown()
+		and fourth.SUIPreviewIcons.debuff1.edge:IsShown() and fourth.PreviewDispel:IsShown())
+	check("some have boss debuffs and your own buffs", h1:GetAttribute("child3").SUIPreviewIcons.boss1:IsShown()
+		and second.SUIPreviewIcons.buff2:IsShown() and not second.SUIPreviewIcons.buff3:IsShown())
+	local far = Raid.headers[2]:GetAttribute("child4") -- the ninth stand-in
+	check("a couple are out of range, and stay faded", far.previewIndex == 9 and far:GetAlpha() == c.rangeAlpha, far:GetAlpha())
+	MOCK.Advance(0.5)
+	check("...after the range check has run too", far:GetAlpha() == c.rangeAlpha and b:GetAlpha() == 1)
+	c.debuffs, c.defensiveIcon = "dispellable", false
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("stand-in icons follow the settings", not icons.def:IsShown() and not second.SUIPreviewIcons.debuff1:IsShown()
+		and fourth.SUIPreviewIcons.debuff1:IsShown() and not fourth.SUIPreviewIcons.debuff2:IsShown())
+	c.debuffs, c.defensiveIcon = "all", true
+	c.nameMaxChars = 3
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("stand-in names are cut to the name length", b.Name:GetText() == "Tan", b.Name:GetText())
+	c.nameMaxChars = 0
+	-- changing the shape with test mode on
+	local cleared = 0
+	local oldClear = b.ClearAllPoints
+	b.ClearAllPoints = function(self) cleared = cleared + 1; return oldClear(self) end
+	c.keepGroups, c.perColumn, c.maxColumns = false, 4, 3
+	ns:Refresh(); MOCK.Advance(0.2)
+	b.ClearAllPoints = oldClear
+	check("one list in test mode: every stand-in moves to the first header", h1.SUIPreview == 20
+		and Raid.headers[2].SUIPreview == nil and h1:GetAttribute("startingIndex") == -19, h1.SUIPreview)
+	check("...with the column limits set", h1:GetAttribute("unitsPerColumn") == 4 and h1:GetAttribute("maxColumns") == 3)
+	check("...and old anchors cleared before the header places them again", cleared > 0)
+	check("the others' stand-ins are gone", not far.preview and not far.SUIPreviewIcons.def:IsShown())
+	c.keepGroups, c.perColumn, c.maxColumns = true, 5, 8
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("back in groups", h1.SUIPreview == 5 and Raid.headers[4].SUIPreview == 5)
+	c.previewSize = 40
+	Raid:SetTestMode(true)
+	check("test mode can show all forty", Raid.headers[8].SUIPreview == 5)
+	c.previewSize = 20
+	Raid:SetTestMode(false)
+	check("out of test mode the real unit is back", not b.preview and b.unit == "raid1" and b:IsEventRegistered("UNIT_HEALTH")
+		and h1:GetAttribute("startingIndex") == 1)
+	check("and the stand-in icons are gone", not icons.def:IsShown() and not fourth.PreviewDispel:IsShown())
+	c.nameMaxChars = 3
+	ns:Refresh(); MOCK.Advance(0.2)
+	ns.UF.UpdateName(b)
+	check("names can be cut short", b.Name:GetText() == "Pin", b.Name:GetText())
+	c.nameMaxChars = 0
+	local inCombat = InCombatLockdown
+	InCombatLockdown = function() return true end
+	Raid:SetTestMode(true)
+	check("no test mode in combat", Raid.testMode == nil)
+	InCombatLockdown = inCombat
+	flushErrors("raid test mode off")
+
+	-- Blizzard's raid frames stay away while ours are up
+	if ns.BGWidgets and ns.BGWidgets.ShowRaidAgain then
+		local container = MOCK.NewObj("Frame", nil, UIParent)
+		container:Hide()
+		ns.BGWidgets.ShowRaidAgain(container)
+		check("the BG score doesn't bring Blizzard's raid frames back", not container:IsShown())
+	end
+
+	for i = #saved, 1, -1 do rawset(_G, saved[i][1], saved[i][2]) end
+	for u, v in pairs(oldNames) do MOCK.unitNames[u] = v end
+	MOCK.unitNames.raid1, MOCK.unitNames.raid2, MOCK.unitNames.raidpet1 = oldNames.raid1, oldNames.raid2, oldNames.raidpet1
+	flushErrors("raid frames")
 end
 
 -- calls to names the mock doesn't know: any that match one of our own local functions means a

@@ -113,17 +113,7 @@ local function UpdateColor(f)
 end
 
 -- First n characters of a UTF-8 string (accented and non-Latin names count one per letter).
-local function Utf8Head(str, n)
-	local count, i, len = 0, 1, #str
-	while i <= len do
-		local b = str:byte(i)
-		local size = b < 0x80 and 1 or b < 0xE0 and 2 or b < 0xF0 and 3 or 4
-		count = count + 1
-		if count > n then return str:sub(1, i - 1), true end
-		i = i + size
-	end
-	return str, false
-end
+local Utf8Head = ns.Utf8Head
 NP.Utf8Head = Utf8Head
 
 local function UpdateName(f)
@@ -966,6 +956,8 @@ local function HideBlizzardPlate(nameplate)
 	end
 end
 
+NP.RECHECK_AFTER = { 0.1, 0.3, 1 }
+
 local plateUpdates = { UpdateColor, UpdateHealth, UpdateName, UpdateClassification, UpdateRole, UpdateSpecIcon, UpdateTarget }
 
 -- re-test "important" (the name or NPC ID may only now be readable) and re-lay the plate if it changed
@@ -979,7 +971,26 @@ function NP.RecheckImportant(f)
 	ApplyHitTest(f)
 end
 
-local function OnPlateAdded(unit)
+-- Is this unit on our side? The second value is false when the game won't say (a hidden answer).
+function NP.Side(unit)
+	local hostile = UnitCanAttack("player", unit)
+	if issecret(hostile) then return false, false end
+	return not hostile, true
+end
+
+-- A unit that has only just appeared (a totem as it drops) can come up as "can't be attacked" for
+-- a moment, and no event follows when that changes. Its plate would stay a thin friendly one, with
+-- no color, castbar or auras. So the side is asked again shortly after.
+function NP.RecheckSide(f)
+	if not f.unit then return end
+	local friendly, known = NP.Side(f.unit)
+	if known and friendly ~= (f.friendly and true or false) then
+		NP.SetupPlate(f.unit, true)
+		return true
+	end
+end
+
+local function OnPlateAdded(unit, isRecheck)
 	local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
 	if not nameplate then return end -- forbidden plates are left to Blizzard
 	HideBlizzardPlate(nameplate)
@@ -996,7 +1007,8 @@ local function OnPlateAdded(unit)
 		return
 	end
 
-	f.friendly = not UnitCanAttack("player", unit)
+	-- no answer: an enemy plate, which is the one that shows everything
+	f.friendly = NP.Side(unit)
 	f.important = not f.friendly and IsImportant(unit)
 	f.minion = not f.friendly and IsMinion(unit)
 	LayoutPlate(f)
@@ -1033,9 +1045,14 @@ local function OnPlateAdded(unit)
 	ApplyHitTest(f)
 	-- Blizzard sets its own hit area while the plate is being set up; ours goes on after it
 	C_Timer.After(0, function() if f.unit == unit then ApplyHitTest(f) end end)
-	-- a fresh totem's name often arrives a moment after its plate: check again
-	if not f.friendly and not f.important then
-		C_Timer.After(0.3, function() if f.unit == unit then NP.RecheckImportant(f) end end)
+	-- a fresh totem's side and name often arrive a moment after its plate: check again
+	if not isRecheck then
+		for _, delay in ipairs(NP.RECHECK_AFTER) do
+			C_Timer.After(delay, function()
+				if f.unit ~= unit then return end
+				if not NP.RecheckSide(f) then NP.RecheckImportant(f) end
+			end)
+		end
 	end
 	local uf = nameplate.UnitFrame
 	if uf and uf.UpdateHitTestArea and not f.hitHooked then

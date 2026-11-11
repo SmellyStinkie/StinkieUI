@@ -12,6 +12,7 @@ local TICK = 0.05
 local SETTLE = 0.4 -- how long a change has to hold before the marker or Blizzard's diamond switches
 local CORPSE = "corpse" -- what the marker follows while you're dead, in place of a quest ID
 local PLATE_WIDTH, PLATE_WIDTH_NO_NAME = 200, 64
+local PLATE_PAD, LINE_GAP = 4, 2 -- above the name and under the distance; between the two lines
 local NEAR_YARDS, FAR_YARDS, FAR_SCALE = 50, 1000, 0.6 -- full size up to NEAR, smallest from FAR
 
 local function cfg() return ns.db.misc.questArrow end
@@ -67,8 +68,9 @@ local function ShowBlizzardMarker(show)
 	f.DistanceText:SetAlpha(alpha)
 end
 
--- On screen: plate above an arrow pointing down at the spot, raised by the height setting. Off
--- screen: the arrow on the spot, with the distance under it.
+-- On screen: plate above an arrow pointing down at the spot, raised by the height setting. The
+-- plate has the quest's name with the distance centered on a line of its own under it, so the two
+-- never run together. Off screen: the arrow on the spot, with the distance under it.
 local function LayoutMarker(clamped)
 	local h = QA.holder
 	local c = cfg()
@@ -76,7 +78,8 @@ local function LayoutMarker(clamped)
 	if not clamped then h:SetPoint("CENTER", C_Navigation.GetFrame(), "CENTER", 0, c.height) end
 	h.Plate:SetShown(not clamped)
 	h.Name:SetShown(c.showName)
-	h.Plate:SetSize(c.showName and PLATE_WIDTH or PLATE_WIDTH_NO_NAME, c.textStyle.size + 8)
+	local line = c.textStyle.size
+	h.Plate:SetSize(c.showName and PLATE_WIDTH or PLATE_WIDTH_NO_NAME, c.showName and line * 2 + PLATE_PAD * 2 + LINE_GAP or line + 8)
 	h.Arrow:ClearAllPoints()
 	h.Distance:ClearAllPoints()
 	h.Plate:ClearAllPoints()
@@ -87,7 +90,11 @@ local function LayoutMarker(clamped)
 		h.Arrow:SetRotation(math.pi)
 		h.Arrow:SetPoint("BOTTOM", h, "CENTER", 0, 0)
 		h.Plate:SetPoint("BOTTOM", h.Arrow, "TOP", 0, 2)
-		h.Distance:SetPoint("RIGHT", h.Plate, "RIGHT", -6, 0)
+		if c.showName then
+			h.Distance:SetPoint("BOTTOM", h.Plate, "BOTTOM", 0, PLATE_PAD)
+		else
+			h.Distance:SetPoint("CENTER", h.Plate, "CENTER", 0, 0)
+		end
 	end
 end
 
@@ -237,11 +244,11 @@ function QA:Init()
 	h.Arrow:SetTexture(ns.MEDIA.arrow, "CLAMP", "CLAMP", "TRILINEAR")
 	h.Plate = CreateFrame("Frame", nil, h)
 	ns.CreateBackdrop(h.Plate)
-	h.Name = ns.CreateText(h.Plate, 13, "LEFT")
+	h.Name = ns.CreateText(h.Plate, 13, "CENTER")
 	-- on its own layer: the plate is a child frame, so it would draw over text on the holder
 	h.TextLayer = CreateFrame("Frame", nil, h)
 	h.TextLayer:SetFrameLevel(h.Plate:GetFrameLevel() + 2)
-	h.Distance = ns.CreateText(h.TextLayer, 13, "RIGHT")
+	h.Distance = ns.CreateText(h.TextLayer, 13, "CENTER")
 	QA.driver = CreateFrame("Frame")
 	QA.onUpdate = ns.Timed("Quest marker", OnUpdate)
 	QA:Refresh()
@@ -256,8 +263,11 @@ function QA:Refresh()
 	ns.ApplyText(h.Name, c.textStyle)
 	ns.ApplyText(h.Distance, c.textStyle)
 	h.Name:ClearAllPoints()
-	h.Name:SetPoint("LEFT", h.Plate, "LEFT", 6, 0)
-	h.Name:SetPoint("RIGHT", h.Plate, "RIGHT", -58, 0)
+	h.Name:SetPoint("TOPLEFT", h.Plate, "TOPLEFT", 6, -PLATE_PAD)
+	h.Name:SetPoint("TOPRIGHT", h.Plate, "TOPRIGHT", -6, -PLATE_PAD)
+	h.Name:SetJustifyH("CENTER")
+	h.Name:SetWordWrap(false) -- a long name is cut off, not wrapped onto the distance
+	h.Distance:SetJustifyH("CENTER")
 	QA.clamped = nil -- lay it out again on the next update
 	QA.driver:SetScript("OnUpdate", c.enabled and QA.onUpdate or nil)
 	QA.Update()

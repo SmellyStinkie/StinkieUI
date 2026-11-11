@@ -423,6 +423,7 @@ end
 -- nothing to show, and Blizzard's next roster update settles it either way.
 function W.ShowRaidAgain(container)
 	if WantRaidHidden() or not IsInRaid() or container.enabled == false then return end
+	if ns.Raid and ns.Raid.HidesBlizzard and ns.Raid.HidesBlizzard() then return end -- our raid frames stand in for it
 	if not container:IsShown() then container:Show() end
 end
 

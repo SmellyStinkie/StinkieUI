@@ -244,21 +244,29 @@ local function OnUpdate(_, dt)
 end
 
 -- newest on top; the same text again just starts over (Blizzard does the same)
-function QT.Add(msg)
+-- r, g, b: this line's own color (a battleground announcement); none = the color from the options
+function QT.Add(msg, r, g, b)
 	if msg == nil or not QT.frame then return end
 	local top = QT.lines[1]
 	local same = top.fs:IsShown() and not issecret(msg) and not issecret(top.text) and top.text == msg
 	if not same then
 		for i = QT.LINES, 2, -1 do
-			local a, b = QT.lines[i], QT.lines[i - 1]
-			a.text, a.age = b.text, b.age
-			a.fs:SetText(b.text or "")
-			a.fs:SetShown(b.fs:IsShown())
-			a.fs:SetAlpha(b.fs:GetAlpha())
+			local a, b2 = QT.lines[i], QT.lines[i - 1]
+			a.text, a.age, a.color = b2.text, b2.age, b2.color
+			a.fs:SetText(b2.text or "")
+			a.fs:SetShown(b2.fs:IsShown())
+			a.fs:SetAlpha(b2.fs:GetAlpha())
+			if a.color then a.fs:SetTextColor(a.color[1], a.color[2], a.color[3]) end
 		end
 		top.text = msg
 		top.fs:SetText(msg) -- a secret message can still be shown
 	end
+	if not r then
+		local sc = qcfg().textStyle.color or { 1, 0.82, 0 }
+		r, g, b = sc[1], sc[2], sc[3]
+	end
+	top.color = { r, g, b }
+	top.fs:SetTextColor(r, g, b)
 	top.age = 0
 	top.fs:SetAlpha(1)
 	top.fs:Show()
@@ -280,6 +288,69 @@ function QT.SetPreview(on)
 	end
 end
 
+---------------------------------------------------------------------------
+-- Battleground announcements ("The mine cart has arrived...") in the same box. Blizzard shows them
+-- in its warning frame in the top middle. Inside a battleground, and only for the events one of
+-- its frames was really listening to, they come to ours instead; leaving hands them back.
+---------------------------------------------------------------------------
+QT.ANNOUNCE_EVENTS = { "RAID_BOSS_EMOTE", "CHAT_MSG_BG_SYSTEM_ALLIANCE", "CHAT_MSG_BG_SYSTEM_HORDE", "CHAT_MSG_BG_SYSTEM_NEUTRAL" }
+QT.ANNOUNCE_FRAMES = { "RaidWarningFrame", "RaidBossEmoteFrame" }
+QT.ANNOUNCE_COLORS = {
+	RAID_BOSS_EMOTE = "RAID_BOSS_EMOTE",
+	CHAT_MSG_BG_SYSTEM_ALLIANCE = "BG_SYSTEM_ALLIANCE",
+	CHAT_MSG_BG_SYSTEM_HORDE = "BG_SYSTEM_HORDE",
+	CHAT_MSG_BG_SYSTEM_NEUTRAL = "BG_SYSTEM_NEUTRAL",
+}
+QT.taking = {} -- { frame, event } pairs taken from Blizzard's frames
+
+local function InBattleground()
+	local _, t = IsInInstance()
+	return t == "pvp"
+end
+
+function QT.ApplyAnnounce()
+	if not QT.frame then return end
+	local c = qcfg()
+	local want = (c.enabled and c.bgAnnounce and InBattleground()) and true or false
+	if want == (QT.announcing or false) then return end
+	QT.announcing = want
+	if want then
+		for _, event in ipairs(QT.ANNOUNCE_EVENTS) do
+			local took = false
+			for _, name in ipairs(QT.ANNOUNCE_FRAMES) do
+				local frame = _G[name]
+				if frame and frame.IsEventRegistered and frame:IsEventRegistered(event) then
+					frame:UnregisterEvent(event)
+					QT.taking[#QT.taking + 1] = { frame, event }
+					took = true
+				end
+			end
+			-- one nobody was showing on screen stays where it was (the chat window)
+			if took then QT.frame:RegisterEvent(event) end
+		end
+	else
+		for _, pair in ipairs(QT.taking) do
+			pair[1]:RegisterEvent(pair[2])
+			QT.frame:UnregisterEvent(pair[2])
+		end
+		wipe(QT.taking)
+	end
+end
+
+function QT.OnAnnounce(event, message, playerName, _, playSound)
+	local body = message
+	if event == "RAID_BOSS_EMOTE" then
+		-- the text can have a place for a name; if it can't be filled in here it's shown as it came
+		local ok, text = pcall(string.format, message, playerName, playerName)
+		if ok then body = text end
+		if not issecret(playSound) and playSound and SOUNDKIT and SOUNDKIT.RAID_BOSS_EMOTE_WARNING then
+			PlaySound(SOUNDKIT.RAID_BOSS_EMOTE_WARNING)
+		end
+	end
+	local info = ChatTypeInfo and ChatTypeInfo[QT.ANNOUNCE_COLORS[event]]
+	if info and info.r then QT.Add(body, info.r, info.g, info.b) else QT.Add(body) end
+end
+
 function OB.ApplyQuestText()
 	local c = qcfg()
 	local on = c.enabled and true or false
@@ -296,11 +367,16 @@ function OB.ApplyQuestText()
 		ns:RegisterMover("questText", f, "Quest Progress Text",
 			function() return qcfg().point end,
 			function(p) qcfg().point = p end)
-		f:SetScript("OnEvent", function(_, _, _, msg)
-			local r, g, b = unpack(qcfg().textStyle.color or { 1, 0.82, 0 })
-			QT.Add(msg)
-			QT.lines[1].fs:SetTextColor(r, g, b)
+		f:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
+			if event == "UI_INFO_MESSAGE" then
+				QT.Add(a2)
+			else
+				local ok, err = pcall(QT.OnAnnounce, event, a1, a2, a3, a4)
+				if not ok then ns.Error(err) end
+			end
 		end)
+		ns:On("PLAYER_ENTERING_WORLD", function() QT.ApplyAnnounce() end)
+		ns:On("ZONE_CHANGED_NEW_AREA", function() QT.ApplyAnnounce() end)
 		table.insert(ns.lockCallbacks, function(unlocked)
 			if qcfg().enabled then QT.SetPreview(unlocked) end
 		end)
@@ -316,6 +392,7 @@ function OB.ApplyQuestText()
 		QT.taken = on
 		if on then blizz:UnregisterEvent("UI_INFO_MESSAGE") else blizz:RegisterEvent("UI_INFO_MESSAGE") end
 	end
+	QT.ApplyAnnounce()
 end
 
 function OB:Init()

@@ -257,14 +257,37 @@ local function CreateRow(i)
 	return r
 end
 
+-- the line of column names on top
 local function HeaderRow()
 	if Q.header then return Q.header end
 	local r = CreateFrame("Frame", nil, Q.holder)
-	r.icon = r:CreateTexture(nil, "ARTWORK")
-	r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-	r.text = ns.CreateText(r, 14, "LEFT")
+	r.label = ns.CreateText(r, 14, "LEFT")
+	r.cells = {}
+	for k = 1, 4 do r.cells[k] = ns.CreateText(r, 14, "LEFT") end
 	Q.header = r
 	return r
+end
+
+Q.HEADERS = { label = "Queue", time = "In queue", est = "Estimate", mmr = "MMR", cr = "Rating" }
+
+-- equal columns: bracket | time in queue | estimate | MMR (| rating). The header row uses the same
+-- places, so each name sits over its column.
+local function PlaceColumns(r, c, labelLeft, cellStyle)
+	local cols = Q.Columns(c)
+	local w = c.width / (#cols + 1)
+	r.label:ClearAllPoints()
+	r.label:SetPoint("LEFT", r, "LEFT", labelLeft, 0)
+	ns.ApplyText(r.label, c.labelStyle)
+	r.label:SetWidth(math.max(10, w - 2 - labelLeft))
+	r.label:SetWordWrap(false)
+	for k, fs in ipairs(r.cells) do
+		ns.ApplyText(fs, cellStyle)
+		fs:ClearAllPoints()
+		fs:SetPoint("LEFT", r, "LEFT", math.floor(w * k) + 4, 0)
+		fs:SetWidth(math.max(10, w - 6))
+		fs:SetWordWrap(false)
+		fs:SetShown(k <= #cols)
+	end
 end
 
 function Q:Layout()
@@ -278,17 +301,13 @@ function Q:Layout()
 		for _, e in ipairs(h.SUIBorder.edges) do e:SetShown(c.background and c.border) end
 	end
 	local icon = c.specIcon and (c.height - 4) or 0
+	local labelLeft = 6 + (icon > 0 and icon + 4 or 0)
 	local top = 4
 	local hr = HeaderRow()
 	hr:SetSize(c.width, c.height)
 	hr:ClearAllPoints()
 	hr:SetPoint("TOPLEFT", h, "TOPLEFT", 0, -top)
-	hr.icon:SetSize(c.height - 4, c.height - 4)
-	hr.icon:ClearAllPoints()
-	hr.icon:SetPoint("LEFT", 6, 0)
-	hr.text:ClearAllPoints()
-	hr.text:SetPoint("LEFT", hr.icon, "RIGHT", 5, 0)
-	ns.ApplyText(hr.text, c.labelStyle)
+	PlaceColumns(hr, c, labelLeft, c.labelStyle)
 	if c.header then top = top + c.height + c.spacing end
 	for i, r in ipairs(rows) do
 		r:SetSize(c.width, c.height)
@@ -297,22 +316,7 @@ function Q:Layout()
 		r.icon:SetSize(math.max(icon, 1), math.max(icon, 1))
 		r.icon:ClearAllPoints()
 		r.icon:SetPoint("LEFT", 6, 0)
-		r.label:ClearAllPoints()
-		if icon > 0 then r.label:SetPoint("LEFT", r.icon, "RIGHT", 4, 0) else r.label:SetPoint("LEFT", 6, 0) end
-		ns.ApplyText(r.label, c.labelStyle)
-		-- equal columns: bracket | time in queue | estimate | MMR (| rating)
-		local cols = Q.Columns(c)
-		local w = c.width / (#cols + 1)
-		r.label:SetWidth(math.max(10, w - 8 - (icon > 0 and icon + 4 or 0)))
-		r.label:SetWordWrap(false)
-		for k, fs in ipairs(r.cells) do
-			ns.ApplyText(fs, c.textStyle)
-			fs:ClearAllPoints()
-			fs:SetPoint("LEFT", r, "LEFT", math.floor(w * k) + 4, 0)
-			fs:SetWidth(math.max(10, w - 6))
-			fs:SetWordWrap(false)
-			fs:SetShown(k <= #cols)
-		end
+		PlaceColumns(r, c, labelLeft, c.textStyle)
 	end
 end
 
@@ -328,30 +332,32 @@ end
 -- brackets with MMR / rating; the rest show N/A
 Q.RATED = { ["2v2"] = true, ["3v3"] = true, shuffle = true, blitz = true, rbg = true }
 
+-- with the column names on top, the values don't repeat them
 function Q.MMRText(q, last)
-	if not (q.bracket and Q.RATED[q.bracket]) then return "|cffaaaaaaMMR N/A|r" end
+	local name = cfg().header and "" or "MMR "
+	if not (q.bracket and Q.RATED[q.bracket]) then return "|cffaaaaaa" .. name .. "N/A|r" end
 	if last and last.mmr then
 		-- Blitz and Shuffle matches saved before 0.42.2 all have a 0 the game gave us, not a real one
 		local delta = last.delta
 		if PER_SPEC[q.bracket] and delta == 0 then delta = nil end
-		return "MMR " .. tostring(last.mmr) .. ((cfg().mmrChange and Q.DeltaText(delta)) or "")
+		return name .. tostring(last.mmr) .. ((cfg().mmrChange and Q.DeltaText(delta)) or "")
 	end
 	-- a saved match there but the game gave no MMR for it: not trackable
-	if last then return "|cffaaaaaaMMR N/A|r" end
-	return "|cffaaaaaaMMR unknown|r" -- no match in this bracket / spec yet
+	if last then return "|cffaaaaaa" .. name .. "N/A|r" end
+	return "|cffaaaaaa" .. name .. "unknown|r" -- no match in this bracket / spec yet
 end
 
 local function Render(list)
 	local c = cfg()
 	local hr = HeaderRow()
-	local firstSpec = list[1] and list[1].spec
-	local sname, sicon = Q.SpecInfo(firstSpec)
-	local showHeader = c.header and #list > 0 and sname ~= nil
+	local cols = Q.Columns(c)
+	local showHeader = c.header and #list > 0
 	if showHeader then
-		hr.icon:SetTexture(sicon)
-		hr.text:SetText("Queued as " .. sname)
+		hr.label:SetText(Q.HEADERS.label)
+		for k, fs in ipairs(hr.cells) do fs:SetText(cols[k] and Q.HEADERS[cols[k]] or "") end
 	end
 	hr:SetShown(showHeader and true or false)
+	local est, cr = c.header and "" or "est ", c.header and "" or "CR "
 	for i, q in ipairs(list) do
 		local r = rows[i]
 		if not r then r = CreateRow(i); Q:Layout() end
@@ -367,11 +373,10 @@ local function Render(list)
 		else
 			values.time = Clock(q.waited)
 		end
-		values.est = "est " .. (q.estimate and Clock(q.estimate) or "-")
+		values.est = est .. (q.estimate and Clock(q.estimate) or "-")
 		local last = q.mmrData or (q.bracket and Q.RATED[q.bracket] and Q.LastMMR(q.bracket, q.spec)) or nil
 		values.mmr = Q.MMRText(q, last)
-		values.cr = (q.bracket and Q.RATED[q.bracket]) and ("CR " .. ((last and last.rating) and tostring(last.rating) or "-")) or "|cffaaaaaaCR N/A|r"
-		local cols = Q.Columns(c)
+		values.cr = (q.bracket and Q.RATED[q.bracket]) and (cr .. ((last and last.rating) and tostring(last.rating) or "-")) or ("|cffaaaaaa" .. cr .. "N/A|r")
 		for k, fs in ipairs(r.cells) do fs:SetText(cols[k] and values[cols[k]] or "") end
 		r:Show()
 	end

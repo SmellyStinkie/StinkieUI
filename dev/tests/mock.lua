@@ -390,3 +390,6 @@ function pcall(f, ...)
 end
 function GetCursorPosition() return 500, 400 end
 function debugprofilestop() return os.clock() * 1000 end
+
+-- power bar colors (the game has one per power type; mana is the fallback the addon uses)
+PowerBarColor = { MANA = { r = 0, g = 0.44, b = 0.87 } }

@@ -64,8 +64,18 @@ function PT:UpdateVisibility()
 		local pvp = (t == "pvp" or t == "arena")
 		local partyHidden = ns.db.party.hideInBattlegrounds and t == "pvp"
 		local hide = (cfg().hideInPvP and pvp) or partyHidden
-		if ns.unlocked or PT.testMode then hide = false end
-		h:SetShown(not hide)
+		local preview = ns.unlocked or PT.testMode
+		if preview then hide = false end
+		-- In a raid group the game hides and shows it for us, so it follows the group in combat too.
+		-- Not in arenas: Solo Shuffle counts as a raid group (the party frames have the same rule).
+		UnregisterStateDriver(h, "visibility")
+		if hide then
+			h:Hide()
+		elseif cfg().hideInRaid and not preview and t ~= "arena" then
+			RegisterStateDriver(h, "visibility", "[group:raid] hide; show")
+		else
+			h:Show()
+		end
 	end)
 end
 
@@ -139,7 +149,8 @@ function PT.FillPreview(f, i)
 	f.HealthText:SetText(math.floor(d.hp * 100) .. "%")
 end
 
-function PT:SetTestMode(on)
+-- count: how many to show (nil = all of them)
+function PT:SetTestMode(on, count)
 	if not PT.holder then return end
 	if InCombatLockdown() then return end
 	PT.testMode = on or nil
@@ -147,7 +158,7 @@ function PT:SetTestMode(on)
 		if on then
 			PT.Unwatch(f)
 			f.preview = true
-			f:Show()
+			f:SetShown(not count or i <= count)
 			PT.FillPreview(f, i)
 		else
 			f.preview = nil
