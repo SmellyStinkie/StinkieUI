@@ -348,7 +348,8 @@ function UnitHealth() return 1000 end
 function UnitHealthMax() return 1000 end
 CurveConstants = { ScaleTo100 = 1 }
 function AbbreviateNumbers(n) return tostring(n) end
-function CreateColor(r, g, b, a) return { r = r, g = g, b = b, a = a, GetRGB = function(self) return self.r, self.g, self.b end, GetRGBA = function(self) return self.r, self.g, self.b, self.a end } end
+function CreateColor(r, g, b, a) return { r = r, g = g, b = b, a = a, GetRGB = function(self) return self.r, self.g, self.b end, GetRGBA = function(self) return self.r, self.g, self.b, self.a end,
+	SetRGBA = function(self, r2, g2, b2, a2) self.r, self.g, self.b, self.a = r2, g2, b2, a2 end } end
 function UnitIsConnected() return true end
 function UnitIsPlayer(u) return u == "player" end
 function UnitReaction() return 2 end

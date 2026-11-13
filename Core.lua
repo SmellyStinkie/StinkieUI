@@ -303,6 +303,7 @@ ns.defaults = {
 	combatTextFont = false, -- floating combat text (needs relog)
 	worldNameFont = true,   -- names and guild names above characters, yours included (needs relog)
 	classColorHealth = true,
+	castEmpowerRanks = true, -- castbars: a line and number where each empower rank is reached
 	colors = {
 		background = { 0.06, 0.06, 0.07, 0.85 },
 		health = { 0.30, 0.30, 0.32 },      -- used when class colors are off
@@ -355,6 +356,9 @@ ns.defaults = {
 		ccSize = 0, -- 0 = frame height
 		ccMax = 2,
 		dispelPosition = "BELOW", -- BELOW (row under the frame) | SIDE (after the CC icons)
+		buffs = false, buffFilter = "mine", -- mine | all
+		buffPosition = "ON", -- ON (the frame's bottom right corner) | BELOW (the row under the frame)
+		buffSize = 16, buffMax = 3,
 		healthText = "percent",
 		nameFormat = "full", showLevel = false,
 		marker = false, markerSize = 16, -- raid target marker on the frame's top edge

@@ -691,6 +691,27 @@ end
 ns.PartyTargets:SetTestMode(true)
 check("party target preview", ns.PartyTargets.frames[2].Name._text == "Pinkie")
 ns.PartyTargets:SetTestMode(false)
+-- buffs on the party frames
+do
+	local P, c = ns.Party, ns.db.party
+	local f = P.frames[1]
+	check("party frames have a buff row, off by default", f.BuffIcons ~= nil and ns.defaults.party.buffs == false)
+	check("no row under the frame for buffs kept on the frame", P.RowBelow({ height = 30, dispelIcons = false, buffs = true, buffPosition = "ON", buffSize = 16 }) == 0)
+	check("buffs below make a row as tall as they are", P.RowBelow({ height = 30, dispelIcons = false, buffs = true, buffPosition = "BELOW", buffSize = 16 }) == 16)
+	check("the row fits the taller of buffs and debuffs", P.RowBelow({ height = 40, dispelIcons = true, dispelPosition = "BELOW", buffs = true, buffPosition = "BELOW", buffSize = 16 }) == 24)
+	check("big defensives aren't repeated among the buffs", P.BUFF_FILTERS.mine:find("!BIG_DEFENSIVE", 1, true) and P.BUFF_FILTERS.mine:find("PLAYER", 1, true)
+		and not P.BUFF_FILTERS.all:find("PLAYER", 1, true))
+	c.buffs = true
+	P:SetTestMode(true)
+	local icons = f.SUIPreview
+	check("test mode shows stand-in buffs", icons and icons.buff1:IsShown() and icons.buff2:IsShown() and not icons.buff3:IsShown())
+	c.buffs = false
+	ns:Refresh(); MOCK.Advance(0.2)
+	check("and none with buffs off", not icons.buff1:IsShown())
+	P:SetTestMode(false)
+	flushErrors("party buffs")
+end
+
 -- test mode for a team of three: you and two others
 do
 	local P, PT = ns.Party, ns.PartyTargets
@@ -4223,6 +4244,40 @@ do
 	check("off: Blizzard gets them back", regs.UI_INFO_MESSAGE == true and not QT.frame:IsShown())
 	UIErrorsFrame.RegisterEvent, UIErrorsFrame.UnregisterEvent = oldReg, oldUnreg
 	flushErrors("quest text")
+end
+
+-- Castbar: empower ranks
+do
+	local m = ns.EmpowerMarks({ 1, 1, 1, 2 }) -- three ranks, then the hold at full power
+	check("empower: a mark where each rank is reached", m and #m == 3 and m[1] == 0.2 and m[2] == 0.4 and m[3] == 0.6)
+	check("empower: hidden shares give no marks", ns.EmpowerMarks({ 1, { __secret = true }, 1 }) == nil
+		and ns.EmpowerMarks({ __secret = true }) == nil and ns.EmpowerMarks(nil) == nil and ns.EmpowerMarks({ 1 }) == nil)
+	local bar = ns.CreateCastbar(UIParent)
+	bar:SetSize(200, 20)
+	local oldChannel, oldCasting, oldParts, oldDur = UnitChannelInfo, UnitCastingInfo, UnitEmpoweredStagePercentages, UnitEmpoweredChannelDuration
+	local empowered = true
+	UnitCastingInfo = function() return nil end
+	UnitChannelInfo = function() return "Fire Breath", "Fire Breath", nil, nil, nil, false, false, 1, empowered, 3, 77 end
+	UnitEmpoweredChannelDuration = function() return {} end
+	UnitEmpoweredStagePercentages = function() return { 25, 25, 25, 25 } end
+	bar:SetUnit("player")
+	local marks = bar.RankMarks
+	check("empowered cast: three rank lines with numbers", bar.empowering and marks and #marks == 3 and marks[3].line:IsShown()
+		and marks[1].text:IsShown() and marks[2].text:GetText() == 2, marks and #marks)
+	bar:SetSize(200, 8)
+	bar:ForceUpdate()
+	check("a thin bar gets the lines only", marks[1].line:IsShown() and not marks[1].text:IsShown())
+	ns.db.castEmpowerRanks = false
+	bar:ForceUpdate()
+	check("switched off: no marks", not marks[1].line:IsShown())
+	ns.db.castEmpowerRanks = true
+	bar:ForceUpdate()
+	empowered = false
+	bar:ForceUpdate()
+	check("the next plain channel has none", bar.channeling and not marks[1].line:IsShown())
+	UnitChannelInfo, UnitCastingInfo, UnitEmpoweredStagePercentages, UnitEmpoweredChannelDuration = oldChannel, oldCasting, oldParts, oldDur
+	bar:SetUnit(nil)
+	flushErrors("empower ranks")
 end
 
 -- Arena info centering

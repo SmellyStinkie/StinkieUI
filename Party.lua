@@ -52,6 +52,21 @@ local function PostUpdate(f)
 	watch(f.CCIcons, cfg.ccIcon and near)
 	watch(f.DefIcons, cfg.defensiveIcon and near)
 	watch(f.DispelIcons, cfg.dispelIcons and near)
+	watch(f.BuffIcons, cfg.buffs and near)
+end
+
+-- which buffs the buff icons show: your own, or everyone's (big defensives have their own icon)
+Party.BUFF_FILTERS = {
+	mine = "HELPFUL|PLAYER|!BIG_DEFENSIVE|!EXTERNAL_DEFENSIVE",
+	all = "HELPFUL|!BIG_DEFENSIVE|!EXTERNAL_DEFENSIVE",
+}
+
+-- the height of the row of icons under a frame (dispellable debuffs and / or buffs), 0 without one
+function Party.RowBelow(cfg)
+	local h = 0
+	if cfg.dispelIcons and cfg.dispelPosition ~= "SIDE" then h = math.floor(cfg.height * 0.6) end
+	if cfg.buffs and cfg.buffPosition == "BELOW" then h = math.max(h, cfg.buffSize) end
+	return h
 end
 
 function Party.Visible(f)
@@ -179,6 +194,15 @@ local function CreatePartyFrame(unit, index)
 			maxWidth = (s + 2) * 3,
 		})
 	end
+	do
+		-- buffs: on the frame's bottom right corner, or right-aligned in the row under it
+		local s, below = cfg.buffSize, cfg.buffPosition == "BELOW"
+		f.BuffIcons = ns.CreateAuraContainer(f, { { filter = Party.BUFF_FILTERS[cfg.buffFilter] or Party.BUFF_FILTERS.mine, max = cfg.buffMax } }, {
+			size = s, spacing = 1, anchor = below and "TOPRIGHT" or "BOTTOMRIGHT", growthX = "LEFT", growthY = below and "DOWN" or "UP",
+			maxWidth = (s + 1) * cfg.buffMax,
+			disableMouse = not below, -- on the frame they'd take the clicks meant for the player
+		})
+	end
 
 	-- PvP trinket: Blizzard's arena crowd-control tracker for this party member (arena only).
 	local trinket = CreateFrame("Frame", nil, f)
@@ -288,6 +312,15 @@ local function LayoutPartyFrame(f, index)
 			local under = f.Castbar and cfg.castbar.enabled and f.Castbar or f
 			f.DispelIcons:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -3)
 			ns.SetAuraGrowth(f.DispelIcons, "TOPLEFT", "RIGHT", "DOWN")
+		end
+	end
+	if f.BuffIcons then
+		f.BuffIcons:ClearAllPoints()
+		if cfg.buffPosition == "BELOW" then
+			local under = f.Castbar and cfg.castbar.enabled and f.Castbar or f
+			f.BuffIcons:SetPoint("TOPRIGHT", under, "BOTTOMRIGHT", 0, -3)
+		else
+			f.BuffIcons:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 2 + (cfg.power ~= "none" and cfg.powerHeight or 0))
 		end
 	end
 	if f.preview then Party.LayoutPreview(f) end
@@ -454,7 +487,8 @@ function Party:Refresh()
 	local cfg = ns.db.party
 	local n = #Party.frames
 	local castH = (cfg.castbar.enabled and (cfg.castbar.height + 2)) or 0
-	if cfg.dispelIcons and cfg.dispelPosition ~= "SIDE" then castH = castH + math.floor(cfg.height * 0.6) + 3 end
+	local row = Party.RowBelow(cfg)
+	if row > 0 then castH = castH + row + 3 end
 	local step = cfg.height + castH + cfg.spacing
 	holder:SetScale(ns.db.scale)
 	holder:SetSize(cfg.width, n * step - cfg.spacing)
@@ -503,6 +537,7 @@ local PREVIEW = {
 	},
 }
 local DISPEL_PREVIEW = { 589, 172 }
+local BUFF_PREVIEW = { 774, 139, 17, 33763 }
 -- looping test casts: { spell, cast time, offset, can't be interrupted }
 local PREVIEW_CASTS = {
 	{ 8690, 3.0, 0.0 },        -- Hearthstone
@@ -607,6 +642,23 @@ function Party.LayoutPreview(f)
 		end
 		p:SetShown(cfg.dispelIcons and k <= (d.dispel or 0))
 		p.tex:SetTexture(C_Spell.GetSpellTexture(DISPEL_PREVIEW[k]))
+		ns.ZoomIcon(p.tex)
+	end
+	-- buffs
+	for k = 1, #BUFF_PREVIEW do
+		local p = PreviewIcon(f, "buff" .. k)
+		local bs = cfg.buffSize
+		p:SetSize(bs, bs)
+		p:ClearAllPoints()
+		if cfg.buffPosition == "BELOW" then
+			local under = (f.Castbar and cfg.castbar.enabled) and f.Castbar or f
+			p:SetPoint("TOPRIGHT", under, "BOTTOMRIGHT", -(k - 1) * (bs + 1), -3)
+		else
+			p:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2 - (k - 1) * (bs + 1), 2 + (cfg.power ~= "none" and cfg.powerHeight or 0))
+		end
+		p.cd:Clear()
+		p:SetShown(cfg.buffs and k <= math.min(d.buffs or 2, cfg.buffMax))
+		p.tex:SetTexture(C_Spell.GetSpellTexture(BUFF_PREVIEW[k]))
 		ns.ZoomIcon(p.tex)
 	end
 	-- trinket

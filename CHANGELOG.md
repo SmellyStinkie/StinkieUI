@@ -1,5 +1,9 @@
 # Stinkie UI changelog
 
+## 0.47.0
+- Castbars: empowered spells (Evoker) show a line where each rank is reached, with the rank's number on taller bars. It's on by default for every castbar; the option is with the castbar colors. Casts whose details the game hides show without the marks.
+- Party Frames: new option to show buffs. Choose your own buffs or everyone's, on the frame's bottom right corner or in the row under it, with size and count sliders. Big defensives keep their own icon. It's off by default.
+
 ## 0.46.0
 - New: Raid Frames (Unit Frames > Raid Frames), a module that's off by default. Turn it on in `/stinkie modules`. It replaces Blizzard's raid frames with flat ones you can size freely:
   - Groups as columns or rows, or one list with your own players per column and number of columns. Order by raid group, by tanks then healers then damage, or by name.

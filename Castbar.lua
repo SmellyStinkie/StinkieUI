@@ -46,9 +46,77 @@ local function ApplyInterruptColor(bar, notInterruptible)
 	end
 end
 
+---------------------------------------------------------------------------
+-- Empower ranks (Evoker): a line on the bar where each rank is reached, with the rank's number.
+-- The game gives each stage's share of the whole cast, the hold at full power last. Where it
+-- hides those numbers (other players' casts in restricted PvP), there's nothing to place and the
+-- bar shows without marks.
+---------------------------------------------------------------------------
+local RANK_NUMBER_MIN_HEIGHT = 14 -- thinner bars get the lines only
+
+-- shares of the cast -> where along the bar (0 to 1) each rank is reached; nil when unknown
+function ns.EmpowerMarks(parts)
+	if issecret(parts) or type(parts) ~= "table" then return nil end
+	local n = #parts
+	if n < 2 then return nil end
+	local total = 0
+	for i = 1, n do
+		local v = parts[i]
+		if issecret(v) or type(v) ~= "number" then return nil end
+		total = total + v
+	end
+	if total <= 0 then return nil end
+	local marks, sum = {}, 0
+	for i = 1, n - 1 do
+		sum = sum + parts[i]
+		marks[i] = sum / total
+	end
+	return marks
+end
+
+local function HideRanks(bar)
+	if not bar.RankMarks then return end
+	for _, m in ipairs(bar.RankMarks) do
+		m.line:Hide()
+		m.text:Hide()
+	end
+end
+
+local function ShowRanks(bar)
+	HideRanks(bar)
+	if not (ns.db.castEmpowerRanks and bar.empowering and bar.unit and UnitEmpoweredStagePercentages) then return end
+	local ok, parts = pcall(UnitEmpoweredStagePercentages, bar.unit)
+	local marks = ok and ns.EmpowerMarks(parts) or nil
+	if not marks then return end
+	local width, height = bar:GetWidth() or 0, bar:GetHeight() or 0
+	if width <= 0 then return end
+	local px = ns.Pixel(bar)
+	bar.RankMarks = bar.RankMarks or {}
+	for i, at in ipairs(marks) do
+		local m = bar.RankMarks[i]
+		if not m then
+			m = { line = bar:CreateTexture(nil, "OVERLAY", nil, 6), text = ns.CreateText(bar, 9, "RIGHT") }
+			m.line:SetColorTexture(1, 1, 1, 0.9)
+			m.text:SetTextColor(1, 1, 1, 0.9)
+			bar.RankMarks[i] = m
+		end
+		m.line:ClearAllPoints()
+		m.line:SetPoint("TOP", bar, "TOPLEFT", width * at, 0)
+		m.line:SetPoint("BOTTOM", bar, "BOTTOMLEFT", width * at, 0)
+		m.line:SetWidth(px * 2)
+		m.line:Show()
+		-- the number sits just before its line: the stretch that ends there is that rank charging
+		m.text:ClearAllPoints()
+		m.text:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", width * at - 2, 1)
+		m.text:SetText(i)
+		m.text:SetShown(height >= RANK_NUMBER_MIN_HEIGHT)
+	end
+end
+
 local function Reset(bar)
 	bar.casting, bar.channeling, bar.empowering = nil, nil, nil
 	bar.castID = nil
+	HideRanks(bar)
 end
 
 local function CastStart(bar, event)
@@ -94,6 +162,7 @@ local function CastStart(bar, event)
 	if bar.Text then bar.Text:SetText(displayName) end
 	ApplyInterruptColor(bar, bar.unit == "player" and false or notInterruptible)
 	bar:Show()
+	ShowRanks(bar)
 end
 
 local function CastUpdate(bar, event, castID)
@@ -112,6 +181,7 @@ local function CastUpdate(bar, event, castID)
 	if not duration then return end
 	bar:SetTimerDuration(duration, Enum.StatusBarInterpolation.Immediate, direction)
 	if bar.Time.binding then bar.Time.binding:SetDuration(duration) end
+	if event == "UNIT_SPELLCAST_EMPOWER_UPDATE" then ShowRanks(bar) end
 end
 
 local function ShowEnd(bar, failed)
