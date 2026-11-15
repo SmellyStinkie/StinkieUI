@@ -18,7 +18,10 @@ local function readable(v) return v ~= nil and not issecret(v) end
 local function cfg() return ns.db.queueInfo end
 
 local LABEL = { ["2v2"] = "2v2", ["3v3"] = "3v3", shuffle = "Solo Shuffle", blitz = "Blitz", rbg = "Rated BG",
-	skirmish = "Skirmish", bg = "Battleground", brawl = "Brawl" }
+	skirmish = "Skirmish", bg = "Battleground", epic = "Epic BG", brawl = "Brawl" }
+
+-- the 40-player battlegrounds, for a queue into one of them by name (lower case)
+local EPIC_NAMES = { "epic", "alterac valley", "isle of conquest", "ashran", "wintergrasp", "korrak" }
 
 -- GetBattlefieldStatus values -> our bracket key (nil = not shown)
 function Q.Bracket(queueType, teamSize, registered, name)
@@ -32,8 +35,13 @@ function Q.Bracket(queueType, teamSize, registered, name)
 		if teamSize == 3 then return "3v3" end
 		return registered and "3v3" or "skirmish"
 	end
+	if qt:find("BRAWL") or n:find("brawl") then return "brawl" end
+	if qt == "BATTLEGROUND" and not registered then
+		for _, epic in ipairs(EPIC_NAMES) do
+			if n:find(epic, 1, true) then return "epic" end
+		end
+	end
 	if qt == "BATTLEGROUND" then return registered and "rbg" or "bg" end
-	if qt:find("BRAWL") then return "brawl" end
 	return nil
 end
 
@@ -136,10 +144,86 @@ function Q.PopVolume()
 	end)
 end
 
+-- A sound of your own in place of the game's. The game's queue pop sound is one sound file;
+-- muting that file silences it wherever the game plays it (a queue popping, a group being
+-- ready), and the chosen sound is played when a queue pops.
+Q.POP_FILE = 568011 -- sound/spells/pvpthroughqueue.ogg
+function Q.CustomPop()
+	local name = cfg().popSoundName
+	return (name ~= nil and name ~= "default") and name or nil
+end
+
+function Q.ApplyPopMute()
+	local want = cfg().enabled and Q.CustomPop() ~= nil
+	if want == (Q.popMuted or false) then return end
+	local fn = want and MuteSoundFile or UnmuteSoundFile
+	if type(fn) ~= "function" then return end
+	if pcall(fn, Q.POP_FILE) then Q.popMuted = want end
+end
+
+function Q.PlayPop()
+	local name = Q.CustomPop()
+	PlaySound(name and ns.SoundKit(name) or SOUNDKIT.PVP_THROUGH_QUEUE, "Master")
+end
+
+---------------------------------------------------------------------------
+-- The queue eye (Blizzard's button that shows while you're queued). It's part of the game's
+-- menu icons, so it sits beside them and fades with them: with the Action Bars "Menu Icons" fade
+-- on, the eye is invisible until the mouse is over the menu. Here it can stay visible, or be
+-- hidden, and be put anywhere at any size. Its parent stays the game's; only its own alpha,
+-- scale and anchor are set, and they're set again after the game places it.
+---------------------------------------------------------------------------
+function Q.ApplyEye()
+	local b = _G.QueueStatusButton
+	if not b then return false end
+	local c = cfg()
+	local on = c.enabled and true or false
+	local show = on and c.eyeShow or "menu" -- always | menu (the game's way) | hidden
+	if b.SetIgnoreParentAlpha then b:SetIgnoreParentAlpha(show == "always") end
+	if show == "hidden" then
+		b:SetAlpha(0)
+		Q.eyeHidden = true
+	elseif Q.eyeHidden then
+		b:SetAlpha(1)
+		Q.eyeHidden = nil
+	end
+	if on and c.eyeMove then
+		local h = Q.eyeHolder
+		if not h then
+			h = CreateFrame("Frame", "StinkieUI_QueueEye", UIParent)
+			h:SetSize(45, 45)
+			Q.eyeHolder = h
+			ns:RegisterMover("queueEye", h, "Queue Eye",
+				function() return cfg().eyePoint end,
+				function(p) cfg().eyePoint = p end)
+		end
+		if not Q.eyeScaleWas then Q.eyeScaleWas = b:GetScale() or 1 end
+		local scale = c.eyeScale or 1
+		h:SetScale(scale)
+		ns:ApplyPoint(h, c.eyePoint)
+		b:SetScale(scale)
+		b:ClearAllPoints()
+		b:SetPoint("CENTER", h, "CENTER", 0, 0)
+		Q.eyeMoved = true
+	end
+	return true
+end
+
+local function HookEye()
+	local b = _G.QueueStatusButton
+	if Q.eyeHooked or not (b and b.UpdatePosition) then return end
+	Q.eyeHooked = true
+	-- the game puts the eye back beside the menu whenever the menu is laid out
+	hooksecurefunc(b, "UpdatePosition", function()
+		if cfg().enabled and cfg().eyeMove then pcall(Q.ApplyEye) end
+	end)
+end
+Q.HookEye = HookEye
+
 -- the options button: hear the sound at the chosen level
 function Q.TestPopSound()
-	Q.PopVolume()
-	PlaySound(SOUNDKIT.PVP_THROUGH_QUEUE, "Master")
+	if cfg().popSound then Q.PopVolume() end
+	Q.PlayPop()
 end
 
 ---------------------------------------------------------------------------
@@ -165,7 +249,10 @@ function Q.Track(now)
 		local status, name, teamSize, registered, suspended, queueType = GetBattlefieldStatus(i)
 		-- once per pop, whatever the queue: Blizzard's sound plays for all of them
 		local popped = status == "confirm"
-		if popped and not popSeen[i] and cfg().popSound then Q.PopVolume() end
+		if popped and not popSeen[i] then
+			if cfg().popSound then Q.PopVolume() end
+			if Q.CustomPop() and cfg().enabled then pcall(Q.PlayPop) end
+		end
 		popSeen[i] = popped or nil
 		local bracket = (status == "queued" or status == "confirm") and Q.Bracket(queueType, teamSize, registered, name)
 		if bracket then
@@ -410,6 +497,7 @@ end
 
 function Q:Init()
 	Q.RestoreVolume() -- left over from a /reload or logout while the sound was playing
+	Q.ApplyPopMute()
 	local h = CreateFrame("Frame", "StinkieUI_QueueInfo", UIParent)
 	h:SetFrameStrata("MEDIUM")
 	h.bg = h:CreateTexture(nil, "BACKGROUND")
@@ -434,10 +522,14 @@ function Q:Init()
 	table.insert(ns.lockCallbacks, function() Q:Update() end)
 	Q:Layout()
 	Q:Update()
+	HookEye()
+	pcall(Q.ApplyEye)
 end
 
 function Q:Refresh()
 	if not Q.holder then return end
+	Q.ApplyPopMute()
+	pcall(Q.ApplyEye)
 	Q.holder.SUIActive = cfg().enabled and true or false
 	Q:Layout()
 	Q:Update()

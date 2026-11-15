@@ -9,6 +9,7 @@ ns.Misc = MISC
 local issecret = ns.issecret
 local function gcfg() return ns.db.misc.gcd end
 local function dcfg() return ns.db.misc.decor end
+local function qcfg() return ns.db.misc.quickBuy end
 local function acfg() return ns.db.misc.auto end
 
 ---------------------------------------------------------------------------
@@ -411,26 +412,313 @@ local function TotalCopper(index, count)
 	return info.price * math.max(1, (count or 1) / stack)
 end
 
-function MISC.OnPopup(which)
-	local c = dcfg()
-	if not c.enabled or not CONFIRM_POPUPS[which] then return end
+-- Putting an item that can still be refunded into the warband bank asks first.
+local BANK_REFUND_POPUPS = {
+	ACCOUNT_BANK_DEPOSIT_NO_REFUND_CONFIRM = true,
+	ACCOUNT_BANK_DEPOSIT_ALL_NO_REFUND_CONFIRM = true,
+}
+
+-- Answers that popup with "yes": does the deposit the popup was asking about, then closes it.
+-- data is what Blizzard gave the popup: the item, and the bank slot it was dropped on (if any).
+function MISC.OnBankPopup(which, data)
+	local q = qcfg()
+	if not (q.enabled and q.bankRefund) then return false end
+	local account = Enum.BankType and Enum.BankType.Account
+	if not (account and C_Bank) then return false end
+	local ok, done = pcall(function()
+		if which == "ACCOUNT_BANK_DEPOSIT_ALL_NO_REFUND_CONFIRM" then
+			C_Bank.AutoDepositItemsIntoBank(account)
+			return true
+		end
+		if type(data) ~= "table" or not data.itemToDeposit then return false end
+		if data.targetItemLocation then -- dropped on a slot: the item is still on the cursor
+			local bag, slot = data.targetItemLocation:GetBagAndSlot()
+			if not (bag and slot) then return false end
+			C_Container.PickupContainerItem(bag, slot)
+			return true
+		end
+		local bag, slot = data.itemToDeposit:GetItemLocation():GetBagAndSlot() -- right clicked in the bags
+		if not (bag and slot) then return false end
+		C_Container.UseContainerItem(bag, slot, nil, account, false)
+		return true
+	end)
+	if not (ok and done) then return false end
+	StaticPopup_Hide(which)
+	return true
+end
+
+function MISC.OnPopup(which, data)
+	if BANK_REFUND_POPUPS[which] then MISC.OnBankPopup(which, data) return end
+	if not CONFIRM_POPUPS[which] then return end
+	local c, q = dcfg(), qcfg()
+	local every = q.enabled and q.skipConfirm -- every purchase, not only decor
+	if not (every or c.enabled) then return end
 	if not (MerchantFrame and MerchantFrame:IsShown()) then return end
 	local index, count = MerchantFrame.itemIndex, MerchantFrame.count or 1
 	if type(index) ~= "number" then return end
 	local link = GetMerchantItemLink(index)
-	if not IsDecor(link) then return end
-	local copper = TotalCopper(index, count)
-	if (c.maxGold or 0) > 0 and copper > c.maxGold * 10000 then return end
+	local decor = c.enabled and IsDecor(link)
+	if decor and (c.maxGold or 0) > 0 and TotalCopper(index, count) > c.maxGold * 10000 then decor = false end
+	if not (every or decor) then return end
 	StaticPopup_Hide(which)
 	BuyMerchantItem(index, count)
-	if c.announce then
+	if decor and c.announce then
 		ns:Print("Bought " .. (count > 1 and (count .. "x ") or "") .. link .. " (decor, confirmed for you).")
+	elseif not decor and q.announce then
+		ns:Print("Bought " .. (count > 1 and (count .. "x ") or "") .. tostring(link) .. ".")
 	end
 end
 
 local function InitDecor()
 	if type(StaticPopup_Show) ~= "function" then return end
-	hooksecurefunc("StaticPopup_Show", function(which) MISC.OnPopup(which) end)
+	hooksecurefunc("StaticPopup_Show", function(which, _, _, data) MISC.OnPopup(which, data) end)
+end
+
+---------------------------------------------------------------------------
+-- Quick Buy
+-- Shift + right click on a vendor item opens a small box: type a number, or press Stack or Max,
+-- then Buy. The box shows the total cost and is the confirmation: the purchase goes straight to
+-- the vendor, so the game's own "are you sure" popups don't come up. Blizzard's stack-split box
+-- (one stack at most, stackable items only) is closed in its favor.
+---------------------------------------------------------------------------
+local QB = {}
+MISC.QuickBuy = QB
+QB.MAX_CALLS = 250 -- purchases sent for one Buy, at most
+
+-- free slots in the ordinary bags
+function QB.FreeSlots()
+	local free = 0
+	for bag = 0, type(NUM_BAG_SLOTS) == "number" and NUM_BAG_SLOTS or 4 do
+		local n, family = C_Container.GetContainerNumFreeSlots(bag)
+		if type(n) == "number" and (family == nil or family == 0) then free = free + n end
+	end
+	return free
+end
+
+-- What a vendor slot sells: the price of one purchase ("bundle" items at a time), what else it
+-- costs, and how many you could buy. afford: what your gold, currencies and the vendor's stock
+-- allow. max: that, and what fits in your free bag slots.
+function QB.Info(index)
+	if type(index) ~= "number" or not (C_MerchantFrame and C_MerchantFrame.GetItemInfo) then return nil end
+	local info = C_MerchantFrame.GetItemInfo(index)
+	if type(info) ~= "table" or not info.name then return nil end
+	local bundle = math.max(1, tonumber(info.stackCount) or 1)
+	local maxStack = math.max(1, tonumber(GetMerchantItemMaxStack(index)) or 1)
+	local price = tonumber(info.price) or 0
+	local limit -- in purchases; nil = nothing limits it
+	local function cap(n)
+		n = math.max(0, math.floor(n))
+		if not limit or n < limit then limit = n end
+	end
+	if price > 0 then cap(GetMoney() / price) end
+	local costs = {}
+	if info.hasExtendedCost then
+		for i = 1, type(MAX_ITEM_COST) == "number" and MAX_ITEM_COST or 3 do
+			local texture, value, link, currencyName = GetMerchantItemCostItem(index, i)
+			if type(value) == "number" and value > 0 and (link or currencyName) then
+				local have
+				if currencyName then
+					local cur = link and C_CurrencyInfo and C_CurrencyInfo.GetCurrencyInfoFromLink and C_CurrencyInfo.GetCurrencyInfoFromLink(link)
+					have = type(cur) == "table" and cur.quantity or nil
+				else
+					have = C_Item.GetItemCount(link, false, false, true)
+				end
+				costs[#costs + 1] = { value = value, texture = texture, name = currencyName or (type(link) == "string" and link:match("%[(.-)%]")) or "?" }
+				if type(have) == "number" then cap(have / value) end
+			end
+		end
+	end
+	local stock = tonumber(info.numAvailable)
+	if stock and stock >= 0 then cap(stock) end
+	local stack = math.max(bundle, math.floor(maxStack / bundle) * bundle) -- the most one purchase call takes
+	local fits = math.floor(QB.FreeSlots() * maxStack / bundle)
+	local afford = limit or math.max(fits, stack / bundle)
+	return {
+		index = index, name = info.name, texture = info.texture, link = GetMerchantItemLink(index),
+		bundle = bundle, stack = stack, price = price, costs = costs,
+		afford = afford * bundle, max = math.min(afford, fits) * bundle,
+	}
+end
+
+-- A typed number as one you can buy: whole purchases, no more than you can pay for.
+function QB.Clamp(d, qty)
+	qty = math.floor((tonumber(qty) or 0) / d.bundle) * d.bundle
+	return math.max(0, math.min(qty, d.afford, QB.MAX_CALLS * d.stack))
+end
+
+function QB.CostText(d, qty)
+	local n = qty / d.bundle
+	local parts = {}
+	if d.price > 0 then
+		local copper = d.price * n
+		local coins = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString
+		parts[#parts + 1] = coins and coins(copper) or (math.floor(copper / 10000) .. "g")
+	end
+	for _, c in ipairs(d.costs) do
+		-- the currency's (or item's) icon after the number, as the vendor window shows it
+		parts[#parts + 1] = (c.value * n) .. " " .. (c.texture and ("|T" .. c.texture .. ":14:14:0:0|t") or c.name)
+	end
+	if #parts == 0 then return "Free" end
+	return table.concat(parts, ", ")
+end
+
+-- Buys qty of the item in that vendor slot, a stack at a time. Returns how many were asked for.
+function QB.Buy(index, qty, link)
+	local d = QB.Info(index)
+	if not d or (link and d.link ~= link) then return 0 end -- the vendor's list changed under the box
+	qty = QB.Clamp(d, qty)
+	local left = qty
+	while left > 0 do
+		local n = math.min(left, d.stack)
+		BuyMerchantItem(index, n)
+		left = left - n
+	end
+	if qty > 0 and qcfg().announce then
+		ns:Print("Bought " .. qty .. "x " .. tostring(d.link or d.name) .. " for " .. QB.CostText(d, qty) .. ".")
+	end
+	return qty
+end
+
+local function QBUpdate(f)
+	local d = f.info
+	local qty = QB.Clamp(d, f.edit:GetText())
+	if qty > 0 then
+		f.cost:SetText("Total: " .. QB.CostText(d, qty) .. (qty ~= tonumber(f.edit:GetText()) and ("  (buys " .. qty .. ")") or ""))
+	elseif d.afford <= 0 then
+		f.cost:SetText("You can't pay for one.")
+	else
+		f.cost:SetText(d.bundle > 1 and ("Sold " .. d.bundle .. " at a time.") or "Type how many.")
+	end
+end
+
+local function QBCreate()
+	local f = CreateFrame("Frame", "StinkieUIQuickBuy", UIParent)
+	f:SetFrameStrata("DIALOG")
+	f:SetSize(250, 150)
+	f:EnableMouse(true)
+	f:SetClampedToScreen(true)
+	f.bg = f:CreateTexture(nil, "BACKGROUND")
+	f.bg:SetAllPoints()
+	f.bg:SetColorTexture(0.08, 0.07, 0.06, 0.96)
+	ns.CreateBackdrop(f, 0)
+	f.icon = f:CreateTexture(nil, "ARTWORK")
+	f.icon:SetSize(20, 20)
+	f.icon:SetPoint("TOPLEFT", 10, -10)
+	f.name = ns.CreateText(f, 13, "LEFT")
+	f.name:SetPoint("LEFT", f.icon, "RIGHT", 6, 0)
+	f.name:SetPoint("RIGHT", f, "RIGHT", -10, 0)
+	f.name:SetWordWrap(false)
+
+	local eb = CreateFrame("EditBox", nil, f)
+	eb:SetSize(90, 22)
+	eb:SetPoint("TOP", f, "TOP", 0, -40) -- the number has a row of its own, an arrow on each side
+	eb:SetAutoFocus(false)
+	ns.SetFont(eb, 13)
+	eb:SetJustifyH("CENTER")
+	if eb.SetNumeric then eb:SetNumeric(true) end
+	if eb.SetMaxLetters then eb:SetMaxLetters(6) end
+	eb.bg = eb:CreateTexture(nil, "BACKGROUND")
+	eb.bg:SetAllPoints()
+	eb.bg:SetColorTexture(0.15, 0.15, 0.17, 1)
+	eb:SetScript("OnTextChanged", function() if f.info then QBUpdate(f) end end)
+	eb:SetScript("OnEnterPressed", function() f.buy:GetScript("OnClick")(f.buy) end)
+	eb:SetScript("OnEscapePressed", function() f:Hide() end)
+	f.edit = eb
+
+	-- the buttons light up under the mouse like the buttons in the options window's list
+	local P = ns.BRAND.plum
+	local function button(text, width)
+		local b = ns.DialogButton(f)
+		b:SetSize(width, 22)
+		b.text:SetText(text)
+		b:SetScript("OnEnter", function(self) self.bg:SetColorTexture(P[1] * 0.6, P[2] * 0.6, P[3] * 0.6, 1) end)
+		b:SetScript("OnLeave", function(self) self.bg:SetColorTexture(0.15, 0.13, 0.11, 1) end)
+		return b
+	end
+	local function set(n)
+		eb:SetText(tostring(n))
+		QBUpdate(f)
+		eb:SetFocus()
+	end
+	-- one purchase fewer / more (one item, or one bundle where the vendor sells several at a time)
+	local function step(dir)
+		local d = f.info
+		local now = math.floor((tonumber(eb:GetText()) or 0) / d.bundle) * d.bundle
+		set(math.max(d.bundle, math.min(now + dir * d.bundle, math.max(d.afford, d.bundle))))
+	end
+	f.less = button("<", 24)
+	f.less:SetPoint("RIGHT", eb, "LEFT", -6, 0)
+	f.less:SetScript("OnClick", function() step(-1) end)
+	f.more = button(">", 24)
+	f.more:SetPoint("LEFT", eb, "RIGHT", 6, 0)
+	f.more:SetScript("OnClick", function() step(1) end)
+
+	f.stack = button("Stack", 112)
+	f.stack:SetPoint("TOPLEFT", 10, -68)
+	f.stack:SetScript("OnClick", function() set(math.min(f.info.stack, math.max(f.info.afford, 0))) end)
+	f.max = button("Max", 112)
+	f.max:SetPoint("TOPRIGHT", -10, -68)
+	f.max:SetScript("OnClick", function() set(f.info.max) end)
+
+	f.cost = ns.CreateText(f, 12, "LEFT")
+	f.cost:SetPoint("TOPLEFT", 10, -98)
+	f.cost:SetPoint("RIGHT", f, "RIGHT", -10, 0)
+	f.cost:SetWordWrap(false)
+
+	f.buy = button("Buy", 112)
+	f.buy:SetPoint("BOTTOMLEFT", 10, 10)
+	f.buy:SetScript("OnClick", function()
+		local d = f.info
+		f:Hide()
+		if d then QB.Buy(d.index, eb:GetText(), d.link) end
+	end)
+	f.cancel = button("Cancel", 112)
+	f.cancel:SetPoint("BOTTOMRIGHT", -10, 10)
+	f.cancel:SetScript("OnClick", function() f:Hide() end)
+	f:Hide()
+	QB.frame = f
+	return f
+end
+
+-- Opens the box for a vendor slot, beside the button that was clicked.
+function QB.Open(index, anchor)
+	local d = QB.Info(index)
+	if not d then return nil end
+	local f = QB.frame or QBCreate()
+	f.info = d
+	f.icon:SetTexture(d.texture)
+	f.name:SetText(d.name)
+	f.stack.text:SetText("Stack (" .. d.stack .. ")")
+	f.max.text:SetText("Max (" .. d.max .. ")")
+	f:ClearAllPoints()
+	if anchor then f:SetPoint("BOTTOMLEFT", anchor, "TOPRIGHT", 4, 4) else f:SetPoint("CENTER") end
+	f.edit:SetText(tostring(math.min(d.bundle, d.afford)))
+	QBUpdate(f)
+	f:Show()
+	f.edit:SetFocus()
+	f.edit:HighlightText()
+	return f
+end
+
+-- after Blizzard's own handling of a click on a vendor item
+function QB.OnClick(button, mouse)
+	if not qcfg().enabled or mouse ~= "RightButton" or not IsShiftKeyDown() then return end
+	if not MerchantFrame or MerchantFrame.selectedTab ~= 1 then return end -- not the buyback tab
+	-- typing somewhere (Shift + click put a link in chat): leave it
+	local focus = GetCurrentKeyboardFocus and GetCurrentKeyboardFocus()
+	if focus and focus ~= (QB.frame and QB.frame.edit) then return end
+	if StackSplitFrame and StackSplitFrame:IsShown() then StackSplitFrame:Hide() end
+	QB.Open(button:GetID(), button)
+end
+
+local function InitQuickBuy()
+	for i = 1, 12 do
+		local b = _G["MerchantItem" .. i .. "ItemButton"]
+		if b and b.HookScript then b:HookScript("OnClick", QB.OnClick) end
+	end
+	local function close() if QB.frame then QB.frame:Hide() end end
+	ns:On("MERCHANT_CLOSED", close)
+	ns:On("MERCHANT_FILTER_ITEM_UPDATE", close)
 end
 
 ---------------------------------------------------------------------------
@@ -599,6 +887,7 @@ function MISC:Init()
 	InitGCD()
 	InitAPM()
 	InitDecor()
+	InitQuickBuy()
 	InitAuto()
 end
 

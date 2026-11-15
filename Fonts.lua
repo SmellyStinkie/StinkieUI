@@ -26,6 +26,29 @@ local function Each(fn)
 	end
 end
 
+-- Text that was seen in game keeping another font although its font object was changed: on the
+-- Group Finder's Premade Groups page (the same page serves the PvP tab), the first category
+-- button ("Questing", "Arenas"). That button is made when the game loads; the others are made
+-- later and follow the font. The page's title and every category button get the font set on the
+-- text itself.
+local function PremadeGroupsText(out)
+	local sel = _G.LFGListFrame and _G.LFGListFrame.CategorySelection
+	if type(sel) ~= "table" then return end
+	out[#out + 1] = sel.Label
+	if type(sel.CategoryButtons) == "table" then
+		for _, b in ipairs(sel.CategoryButtons) do out[#out + 1] = b.Label end
+	end
+end
+local stringOriginal = {} -- the text -> { path, size, flags }
+
+local function EachString(fn)
+	local list = {}
+	pcall(PremadeGroupsText, list)
+	for _, s in ipairs(list) do
+		if type(s) == "table" and s.GetFont and s.SetFont then fn(s) end
+	end
+end
+
 function GF:Apply()
 	if not ns.db.globalFont then
 		if applied then GF:Restore() end
@@ -40,6 +63,12 @@ function GF:Apply()
 		if not original[name] then original[name] = { p, size, flags } end
 		if p ~= path then obj:SetFont(path, size, flags or "") end
 	end)
+	EachString(function(s)
+		local p, size, flags = s:GetFont()
+		if not size or size <= 0 then return end
+		if not stringOriginal[s] then stringOriginal[s] = { p, size, flags } end
+		if p ~= path then s:SetFont(path, size, flags or "") end
+	end)
 	applied = true
 end
 
@@ -47,6 +76,10 @@ function GF:Restore()
 	Each(function(name, obj)
 		local o = original[name]
 		if o and o[1] then obj:SetFont(o[1], o[2], o[3] or "") end
+	end)
+	EachString(function(s)
+		local o = stringOriginal[s]
+		if o and o[1] then s:SetFont(o[1], o[2], o[3] or "") end
 	end)
 	applied = false
 end
@@ -77,6 +110,7 @@ function GF:Init()
 		Queue()
 		HookShow("CharacterFrame")
 		HookShow("InspectFrame")
+		HookShow("PVEFrame")
 	end)
 	-- a cold login can refuse the font file for a few seconds; try again later
 	ns:On("PLAYER_ENTERING_WORLD", function()
@@ -86,6 +120,7 @@ function GF:Init()
 		C_Timer.After(15, Queue)
 	end)
 	HookShow("CharacterFrame")
+	HookShow("PVEFrame")
 end
 
 function GF:Refresh()

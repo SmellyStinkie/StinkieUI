@@ -979,6 +979,96 @@ do
 	check("no readable volume, nothing changes", master == "0.3" and StinkieUIDB.popVolumeWas == nil, master)
 	C_CVar = oldCV
 	qi.popSound, qi.popVolume = false, 1
+	-- queue names
+	check("an epic battleground queue is Epic BG", Q.Bracket("BATTLEGROUND", 0, false, "Random Epic Battleground") == "epic"
+		and Q.Bracket("BATTLEGROUND", 0, false, "Alterac Valley") == "epic")
+	check("a brawl queue is Brawl, by type or by name", Q.Bracket("BRAWL", 0, false, "Southshore vs. Tarren Mill") == "brawl"
+		and Q.Bracket("BATTLEGROUND", 0, false, "Brawl: Packed House") == "brawl")
+	check("other battlegrounds are unchanged", Q.Bracket("BATTLEGROUND", 0, false, "Random Battleground") == "bg"
+		and Q.Bracket("BATTLEGROUND", 0, true, "Rated Battleground") == "rbg" and Q.Bracket("RATEDSOLORBG", 0, true, "Battleground Blitz") == "blitz")
+	MOCK.queues = { { status = "queued", name = "Random Epic Battleground", size = 0, rated = false, qt = "BATTLEGROUND" },
+		{ status = "queued", name = "Brawl: Packed House", size = 0, rated = false, qt = "BRAWL" } }
+	local read = Q.Read()
+	check("the Queue column says Epic BG and Brawl", #read == 2 and read[1].label == "Epic BG" and read[2].label == "Brawl", read[1] and read[1].label)
+	MOCK.queues = {}
+	-- the game's queue eye
+	do
+		local eye = MOCK.NewObj("Button", "QueueStatusButton", UIParent)
+		local ignore, hookedFn
+		eye.SetIgnoreParentAlpha = function(_, v) ignore = v end
+		eye.UpdatePosition = function() end
+		local pt
+		eye.SetPoint = function(_, p, rel) pt = { p, rel } end
+		eye.ClearAllPoints = function() pt = nil end
+		local oldHook = hooksecurefunc
+		hooksecurefunc = function(t, name, fn) if t == eye and name == "UpdatePosition" then hookedFn = fn end end
+		check("queue eye: shown by default, left where the game puts it", qi.eyeShow == "always" and qi.eyeMove == false)
+		Q.eyeHooked = nil
+		Q.HookEye()
+		Q:Refresh()
+		hooksecurefunc = oldHook
+		check("shown: it no longer fades with the menu icons", ignore == true and eye:GetAlpha() == 1 and pt == nil)
+		qi.eyeShow = "menu"
+		Q:Refresh()
+		check("with the menu: the game's way", ignore == false and eye:GetAlpha() == 1)
+		qi.eyeShow = "hidden"
+		Q:Refresh()
+		check("hidden", eye:GetAlpha() == 0)
+		qi.eyeShow = "always"
+		Q:Refresh()
+		check("and back", eye:GetAlpha() == 1 and ignore == true)
+		qi.eyeMove, qi.eyeScale = true, 1.5
+		Q:Refresh()
+		check("my own spot: on Stinkie UI's holder, at my size", pt and pt[1] == "CENTER" and pt[2] == Q.eyeHolder and eye:GetScale() == 1.5 and ns.movers.queueEye ~= nil)
+		eye:ClearAllPoints()
+		eye:SetScale(1)
+		check("the game placing it again is watched", type(hookedFn) == "function")
+		hookedFn()
+		check("and it goes back to my spot", pt and pt[1] == "CENTER" and pt[2] == Q.eyeHolder and eye:GetScale() == 1.5)
+		qi.enabled = false
+		Q:Refresh()
+		check("Queue Time & MMR off: the eye is the game's again", ignore == false)
+		qi.enabled, qi.eyeMove, qi.eyeScale = true, false, 1
+		rawset(_G, "QueueStatusButton", nil)
+	end
+	-- a sound of your own in place of the game's
+	do
+		local played, muted = {}, {}
+		local oldPlay, oldMute, oldUnmute, oldKit = PlaySound, rawget(_G, "MuteSoundFile"), rawget(_G, "UnmuteSoundFile"), rawget(_G, "SOUNDKIT")
+		PlaySound = function(kit, channel) played[#played + 1] = { kit, channel } end
+		rawset(_G, "MuteSoundFile", function(id) muted[id] = true end)
+		rawset(_G, "UnmuteSoundFile", function(id) muted[id] = nil end)
+		rawset(_G, "SOUNDKIT", { PVP_THROUGH_QUEUE = 8459, READY_CHECK = 8960 })
+		check("the game's own pop sound by default", qi.popSoundName == "default" and Q.CustomPop() == nil)
+		Q:Refresh()
+		MOCK.queues = { pop }
+		MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
+		check("default: nothing muted, nothing played by Stinkie UI", muted[568011] == nil and #played == 0)
+		Q.TestPopSound()
+		check("Play it plays the game's sound", #played == 1 and played[1][1] == 8459)
+		MOCK.queues = {}
+		MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
+		played = {}
+		qi.popSoundName = "readyCheck"
+		Q:Refresh()
+		check("another sound: the game's file is muted", muted[568011] == true)
+		MOCK.queues = { pop }
+		MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
+		check("and the chosen sound plays on the pop", #played == 1 and played[1][1] == 8960 and played[1][2] == "Master")
+		MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
+		check("once per pop", #played == 1)
+		Q.TestPopSound()
+		check("Play it plays the chosen sound", #played == 2 and played[2][1] == 8960)
+		qi.popSoundName = "default"
+		Q:Refresh()
+		check("back to the game's own: unmuted", muted[568011] == nil)
+		MOCK.queues = {}
+		MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
+		PlaySound = oldPlay
+		rawset(_G, "MuteSoundFile", oldMute)
+		rawset(_G, "UnmuteSoundFile", oldUnmute)
+		rawset(_G, "SOUNDKIT", oldKit)
+	end
 	MOCK.queues = {}
 	MOCK.Fire("UPDATE_BATTLEFIELD_STATUS")
 end
@@ -3656,6 +3746,408 @@ do
 	for k, v in pairs(saved) do _G[k] = v end
 	for _, k in ipairs({ "questAccept", "questTurnIn", "repair", "repairGuild", "sellJunk", "releasePvP" }) do A[k] = false end
 	A.announce = true
+end
+
+-- Error Catcher
+do
+	local E, R, c = ns.Errors, ns.Report, ns.db.errors
+	local saved = {}
+	local function stub(name, v) saved[#saved + 1] = { name, rawget(_G, name) }; rawset(_G, name, v) end
+	check("error catcher: quiet by default", c.sound == false and c.popup == false and c.blizzard == false and c.chat == "stinkie")
+	check("it's a module, off while BugGrabber is loaded", ns.Modules.byId.errors ~= nil and E.CONFLICTS[1] == "!BugGrabber")
+	local oldBugs = StinkieUIDB.bugs
+	StinkieUIDB.bugs = { session = 4, list = {
+		{ m = "old one", s = "OtherAddon/x.lua:1", n = 2, t = 100, ses = 3, v = "0.1" },
+		{ m = "StinkieUI/Party.lua:9: last time", s = "StinkieUI/Party.lua:9", n = 1, t = 200, ses = 4, v = "0.2" },
+	} }
+	local handler, passed = nil, {}
+	local previous = function(m) passed[#passed + 1] = m end
+	stub("seterrorhandler", function(fn) handler = fn end)
+	stub("geterrorhandler", function() return previous end)
+	stub("debugstack", function() return "StinkieUI/Raid.lua:10: in function 'Layout'\nStinkieUI/Core.lua:5: in function 'Refresh'" end)
+	stub("debuglocals", function() return "x = 1" end)
+	stub("InCombatLockdown", function() return false end)
+	stub("time", function() return 1000 end)
+	stub("date", function() return "2026-11-15 12:00" end)
+	local now = 100
+	stub("GetTime", function() return now end)
+	local sounds, lastKit = 0, nil
+	stub("PlaySound", function(kit) sounds = sounds + 1; lastKit = kit end)
+	stub("SOUNDKIT", { READY_CHECK = 111 })
+	local master, timers = "0.8", {}
+	stub("C_CVar", { GetCVar = function() return master end, SetCVar = function(_, v) master = v end })
+	local oldAfter = C_Timer.After
+	C_Timer.After = function(_, fn) timers[#timers + 1] = fn end
+	local oldWas = StinkieUIDB.popVolumeWas
+	StinkieUIDB.popVolumeWas = nil
+	local said = {}
+	local oldPrint = ns.Print
+	ns.Print = function(_, m) said[#said + 1] = m end
+	local wasInstalled, wasSession, wasPrev = E.installed, E.sessionId, E.previous
+	E.installed, E.frame = false, nil
+
+	-- another catcher loaded: ours stays out
+	local oldConflict = ns.Modules.Conflict
+	ns.Modules.Conflict = function() return "!BugGrabber" end
+	check("BugGrabber loaded: the game's handler is left alone", E.Install() == false and handler == nil)
+	ns.Modules.Conflict = function() return nil end
+	check("installs as the game's error handler", E.Install() == true and handler == E.Handler and E.installed)
+	check("a new session starts", E.sessionId == 5 and StinkieUIDB.bugs.session == 5)
+	check("installing twice changes nothing", E.Install() == true and E.sessionId == 5)
+
+	handler("Interface/AddOns/StinkieUI/Raid.lua:10: attempt to index a nil value")
+	local list = StinkieUIDB.bugs.list
+	local e = list[#list]
+	check("an error is kept with where it happened and the values", #list == 3 and e.ses == 5 and e.n == 1
+		and e.s:find("Raid.lua:10", 1, true) ~= nil and e.l == "x = 1" and e.v == ns.version)
+	check("the game's own window isn't asked", #passed == 0)
+	check("a Stinkie UI error says so in chat", #said == 1 and said[1]:find("in Stinkie UI", 1, true) ~= nil
+		and said[1]:find("StinkieUI/Raid.lua:10", 1, true) ~= nil and said[1]:find("Interface", 1, true) == nil)
+	check("no sound unless asked", sounds == 0)
+	handler("Interface/AddOns/StinkieUI/Raid.lua:10: attempt to index a nil value")
+	check("the same error again only counts up", #list == 3 and e.n == 2 and #said == 1)
+
+	stub("debugstack", function() return "OtherAddon/main.lua:3: in function 'x'" end)
+	now = 200
+	handler("OtherAddon/main.lua:3: boom")
+	check("another addon's error is kept without a chat line", #list == 4 and #said == 1 and not E.IsOurs(list[4]))
+	c.chat = "all"
+	handler("OtherAddon/main.lua:4: boom two")
+	check("any addon's, when asked", #said == 2 and said[2]:find("in Stinkie UI", 1, true) == nil)
+	handler("OtherAddon/main.lua:5: boom three")
+	check("chat lines are spaced out", #said == 2 and #list == 6)
+	c.chat = "none"
+	now = 300
+	c.sound, c.blizzard = true, true
+	handler("OtherAddon/main.lua:6: boom four")
+	check("never: no line; sound and the game's window when asked", #said == 2 and sounds == 1 and passed[1] == "OtherAddon/main.lua:6: boom four")
+	check("the whisper sound by default, the game's volume untouched", lastKit == 3081 and master == "0.8" and #timers == 0)
+	c.sound, c.blizzard, c.chat = false, false, "stinkie"
+	c.soundName, c.volume = "readyCheck", 50
+	E.PlaySound()
+	check("the chosen sound, by the game's name for it", lastKit == 111)
+	check("quieter: the game's volume drops for the sound", tonumber(master) == 0.4 and StinkieUIDB.popVolumeWas == "0.8" and #timers == 1)
+	E.PlaySound()
+	check("a second sound meanwhile doesn't save the lowered volume", tonumber(master) == 0.4 and StinkieUIDB.popVolumeWas == "0.8" and #timers == 1)
+	timers[1]()
+	check("and comes back after it", master == "0.8" and StinkieUIDB.popVolumeWas == nil)
+	StinkieUIDB.popVolumeWas = "0.6"
+	timers = {}
+	E.PlaySound()
+	check("while the queue pop holds the volume, it isn't touched", master == "0.8" and #timers == 0 and StinkieUIDB.popVolumeWas == "0.6")
+	E.RestoreVolume()
+	check("a volume left lowered by a reload is put back", master == "0.6" and StinkieUIDB.popVolumeWas == nil)
+	c.soundName = "gone"
+	check("an unknown choice falls back to the first sound", E.SoundKit("gone") == 3081)
+	c.soundName, c.volume = "whisper", 100
+	master = "0.8"
+
+	stub("InCombatLockdown", function() return true end)
+	handler("OtherAddon/main.lua:7: in combat")
+	check("in combat the values aren't read", list[#list].l == nil and list[#list].s ~= nil)
+	stub("InCombatLockdown", function() return false end)
+	check("a broken catch never raises", pcall(handler, nil) and pcall(handler, {}))
+	stub("debugstack", function() return "s" end)
+	E.OnBlocked("ADDON_ACTION_BLOCKED", "OtherAddon", "CastSpellByName()")
+	check("a blocked action is kept as an error", list[#list].m == "OtherAddon: the game blocked it from calling CastSpellByName().")
+
+	-- the list is trimmed, oldest first
+	c.keep = 10
+	for i = 1, 12 do handler("OtherAddon/loop.lua:" .. i) end
+	check("only the newest are kept", #list == 10 and list[#list].m == "OtherAddon/loop.lua:12" and list[1].m ~= "old one")
+	c.keep = 50
+
+	-- views, newest first
+	StinkieUIDB.bugs.list = {
+		{ m = "old one", s = "OtherAddon/x.lua:1", n = 2, t = 100, ses = 3, v = "0.1" },
+		{ m = "StinkieUI/Party.lua:9: last time", s = "StinkieUI/Party.lua:9: in function 'a'\nline2\nline3\nline4\nline5", l = "name = \"Someone\"", n = 1, t = 200, ses = 4, v = "0.2" },
+		{ m = "now A", s = "sA", n = 1, t = 300, ses = 5, v = "0.3" },
+		{ m = "now B", s = "sB", l = "y = 2", n = 3, t = 400, ses = 5, v = "0.3" },
+	}
+	check("this session, newest first", #E.List("session") == 2 and E.List("session")[1].m == "now B")
+	check("last session", #E.List("last") == 1 and E.List("last")[1].m:find("last time", 1, true) ~= nil)
+	check("all", #E.List("all") == 4 and E.List("all")[4].m == "old one")
+	local text = E.Text(E.List("session")[1])
+	check("an error as text: count, when, version, message, stack, values",
+		text == "[x3] 2026-11-15 12:00, Stinkie UI 0.3\nnow B\n\nStack:\nsB\n\nLocals:\ny = 2", text)
+
+	-- the window
+	E.view, E.index = "session", 1
+	local oldSpecial = rawget(_G, "UISpecialFrames")
+	rawset(_G, "UISpecialFrames", {})
+	local f = E.Show()
+	check("Escape closes the window (it's on the game's list for that)", UISpecialFrames[1] == "StinkieUIErrors" and _G.StinkieUIErrors == f)
+	rawset(_G, "UISpecialFrames", oldSpecial)
+	check("the window opens on the newest error of this session", f:IsShown() and f.title._text == "Errors: this session, 1 of 2" and f.edit:GetText() == text)
+	f.next:GetScript("OnClick")(f.next)
+	check("Older moves on", f.title._text == "Errors: this session, 2 of 2" and f.edit:GetText():find("now A", 1, true) ~= nil)
+	f.next:GetScript("OnClick")(f.next)
+	check("and stops at the last", f.title._text == "Errors: this session, 2 of 2")
+	f.prev:GetScript("OnClick")(f.prev)
+	f.prev:GetScript("OnClick")(f.prev)
+	check("Newer stops at the first", f.title._text == "Errors: this session, 1 of 2")
+	f.tabs[3]:GetScript("OnClick")(f.tabs[3])
+	check("the All tab", E.view == "all" and f.title._text == "Errors: all, 1 of 4" and f.tabs[3].selected and not f.tabs[1].selected)
+	f.edit:GetScript("OnTextChanged")(f.edit, true)
+	check("typing puts the text back", f.edit:GetText() == f.shown)
+	handler("StinkieUI/New.lua:1: while open")
+	check("a new error shows up while the window is open", f.title._text == "Errors: all, 1 of 5")
+	c.popup = true
+	f:Hide()
+	handler("StinkieUI/New.lua:2: pops")
+	check("open on error, when asked", f:IsShown() and E.view == "session" and f.edit:GetText():find("pops", 1, true) ~= nil)
+	c.popup = false
+
+	-- the support report carries Stinkie UI's, with where, without the values
+	local caught = R.CaughtErrors()
+	local hasNames = false
+	for _, x in ipairs(caught) do for _, w in ipairs(x.where) do if w:find("Someone", 1, true) then hasNames = true end end end
+	check("report: only Stinkie UI's errors, four lines of where at most, no values", #caught == 3 and caught[3].msg:find("last time", 1, true) ~= nil
+		and #caught[3].where == 4 and not hasNames, #caught)
+	local report = R.Build()
+	check("and they're in the report", report:find("From the Error Catcher", 1, true) ~= nil and report:find("StinkieUI/Party.lua:9: in function 'a'", 1, true) ~= nil
+		and report:find("Someone", 1, true) == nil and report:find("old one", 1, true) == nil)
+
+	local count = #StinkieUIDB.bugs.list
+	f.wipe:GetScript("OnClick")(f.wipe)
+	check("wipe asks first, saying how many", #StinkieUIDB.bugs.list == count and ns.dialog:IsShown()
+		and ns.dialog.text._text:find("all " .. count .. " saved errors", 1, true) ~= nil and ns.dialog.yes.text._text == "Wipe")
+	ns.dialog.no:GetScript("OnClick")(ns.dialog.no)
+	check("Keep keeps them", #StinkieUIDB.bugs.list == count and not ns.dialog:IsShown())
+	f.wipe:GetScript("OnClick")(f.wipe)
+	ns.dialog.yes:GetScript("OnClick")(ns.dialog.yes)
+	check("wipe empties it", #StinkieUIDB.bugs.list == 0 and f.title._text == "Errors: this session" and f.edit:GetText() == "No errors here.")
+	f.wipe:GetScript("OnClick")(f.wipe)
+	check("nothing saved: nothing to ask", not ns.dialog:IsShown())
+	SlashCmdList.STINKIEUI("e")
+	check("/st e closes the open window", not f:IsShown())
+	SlashCmdList.STINKIEUI("errors")
+	check("/st errors opens it", f:IsShown())
+	f:Hide()
+	E.Toggle()
+	check("/stinkie errors opens it", f:IsShown())
+	E.Toggle()
+	check("and closes it", not f:IsShown())
+
+	E.installed, E.sessionId, E.previous = wasInstalled, wasSession, wasPrev
+	C_Timer.After = oldAfter
+	StinkieUIDB.popVolumeWas = oldWas
+	ns.Modules.Conflict = oldConflict
+	ns.Print = oldPrint
+	StinkieUIDB.bugs = oldBugs
+	for i = #saved, 1, -1 do rawset(_G, saved[i][1], saved[i][2]) end
+end
+
+-- the entry in the game's own options: what Stinkie UI is, and a button that stands out
+do
+	local O = ns.Options
+	local registered
+	local oldSettings, oldPanel = rawget(_G, "Settings"), rawget(_G, "SettingsPanel")
+	rawset(_G, "Settings", { RegisterCanvasLayoutCategory = function(panel, name) registered = name; return {} end, RegisterAddOnCategory = function() end })
+	rawset(_G, "SettingsPanel", nil)
+	O:Init()
+	local p = O.gamePanel
+	check("the game's options get a Stinkie UI entry", registered == "Stinkie UI" and p ~= nil)
+	check("it says what the addon is, with the version", p.tagline._text:find("modular", 1, true) ~= nil and p.tagline._text:find(tostring(ns.version), 1, true) ~= nil)
+	check("and how many modules there are", p.about._text:find(tostring(#ns.Modules.LIST) .. " modules", 1, true) ~= nil)
+	check("the options button has the accent box around it", p.open.text._text == "Open Stinkie UI options" and p.open:GetHeight() == 34)
+	local opened
+	local oldToggle, oldOpen = ns.ToggleOptions, ns.Modules.Open
+	ns.ToggleOptions = function() opened = "options" end
+	ns.Modules.Open = function(view) opened = view end
+	local was = O.window
+	O.window = nil
+	p.open:GetScript("OnClick")(p.open)
+	check("it opens the options", opened == "options")
+	p.modules:GetScript("OnClick")(p.modules)
+	check("Choose modules opens the module list", opened == "list")
+	O.window = was
+	ns.ToggleOptions, ns.Modules.Open = oldToggle, oldOpen
+	rawset(_G, "Settings", oldSettings)
+	rawset(_G, "SettingsPanel", oldPanel)
+end
+
+-- Quick Buy
+do
+	local M, QB, q = ns.Misc, ns.Misc.QuickBuy, ns.db.misc.quickBuy
+	local saved = {}
+	local function stub(name, v) saved[#saved + 1] = { name, rawget(_G, name) }; rawset(_G, name, v) end
+	check("quick buy: on by default, the extras off", q.enabled == true and q.skipConfirm == false and q.bankRefund == false)
+	-- slot 1: arrows, 5 silver for 200, stacks of 1000. slot 2: a chest for 700 of a currency. slot 3: 2 left in stock.
+	local items = {
+		{ name = "Arrow", price = 500, stackCount = 200, numAvailable = -1, texture = 1 },
+		{ name = "Chest", price = 0, stackCount = 1, numAvailable = -1, hasExtendedCost = true, texture = 2 },
+		{ name = "Rare", price = 100, stackCount = 1, numAvailable = 2, texture = 3 },
+	}
+	local maxStack, money, conquest, bought = { 1000, 1, 20 }, 2600, 1500, {}
+	stub("C_MerchantFrame", { GetItemInfo = function(i) return items[i] end })
+	stub("GetMerchantItemMaxStack", function(i) return maxStack[i] end)
+	stub("GetMerchantItemLink", function(i) return items[i] and ("[" .. items[i].name .. "]") end)
+	stub("GetMerchantItemCostItem", function(i, n) if i == 2 and n == 1 then return 9, 700, "currency:1", "Conquest" end end)
+	local oldBrand = ns.BRAND
+	ns.BRAND = { plum = { 0.5, 0.2, 0.4 } }
+	stub("GetMoney", function() return money end)
+	stub("BuyMerchantItem", function(i, n) bought[#bought + 1] = { i, n } end)
+	stub("C_CurrencyInfo", { GetCurrencyInfoFromLink = function() return { quantity = conquest } end, GetCoinTextureString = function(c) return c .. "c" end })
+	stub("C_Container", { GetContainerNumFreeSlots = function(bag) return bag == 0 and 4 or 0, 0 end })
+	stub("MerchantFrame", { selectedTab = 1, IsShown = function() return true end })
+	local shift = true
+	stub("IsShiftKeyDown", function() return shift end)
+	stub("GetCurrentKeyboardFocus", function() return nil end)
+	local said = {}
+	local oldPrint = ns.Print
+	ns.Print = function(_, m) said[#said + 1] = m end
+
+	local d = QB.Info(1)
+	check("a bundle item: sold 200 at a time, 1000 to a stack", d.bundle == 200 and d.stack == 1000)
+	check("max: what your gold pays for (5 purchases)", d.afford == 1000 and d.max == 1000, d.afford .. " " .. d.max)
+	check("a typed number rounds down to whole purchases", QB.Clamp(d, 450) == 400 and QB.Clamp(d, 150) == 0)
+	check("and never more than you can pay for", QB.Clamp(d, 99999) == 1000)
+	check("the total", QB.CostText(d, 400) == "1000c")
+	money = 500 * 30
+	check("more gold than bag space: max is what fits (4 slots)", QB.Info(1).afford == 6000 and QB.Info(1).max == 4000)
+	check("buys a stack at a time", QB.Buy(1, 2300) == 2200 and #bought == 3 and bought[1][2] == 1000 and bought[3][2] == 200 and bought[1][1] == 1)
+	check("says what it bought", #said == 1 and said[1]:find("2200x", 1, true) ~= nil)
+	bought = {}
+	d = QB.Info(2)
+	check("a currency cost: max from what you have (1500 / 700)", d.afford == 2 and d.max == 2 and QB.CostText(d, 2) == "1400 |T9:14:14:0:0|t", QB.CostText(d, 2))
+	check("no icon known: the currency's name", QB.CostText({ bundle = 1, price = 0, costs = { { value = 3, name = "Honor" } } }, 2) == "6 Honor")
+	check("items that don't stack are bought one by one", QB.Buy(2, 5) == 2 and #bought == 2 and bought[1][2] == 1)
+	bought = {}
+	check("the vendor's stock limits it", QB.Info(3).afford == 2)
+	check("a list that changed under the box buys nothing", QB.Buy(3, 1, "[Other]") == 0 and #bought == 0)
+	check("an empty slot: nothing", QB.Info(9) == nil and QB.Open(9) == nil)
+
+	-- the box
+	local split = MOCK.NewObj("Frame", "StackSplitFrame", UIParent)
+	local button = MOCK.NewObj("Button", nil, UIParent)
+	button.GetID = function() return 1 end
+	QB.OnClick(button, "LeftButton")
+	check("Shift + left click is left to the game", QB.frame == nil or not QB.frame:IsShown())
+	shift = false
+	QB.OnClick(button, "RightButton")
+	check("a plain right click too", QB.frame == nil or not QB.frame:IsShown())
+	shift = true
+	QB.OnClick(button, "RightButton")
+	local f = QB.frame
+	check("Shift + right click opens the box and closes the game's split box", f ~= nil and f:IsShown() and not split:IsShown())
+	check("it starts at one purchase and shows the total", f.edit:GetText() == "200" and f.cost._text == "Total: 500c", f.cost._text)
+	check("the buttons say how many", f.stack.text._text == "Stack (1000)" and f.max.text._text == "Max (4000)")
+	f.max:GetScript("OnClick")(f.max)
+	check("Max fills it in", f.edit:GetText() == "4000")
+	f.edit:SetText("400")
+	f.more:GetScript("OnClick")(f.more)
+	check("the right arrow adds one purchase", f.edit:GetText() == "600" and f.cost._text == "Total: 1500c")
+	f.less:GetScript("OnClick")(f.less)
+	f.less:GetScript("OnClick")(f.less)
+	f.less:GetScript("OnClick")(f.less)
+	check("the left arrow takes one off, never below one purchase", f.edit:GetText() == "200")
+	f.edit:SetText("6000")
+	f.more:GetScript("OnClick")(f.more)
+	check("and never above what you can pay for", f.edit:GetText() == "6000")
+	local painted
+	f.buy.bg.SetColorTexture = function(_, r, g, b) painted = { r, g, b } end
+	f.buy:GetScript("OnEnter")(f.buy)
+	check("a button lights up under the mouse", painted and math.abs(painted[1] - 0.3) < 0.001 and math.abs(painted[2] - 0.12) < 0.001)
+	f.buy:GetScript("OnLeave")(f.buy)
+	check("and goes back when the mouse leaves", painted[1] == 0.15)
+	f.buy.bg.SetColorTexture = nil
+	f.stack:GetScript("OnClick")(f.stack)
+	f.buy:GetScript("OnClick")(f.buy)
+	check("Buy buys and closes", #bought == 1 and bought[1][2] == 1000 and not f:IsShown())
+	bought = {}
+	QB.OnClick(button, "RightButton")
+	f.edit:SetText("600")
+	f.edit:GetScript("OnEnterPressed")(f.edit)
+	check("Enter buys the typed number", #bought == 1 and bought[1][2] == 600 and not f:IsShown())
+	bought = {}
+	QB.OnClick(button, "RightButton")
+	f.edit:GetScript("OnEscapePressed")(f.edit)
+	check("Escape closes without buying", #bought == 0 and not f:IsShown())
+	MerchantFrame.selectedTab = 2
+	QB.OnClick(button, "RightButton")
+	check("not on the buyback tab", not f:IsShown())
+	MerchantFrame.selectedTab = 1
+	GetCurrentKeyboardFocus = function() return {} end
+	QB.OnClick(button, "RightButton")
+	check("not while typing in chat", not f:IsShown())
+	GetCurrentKeyboardFocus = function() return nil end
+	q.enabled = false
+	QB.OnClick(button, "RightButton")
+	check("off: nothing", not f:IsShown())
+	q.enabled = true
+
+	-- the game's "are you sure" popup on an ordinary purchase
+	local hidden = {}
+	stub("StaticPopup_Hide", function(w) hidden[#hidden + 1] = w end)
+	MerchantFrame.itemIndex, MerchantFrame.count = 3, 1
+	M.OnPopup("CONFIRM_PURCHASE_TOKEN_ITEM")
+	check("ordinary purchases still ask by default", #bought == 0 and #hidden == 0)
+	q.skipConfirm = true
+	M.OnPopup("CONFIRM_PURCHASE_TOKEN_ITEM")
+	check("the option answers it", #bought == 1 and bought[1][1] == 3 and hidden[1] == "CONFIRM_PURCHASE_TOKEN_ITEM")
+	M.OnPopup("CONFIRM_PURCHASE_ITEM_DELAYED")
+	check("the limited-currency warning is never skipped", #bought == 1)
+	q.skipConfirm = false
+
+	-- warband bank: the "can no longer be refunded" question
+	local bank = {}
+	stub("C_Bank", { AutoDepositItemsIntoBank = function(t) bank[#bank + 1] = { "all", t } end })
+	C_Container.UseContainerItem = function(b, s, _, t) bank[#bank + 1] = { "use", b, s, t } end
+	C_Container.PickupContainerItem = function(b, s) bank[#bank + 1] = { "pickup", b, s } end
+	local oldBank = Enum.BankType
+	Enum.BankType = { Account = 2 }
+	local item = { GetItemLocation = function() return { GetBagAndSlot = function() return 1, 7 end } end }
+	hidden = {}
+	M.OnPopup("ACCOUNT_BANK_DEPOSIT_NO_REFUND_CONFIRM", { itemToDeposit = item })
+	check("off: the bank question waits for you", #bank == 0 and #hidden == 0)
+	q.bankRefund = true
+	M.OnPopup("ACCOUNT_BANK_DEPOSIT_NO_REFUND_CONFIRM", { itemToDeposit = item })
+	check("on: the item goes into the warband bank and the question closes", #bank == 1 and bank[1][1] == "use" and bank[1][2] == 1 and bank[1][3] == 7 and bank[1][4] == 2 and #hidden == 1)
+	bank, hidden = {}, {}
+	M.OnPopup("ACCOUNT_BANK_DEPOSIT_NO_REFUND_CONFIRM", { itemToDeposit = item, targetItemLocation = { GetBagAndSlot = function() return 13, 4 end } })
+	check("dropped on a bank slot: placed there", #bank == 1 and bank[1][1] == "pickup" and bank[1][2] == 13 and bank[1][3] == 4 and #hidden == 1)
+	bank, hidden = {}, {}
+	M.OnPopup("ACCOUNT_BANK_DEPOSIT_ALL_NO_REFUND_CONFIRM")
+	check("deposit all: done", #bank == 1 and bank[1][1] == "all" and #hidden == 1)
+	bank, hidden = {}, {}
+	M.OnPopup("ACCOUNT_BANK_DEPOSIT_NO_REFUND_CONFIRM", nil)
+	check("nothing to go on: the question stays", #bank == 0 and #hidden == 0)
+	M.OnPopup("USE_NO_REFUND_CONFIRM")
+	check("other refund questions are left alone", #bank == 0 and #hidden == 0)
+	q.bankRefund = false
+	Enum.BankType = oldBank
+	ns.Print = oldPrint
+	ns.BRAND = oldBrand
+	rawset(_G, "StackSplitFrame", nil)
+	for i = #saved, 1, -1 do rawset(_G, saved[i][1], saved[i][2]) end
+end
+
+-- the Group Finder's Premade Groups title gets the font on the text itself
+do
+	local GF = ns.GlobalFont
+	local label = MOCK.NewObj("FontString", nil, UIParent)
+	local font = { "Fonts\\MORPHEUS.TTF", 22, "" }
+	label.GetFont = function() return font[1], font[2], font[3] end
+	label.SetFont = function(_, p, s, f) font = { p, s, f } end
+	local old = rawget(_G, "LFGListFrame")
+	local first = MOCK.NewObj("FontString", nil, UIParent)
+	local firstFont = { "Fonts\\MORPHEUS.TTF", 12, "" }
+	first.GetFont = function() return firstFont[1], firstFont[2], firstFont[3] end
+	first.SetFont = function(_, p, s, f) firstFont = { p, s, f } end
+	rawset(_G, "LFGListFrame", { CategorySelection = { Label = label, CategoryButtons = { { Label = first }, {} } } })
+	local was = ns.db.globalFont
+	ns.db.globalFont = true
+	GF:Apply()
+	check("Premade Groups title: the chosen font, same size", font[1] == ns.GetFontPath() and font[2] == 22, tostring(font[1]))
+	check("the first category button (Questing / Arenas) too", firstFont[1] == ns.GetFontPath() and firstFont[2] == 12)
+	ns.db.globalFont = false
+	GF:Apply()
+	check("font off: the title gets the game's font back", font[1] == "Fonts\\MORPHEUS.TTF" and font[2] == 22)
+	check("and so does the button", firstFont[1] == "Fonts\\MORPHEUS.TTF")
+	ns.db.globalFont = was
+	GF:Apply()
+	rawset(_G, "LFGListFrame", old)
 end
 
 -- Character Sheet: window opacity reaches what's on screen

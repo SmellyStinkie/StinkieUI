@@ -105,6 +105,10 @@ M.LIST = {
 	{ id = "windowMover", name = "Window Mover", category = "Quality of Life", files = { "WindowMover" },
 		enabled = { "windowMover" }, conflicts = function() return ns.WindowMover.CONFLICTS end,
 		desc = "Drag Blizzard's windows anywhere and Ctrl + wheel to resize them.", pages = { "Window Mover" } },
+	{ id = "errors", name = "Error Catcher", category = "Quality of Life", files = { "Errors" },
+		conflicts = function() return ns.Errors.CONFLICTS end,
+		desc = "Keeps Lua errors quietly instead of popping them up, with a window to read and copy them.",
+		pages = { "Error Catcher" } },
 	{ id = "combatLog", name = "Combat Logging", category = "Quality of Life", files = { "CombatLog" },
 		enabled = { "combatLog" }, desc = "Turns /combatlog on in the matches and instances you pick.",
 		pages = { "Combat Logging" } },
@@ -303,7 +307,11 @@ M.UNDO = {
 		end
 	end,
 	-- the master volume, if a /reload or logout came while the queue pop sound played
-	queueInfo = function() if ns.QueueInfo then ns.QueueInfo.RestoreVolume() end end,
+	queueInfo = function()
+		if not ns.QueueInfo then return end
+		ns.QueueInfo.RestoreVolume()
+		if UnmuteSoundFile then pcall(UnmuteSoundFile, ns.QueueInfo.POP_FILE) end -- the game's pop sound back
+	end,
 }
 
 function M.RestoreDisabled()

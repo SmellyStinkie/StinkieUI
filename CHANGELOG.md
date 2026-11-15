@@ -1,5 +1,15 @@
 # Stinkie UI changelog
 
+## 0.49.0
+- New: Error Catcher (Quality of Life), a module that stands in for BugGrabber and BugSack. Lua errors from any addon are kept quietly instead of popping up, and `/st errors` (or `/st e`) opens a window to read and copy them, by session. Options for a chat line, a sound with its own volume, opening the window on an error, and how many errors to keep. It stays off while BugGrabber is loaded.
+- New: Quick Buy (Quality of Life > Automation). Shift + right click a vendor item for a box to buy any number of it: type a number, use the arrows, or press Stack or Max. It shows the total and buys without the "are you sure" popup. Options to skip that popup on ordinary purchases too, and to answer the "can no longer be refunded" question when putting an item in the warband bank.
+- Queue Time & MMR: pick another sound for the queue pop from a list. The game's own sound is muted while one is chosen.
+- Queue Time & MMR: options for the game's queue eye. It now stays visible when the menu icons fade, and it can be hidden, resized and moved.
+- Queue Time & MMR: epic battleground and brawl queues show as "Epic BG" and "Brawl". Shorter labels on the options page, which no longer overlap.
+- The Stinkie UI page in the game's own options now says what the addon is, with a clearer button to open the options, a button for the module list, and the slash commands.
+- Support report (`/stinkie report`): includes Stinkie UI's errors from the Error Catcher with where they happened.
+- Game Fonts: the first category button on the Premade Groups page ("Questing", "Arenas") now uses the chosen font.
+
 ## 0.48.0
 - Target and Focus frames: new option to show the unit's buffs in a row of their own, everyone's or only the ones you cast, with size and count sliders. It's off by default and sits on the other side of the frame from the other aura icons.
 - Party and Raid Frames: new "Target outline thickness" slider for the outline on your target.

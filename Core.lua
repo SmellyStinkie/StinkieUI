@@ -651,6 +651,17 @@ ns.defaults = {
 		flashTabs = true, flashPlayerOnly = true,
 		colors = {}, -- chat type -> { r, g, b }, only the ones changed here
 	},
+	-- Error Catcher (Report.lua)
+	errors = {
+		chat = "stinkie", -- none | stinkie (only Stinkie UI's errors) | all
+		popup = false,    -- open the window when an error is caught
+		sound = false,
+		soundName = "whisper", -- which one (ns.Errors.SOUNDS)
+		volume = 100,     -- percent of the game's volume while it plays
+		blizzard = false, -- also hand the error to the game's own error window
+		fontSize = 12,
+		keep = 50,        -- errors kept, over all sessions
+	},
 	misc = {
 		gcd = {
 			enabled = false,
@@ -676,6 +687,13 @@ ns.defaults = {
 		decor = {
 			enabled = false,
 			maxGold = 0, -- 0: no limit
+			announce = true,
+		},
+		-- Shift + right click on a vendor item: a box to buy any number of it
+		quickBuy = {
+			enabled = true,
+			skipConfirm = false, -- ordinary purchases skip the game's "are you sure" popup too
+			bankRefund = false,  -- putting a refundable item in the warband bank: answer the "can't be refunded" popup
 			announce = true,
 		},
 		-- a small nameplate in the world on the quest you're actively tracking
@@ -959,6 +977,9 @@ ns.defaults = {
 		estimate = true, mmr = true, mmrChange = true, rating = false,
 		specIcon = true, header = true, hideInPvP = true, -- queued spec icon per row, column names on top
 		popSound = false, popVolume = 1, -- master volume while the queue pop sound plays
+		popSoundName = "default", -- default (the game's own) | a key of ns.SOUNDS, played in its place
+		eyeShow = "always", -- the game's queue eye: always | menu (fades with the menu icons) | hidden
+		eyeMove = false, eyeScale = 1, eyePoint = { "BOTTOMRIGHT", -330, 40 }, -- your own spot and size for it
 		width = 440, height = 22, spacing = 2, scale = 1,
 		background = true, bgColor = { 0.04, 0.04, 0.05 }, bgAlpha = 0.65, border = true,
 		textStyle = text(14),
@@ -1328,6 +1349,27 @@ local function LastSpec()
 end
 
 ---------------------------------------------------------------------------
+-- Sounds to pick from (the Error Catcher's sound, the queue pop sound).
+-- key, label, the game's name for the sound, its number if the name is gone
+---------------------------------------------------------------------------
+ns.SOUNDS = {
+	{ "whisper", "Whisper", "TELL_MESSAGE", 3081 },
+	{ "ping", "Map ping", "MAP_PING", 3175 },
+	{ "invite", "Group invite", "IG_PLAYER_INVITE", 880 },
+	{ "questFailed", "Quest failed", "IG_QUEST_FAILED", 847 },
+	{ "readyCheck", "Ready check", "READY_CHECK", 8960 },
+	{ "alarm", "Alarm clock", "ALARM_CLOCK_WARNING_3", 12889 },
+	{ "raidWarning", "Raid warning", "RAID_WARNING", 8959 },
+}
+
+-- the number to hand PlaySound for a choice; an unknown choice gets the first sound
+function ns.SoundKit(key)
+	local s = ns.SOUNDS[1]
+	for _, entry in ipairs(ns.SOUNDS) do if entry[1] == key then s = entry end end
+	return (type(SOUNDKIT) == "table" and tonumber(SOUNDKIT[s[3]])) or s[4]
+end
+
+---------------------------------------------------------------------------
 -- Stinkie UI's own yes / no box. Blizzard's popups aren't used: one opened by an addon sits in
 -- Blizzard's list of shown popups carrying the addon's mark, and Blizzard walks that list every
 -- frame in the same pass that fades the chat windows. While it's up, chat fading runs as Stinkie
@@ -1348,6 +1390,7 @@ local function DialogButton(parent)
 	b:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
 	return b
 end
+ns.DialogButton = DialogButton
 
 local function CreateDialog()
 	local f = CreateFrame("Frame", "StinkieUIDialog", UIParent)
@@ -2055,6 +2098,8 @@ SlashCmdList.STINKIEUI = function(msg)
 		ns.Modules.Open("list")
 	elseif msg == "report" then
 		if ns.Report then ns.Report.Show() else ns.NeedsRestart() end
+	elseif msg == "errors" or msg == "e" or msg == "bugs" then
+		if ns.Errors then ns.Errors.Toggle() else ns.NeedsRestart() end
 	elseif msg == "setup" then
 		ns.Modules.Open("picker")
 	elseif msg == "unlock" or msg == "move" then

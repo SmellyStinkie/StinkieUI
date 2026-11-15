@@ -1192,7 +1192,15 @@ end
 local function BuildAutomationPage(page)
 	local function decor() return ns.db.misc.decor end
 	local function auto() return ns.db.misc.auto end
+	local function quick() return ns.db.misc.quickBuy end
 	page:Column(1)
+	page:Header("Quick Buy")
+	page:Check("Enabled", Getter(quick, "enabled"), Setter(quick, "enabled"))
+	page:Note("Shift + right click a vendor item for a box to buy any number of it: type a number, or press Stack or Max. The box shows the total and buys without the game's \"are you sure\" popup.", 62)
+	page:Check("Skip that popup on ordinary purchases too", Getter(quick, "skipConfirm"), Setter(quick, "skipConfirm"))
+	page:Check("Warband bank: confirm \"can no longer be refunded\" for me", Getter(quick, "bankRefund"), Setter(quick, "bankRefund"))
+	page:Note("Putting a just-bought item in the warband bank ends its refund. With this on, the question is answered yes for you.", 36)
+	page:Check("Say in chat what was bought", Getter(quick, "announce"), Setter(quick, "announce"))
 	page:Header("Auto-Confirm Decor Purchases")
 	page:Check("Enabled", Getter(decor, "enabled"), Setter(decor, "enabled"))
 	page:Note("Buying housing decor from a vendor skips the \"are you sure\" popup. Other items still ask. Never used for the in-game shop.", 50)
@@ -1214,6 +1222,46 @@ local function BuildAutomationPage(page)
 	page:Check("Release when you die", Getter(auto, "releasePvP"), Setter(auto, "releasePvP"))
 	page:Note("Battlegrounds and Blitz only. With a soulstone or similar, the choice stays yours.", 36)
 	page:Check("Say in chat what was done", Getter(auto, "announce"), Setter(auto, "announce"))
+end
+
+local function BuildErrorsPage(page)
+	local E = ns.Errors
+	local fallback = {}
+	local function cfg() return ns.db.errors or ns.defaults.errors or fallback end
+	page:Column(1)
+	page:Header("Error Catcher")
+	local other = ns.Modules.Conflict("errors")
+	if other then
+		page:Note("Off because " .. other .. " is loaded: two error catchers would fight over the same errors. Disable it (and BugSack) to use this one.", 48)
+	else
+		page:Note("Lua errors from any addon are kept quietly instead of popping up in the middle of the screen. Open the window to read them, or to copy one when asking for a fix.", 62)
+	end
+	page:Button("Open the errors window", function() if E then E.Toggle() else ns.NeedsRestart() end end)
+	page:Note("Also /st errors or /st e. Each error has its message, where it happened and the values at that moment.", 36)
+	page:Choice("Chat line for a new error", { { "none", "Never" }, { "stinkie", "Stinkie UI's" }, { "all", "Any addon's" } },
+		Getter(cfg, "chat"), Setter(cfg, "chat"))
+	page:Check("Open the window when an error is caught", Getter(cfg, "popup"), Setter(cfg, "popup"))
+	page:Check("Also show the game's own error window", Getter(cfg, "blizzard"), Setter(cfg, "blizzard"))
+	page:Note("The game's window only shows if its \"Display Lua errors\" setting is on.", 22)
+	page:Column(2)
+	page:Header("The window")
+	page:Slider("Text size", 9, 20, 1, Getter(cfg, "fontSize"), Setter(cfg, "fontSize"))
+	page:Slider("Errors kept", 10, 200, 10, Getter(cfg, "keep"), Setter(cfg, "keep"))
+	page:Note("Kept for the whole account, across sessions. The oldest drop off first.", 22)
+	page:Button("Wipe saved errors", function() if E then E.AskWipe() else ns.NeedsRestart() end end)
+	page:Header("Sound")
+	page:Check("Play a sound for a new error", Getter(cfg, "sound"), Setter(cfg, "sound"))
+	page:Dropdown("Sound", function()
+		local items = {}
+		for _, s in ipairs(E and E.SOUNDS or {}) do items[#items + 1] = { s[1], s[2] } end
+		return items
+	end, Getter(cfg, "soundName"), Setter(cfg, "soundName"))
+	page:Slider("Volume (% of the game's volume)", 10, 100, 5, Getter(cfg, "volume"), Setter(cfg, "volume"))
+	page:Button("Play it", function() if E then E.PlaySound() else ns.NeedsRestart() end end)
+	page:Note("Below 100, the whole game goes that much quieter for the two seconds the sound plays.", 36)
+	page:Header("Asking for help")
+	page:Button("Support report", function() if ns.Report then ns.Report.Show() else ns.NeedsRestart() end end)
+	page:Note("One block to paste (/stinkie report): version, game client, modules, and Stinkie UI's recent errors with where they happened. No character names.", 62)
 end
 
 local function BuildCombatPage(page)
@@ -1563,13 +1611,20 @@ local function BuildQueueInfoPage(page)
 	page:Button("Test mode on / off", function() ns.QueueInfo:SetTestMode(not ns.QueueInfo.testMode) end)
 	page:Check("Estimated wait", Getter(cfg, "estimate"), Setter(cfg, "estimate"))
 	page:Check("MMR", Getter(cfg, "mmr"), Setter(cfg, "mmr"))
-	page:Check("MMR change from your last game (+73 green / -40 red)", Getter(cfg, "mmrChange"), Setter(cfg, "mmrChange"))
+	page:Check("MMR change from your last game", Getter(cfg, "mmrChange"), Setter(cfg, "mmrChange"))
 	page:Check("Rating (CR)", Getter(cfg, "rating"), Setter(cfg, "rating"))
-	page:Check("Spec icon (the spec you're queued as)", Getter(cfg, "specIcon"), Setter(cfg, "specIcon"))
-	page:Check("Column names on top (Queue, In queue, Estimate, MMR)", Getter(cfg, "header"), Setter(cfg, "header"))
+	page:Check("Spec icon", Getter(cfg, "specIcon"), Setter(cfg, "specIcon"))
+	page:Check("Column names on top", Getter(cfg, "header"), Setter(cfg, "header"))
 	page:Check("Hide while in an arena or battleground", Getter(cfg, "hideInPvP"), Setter(cfg, "hideInPvP"))
-	page:Note("The game only shows MMR at the end of a match, so this is your MMR after your last match in that bracket on this character (recorded or imported), and how much that match changed it. Solo Shuffle and Blitz use the spec you queued as. It says 'MMR unknown' until you play a match there (per spec for Shuffle and Blitz), and N/A where the game gives no MMR (unrated queues, or a bracket whose matches came without one).", 76)
+	page:Note("The game only shows MMR at the end of a match, so this is your MMR after your last match in that bracket on this character, and how much that match changed it.", 50)
+	page:Note("Solo Shuffle and Blitz go by the spec you queued as. 'MMR unknown' means no match is recorded there yet. N/A means the game gives no MMR for that queue.", 50)
 	page:Header("Queue pop sound")
+	page:Dropdown("Sound", function()
+		local items = { { "default", "The game's own" } }
+		for _, s in ipairs(ns.SOUNDS or {}) do items[#items + 1] = { s[1], s[2] } end
+		return items
+	end, Getter(cfg, "popSoundName"), Setter(cfg, "popSoundName"))
+	page:Note("Another sound mutes the game's and plays in its place. The game uses the same sound when a dungeon or raid group is ready, so that goes quiet too.", 50)
 	page:Check("Set the volume of the queue pop sound", Getter(cfg, "popSound"), Setter(cfg, "popSound"))
 	page:Slider("Volume", 0, 1, 0.05, Getter(cfg, "popVolume"), Setter(cfg, "popVolume"))
 	page:Button("Play it", function() ns.QueueInfo.TestPopSound() end)
@@ -1588,6 +1643,14 @@ local function BuildQueueInfoPage(page)
 	page:Slider("Opacity", 0, 1, 0.05, Getter(cfg, "bgAlpha"), Setter(cfg, "bgAlpha"))
 	page:TextStyle("Bracket text", function() return cfg().labelStyle end, {})
 	page:TextStyle("Time and MMR text", function() return cfg().textStyle end, {})
+	page:Header("Queue eye")
+	page:Choice("The game's queue eye", { { "always", "Shown" }, { "menu", "With menu" }, { "hidden", "Hidden" } },
+		Getter(cfg, "eyeShow"), Setter(cfg, "eyeShow"))
+	page:Note("The eye belongs to the game's menu icons. If those fade (Action Bars > Menu Icons), the eye fades with them unless it's set to Shown.", 50)
+	page:Check("My own spot and size for it", Getter(cfg, "eyeMove"), Setter(cfg, "eyeMove"), true)
+	page:Slider("Eye size", 0.5, 2.5, 0.05, Getter(cfg, "eyeScale"), Setter(cfg, "eyeScale"))
+	page:Position(nil, function() return "queueEye" end)
+	page:Note("Turning this off puts the eye back beside the menu after a /reload.", 22)
 end
 
 local function BuildCharacterPage(page)
@@ -2620,6 +2683,7 @@ local pages = {
 		{ "Automation", BuildAutomationPage },
 		{ "Quest Marker", BuildQuestMarkerPage },
 		{ "Cursor", BuildCursorPage },
+		{ "Error Catcher", BuildErrorsPage },
 		{ "Combat Logging", BuildCombatLogPage },
 		{ "Window Mover", BuildWindowMoverPage },
 	} },
@@ -2937,15 +3001,76 @@ end
 function O:Init()
 	if not (Settings and Settings.RegisterCanvasLayoutCategory) then return end
 	local panel = CreateFrame("Frame")
-	local btn = FlatButton(panel, "Open Stinkie UI", 160, function()
-		if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
-		if not O.window or not O.window:IsShown() then ns:ToggleOptions() end
-	end)
+	O.gamePanel = panel
+	local function leave() if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end end
 	local logo = panel:CreateTexture(nil, "ARTWORK")
 	logo:SetSize(128, 128)
 	logo:SetPoint("TOPLEFT", 16, -16)
 	logo:SetTexture(ns.MEDIA.logo, "CLAMP", "CLAMP", "TRILINEAR")
-	btn:SetPoint("TOPLEFT", logo, "BOTTOMLEFT", 0, -12)
+
+	local title = Label(panel, "Stinkie UI", 26, { ACCENT[1], ACCENT[2], ACCENT[3] })
+	title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 18, -14)
+	local tagline = Label(panel, "A modular, PvP-first interface.  Version " .. tostring(ns.version), 14, { 0.86, 0.84, 0.76 })
+	tagline:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+	panel.tagline = tagline
+
+	-- the way in, in the accent color so it can't be missed
+	local btn = FlatButton(panel, "Open Stinkie UI options", 250, function()
+		leave()
+		if not O.window or not O.window:IsShown() then ns:ToggleOptions() end
+	end)
+	btn:SetHeight(34)
+	ns.SetFont(btn.text, 15)
+	btn.text:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
+	ns.SetBorderColor(btn, ACCENT[1], ACCENT[2], ACCENT[3], 1)
+	btn:SetPoint("TOPLEFT", tagline, "BOTTOMLEFT", 0, -16)
+	panel.open = btn
+
+	local function para(text, under, gap)
+		local fs = Label(panel, text, 13, { 0.86, 0.84, 0.76 })
+		fs:SetWidth(560)
+		fs:SetWordWrap(true)
+		if fs.SetSpacing then fs:SetSpacing(3) end
+		fs:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -(gap or 12))
+		return fs
+	end
+	local function heading(text, under)
+		local fs = Label(panel, text, 15, { ACCENT[1], ACCENT[2], ACCENT[3] })
+		fs:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -22)
+		return fs
+	end
+
+	local h1 = Label(panel, "Use only what you want", 15, { ACCENT[1], ACCENT[2], ACCENT[3] })
+	h1:SetPoint("TOPLEFT", logo, "BOTTOMLEFT", 0, -22)
+	local count = #ns.Modules.LIST
+	local p1 = para(("Stinkie UI is built from %d modules: unit, party, raid and arena frames, nameplates, battleground tools, chat, action bars, and a long list of quality of life helpers. Almost nobody needs all of them, and you aren't meant to."):format(count), h1, 8)
+	local p2 = para("Every module can be switched off on its own. One that's off doesn't load at all: no frames, no events and no game settings changed. So Stinkie UI can be your whole interface, or one or two pieces next to the addons you already like.", p1)
+	panel.about = p1
+
+	local mods = FlatButton(panel, "Choose modules", 160, function()
+		leave()
+		ns.Modules.Open("list")
+	end)
+	mods:SetHeight(26)
+	mods:SetPoint("TOPLEFT", p2, "BOTTOMLEFT", 0, -14)
+	panel.modules = mods
+
+	local h2 = heading("Commands", mods)
+	local last = h2
+	for i, c in ipairs({
+		{ "/stinkie", "the options window (also /sui and /st)" },
+		{ "/stinkie modules", "pick which parts load" },
+		{ "/stinkie unlock", "drag frames where you want them" },
+		{ "/st errors", "Lua errors that were caught (or /st e)" },
+		{ "/stinkie report", "a block to paste when asking for help" },
+		{ "/mh", "your PvP match history" },
+	}) do
+		local cmd = Label(panel, c[1], 13, { 1, 1, 1 })
+		cmd:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, i == 1 and -8 or -6)
+		local what = Label(panel, c[2], 13, { 0.70, 0.68, 0.60 })
+		what:SetPoint("LEFT", cmd, "LEFT", 150, 0)
+		last = cmd
+	end
 	local category = Settings.RegisterCanvasLayoutCategory(panel, "Stinkie UI")
 	Settings.RegisterAddOnCategory(category)
 end
