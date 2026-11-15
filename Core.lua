@@ -324,7 +324,8 @@ ns.defaults = {
 			width = 150, height = 24, showPower = true, powerHeight = 6,
 			point = { "BOTTOM", 230, 240 },
 			eliteIcon = true, eliteSize = 16, eliteCorner = "TOPLEFT", -- gold star: elite / boss, silver: rare
-			auras = { enabled = true, size = 24, max = 8, position = "BELOW", showSmall = true, ccIcon = true, ccIconSize = 0, ccIconSide = "RIGHT" },
+			auras = { enabled = true, size = 24, max = 8, position = "BELOW", showSmall = true, ccIcon = true, ccIconSize = 0, ccIconSide = "RIGHT",
+				buffs = false, buffFilter = "all", buffSize = 20, buffMax = 8 }, -- buffFilter: all | mine (the ones you cast)
 			castbar = castbar(true, 180, 16, { "BOTTOM", 230, 300 }),
 		}),
 		targettarget = unit({
@@ -335,7 +336,8 @@ ns.defaults = {
 			width = 120, height = 18, showPower = true, powerHeight = 4, textSize = 11,
 			point = { "BOTTOM", 230, 400 },
 			eliteIcon = true, eliteSize = 14, eliteCorner = "TOPLEFT",
-			auras = { enabled = true, size = 20, max = 6, position = "BELOW", showSmall = true, ccIcon = true, ccIconSize = 0, ccIconSide = "RIGHT" },
+			auras = { enabled = true, size = 20, max = 6, position = "BELOW", showSmall = true, ccIcon = true, ccIconSize = 0, ccIconSide = "RIGHT",
+				buffs = false, buffFilter = "all", buffSize = 18, buffMax = 6 },
 			castbar = castbar(true, 160, 14, { "BOTTOM", 230, 365 }),
 		}),
 		pet = unit({
@@ -346,6 +348,7 @@ ns.defaults = {
 	},
 	party = {
 		enabled = true, width = 130, height = 34,
+		targetThickness = 1, -- the outline on the party member you have targeted (pixels)
 		power = "all", -- all | healer | none
 		powerHeight = 5,
 		spacing = 10,
@@ -436,6 +439,7 @@ ns.defaults = {
 		showLevel = true, showHealthText = false,
 		nameInBar = false,
 		minionScale = 1, -- width of pet / guardian / totem plates relative to normal
+		shrinkMinions = false, -- let the game scale those plates down ("simplified" nameplates)
 		auraSize = 22, maxAuras = 6,
 		auraMode = "all", -- all | important | whitelist
 		auraOnlyMine = true,
@@ -761,7 +765,7 @@ ns.defaults = {
 		marker = true, markerSize = 14, leaderIcon = false,
 		rangeFade = true, rangeAlpha = 0.45,
 		shields = true, healPrediction = true,
-		aggro = true, targetHighlight = true,
+		aggro = true, targetHighlight = true, targetThickness = 1, -- pixels
 		readyCheck = true, centerIcons = true, statusIconSize = 18, -- summon / resurrect / phased / other group
 		debuffs = "all", debuffSize = 16, debuffMax = 3, -- all | dispellable | none
 		buffs = true, buffSize = 14, buffMax = 3,
@@ -1323,11 +1327,78 @@ local function LastSpec()
 	return store and store.lastSpec and store.lastSpec[ns.CharKey()]
 end
 
-StaticPopupDialogs["STINKIEUI_SPEC_PROFILE"] = {
+---------------------------------------------------------------------------
+-- Stinkie UI's own yes / no box. Blizzard's popups aren't used: one opened by an addon sits in
+-- Blizzard's list of shown popups carrying the addon's mark, and Blizzard walks that list every
+-- frame in the same pass that fades the chat windows. While it's up, chat fading runs as Stinkie
+-- UI, and in a match (hidden values) that's a "tainted by StinkieUI" error.
+---------------------------------------------------------------------------
+ns.Dialogs = {}
+
+local function DialogButton(parent)
+	local b = CreateFrame("Button", nil, parent)
+	b:SetSize(120, 24)
+	b.bg = b:CreateTexture(nil, "BACKGROUND")
+	b.bg:SetAllPoints()
+	b.bg:SetColorTexture(0.15, 0.13, 0.11, 1)
+	ns.CreateBackdrop(b, 0)
+	b.text = ns.CreateText(b, 13, "CENTER")
+	b.text:SetPoint("CENTER")
+	b:SetScript("OnEnter", function(self) self.text:SetTextColor(ns.ACCENT[1], ns.ACCENT[2], ns.ACCENT[3]) end)
+	b:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
+	return b
+end
+
+local function CreateDialog()
+	local f = CreateFrame("Frame", "StinkieUIDialog", UIParent)
+	f:SetFrameStrata("FULLSCREEN_DIALOG")
+	f:SetPoint("TOP", UIParent, "TOP", 0, -140)
+	f:SetWidth(380)
+	f:EnableMouse(true)
+	f.bg = f:CreateTexture(nil, "BACKGROUND")
+	f.bg:SetAllPoints()
+	f.bg:SetColorTexture(0.08, 0.07, 0.06, 0.96)
+	ns.CreateBackdrop(f, 0)
+	f.text = ns.CreateText(f, 13, "CENTER")
+	f.text:SetWordWrap(true)
+	f.text:SetPoint("TOP", 0, -16)
+	f.text:SetWidth(340)
+	f.yes, f.no = DialogButton(f), DialogButton(f)
+	f.yes:SetPoint("BOTTOMRIGHT", f, "BOTTOM", -6, 14)
+	f.no:SetPoint("BOTTOMLEFT", f, "BOTTOM", 6, 14)
+	f.yes:SetScript("OnClick", function()
+		local info, data = f.info, f.data
+		f:Hide()
+		if info and info.OnAccept then
+			local ok, err = pcall(info.OnAccept, data)
+			if not ok then ns.Error(err) end
+		end
+	end)
+	f.no:SetScript("OnClick", function() f:Hide() end)
+	f:Hide()
+	ns.dialog = f
+	return f
+end
+
+-- Shows the box for ns.Dialogs[key]; a and b fill the %s in its text, data goes to OnAccept.
+-- One box: a new question replaces the one that was up.
+function ns.ShowDialog(key, a, b, data)
+	local info = ns.Dialogs[key]
+	if not info then return end
+	local f = ns.dialog or CreateDialog()
+	f.info, f.data = info, data
+	f.text:SetText(info.text:format(tostring(a or ""), tostring(b or "")))
+	f.yes.text:SetText(info.button1 or YES or "Yes")
+	f.no.text:SetText(info.button2 or NO or "No")
+	f:SetHeight(math.max(f.text:GetStringHeight() or 0, 14) + 70)
+	f:Show()
+	return f
+end
+
+ns.Dialogs.SPEC_PROFILE = {
 	text = "You're now %s. Load its Stinkie UI profile \"%s\"? This reloads the UI.",
 	button1 = RELOADUI or "Reload", button2 = "Not now",
 	OnAccept = function() ReloadUI() end,
-	timeout = 0, whileDead = true, hideOnEscape = true,
 }
 
 local declined = {}
@@ -1345,7 +1416,7 @@ function ns.CheckSpecProfile(force)
 		local specName = "this spec"
 		for _, s in ipairs(ns.SpecList()) do if s[1] == spec then specName = s[2] end end
 		declined[spec .. want] = true -- asked once per spec and profile each session
-		StaticPopup_Show("STINKIEUI_SPEC_PROFILE", specName, want)
+		ns.ShowDialog("SPEC_PROFILE", specName, want)
 	end)
 end
 

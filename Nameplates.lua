@@ -1080,6 +1080,9 @@ function NP.DebugTarget()
 	show("name (secret = hidden by the game)", UnitName("target"))
 	show("NPC ID (secret = hidden by the game)", UnitCreatureID and UnitCreatureID("target"))
 	show("minion (pet / totem / guardian)", UnitIsMinion and UnitIsMinion("target"))
+	show("plate scale (below 1 = shrunk by the game)", plate.GetScale and plate:GetScale())
+	show("game shrinks pet / totem plates", Enum.NamePlateSimplifiedType and GetCVarBitfield
+		and GetCVarBitfield("nameplateSimplifiedTypes", Enum.NamePlateSimplifiedType.Minion))
 	show("target marker (secret = hidden by the game)", GetRaidTargetIndex("target"))
 	local _, detailedStatus, threatPercent = UnitDetailedThreatSituation("player", "target")
 	show("threat % (secret = hidden by the game)", threatPercent)
@@ -1222,12 +1225,25 @@ function NP.PrintStacking()
 	ns:Print("stacking box height: " .. ((bh and bh > 0) and bh or (cfg.height + cfg.castHeight + 24) .. " (auto)"))
 end
 
+-- The game "simplifies" the plates of pets, guardians and totems (its own Nameplates setting, on
+-- by default): it scales the whole plate down, and our plate rides on Blizzard's, so it shrinks
+-- with it: a thin bar and tiny text, whatever sizes are set here. That game setting is switched
+-- off for those units unless the player wants the shrinking.
+function NP.ApplySimplified(cfg)
+	local E = Enum.NamePlateSimplifiedType
+	if not (E and E.Minion and SetCVarBitfield and HasCVar("nameplateSimplifiedTypes")) then return false end
+	ns.Modules.Remember("nameplates", "nameplateSimplifiedTypes", E.Minion)
+	pcall(SetCVarBitfield, "nameplateSimplifiedTypes", E.Minion, cfg.shrinkMinions and true or false)
+	return true
+end
+
 function NP:ApplyCVars()
 	ns:RunOOC(function()
 		local cfg = ns.db.nameplates
 		local bh = cfg.stacking.boxHeight
 		C_NamePlate.SetNamePlateSize(cfg.width + 10, (bh and bh > 0) and bh or (cfg.height + cfg.castHeight + 24))
 		pcall(ApplyStacking, cfg)
+		pcall(NP.ApplySimplified, cfg)
 		if cfg.highlight.scale then
 			ns.Modules.Remember("nameplates", "nameplateSelectedScale")
 			pcall(C_CVar.SetCVar, "nameplateSelectedScale", tostring(cfg.highlight.scale))

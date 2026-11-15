@@ -316,11 +316,15 @@ elseif SCENARIO == "spec-profiles" then
 		GetSpecializationInfo = function(i) return 264 + i, ({ "Affliction", "Demonology", "Destruction" })[i], "", 0 end,
 	}
 	local shown = {}
-	StaticPopup_Show = function(which, a, b) shown[#shown + 1] = { which, a, b } end
 	local key = ns.CharKey()
 	StinkieUIDB = store(allChoices(true), { specProfiles = { [key] = { enabled = true, [3] = "Destro" } } })
 	StinkieUIDB.profiles.Destro = { version = ns.DB_VERSION, scale = 0.8 }
 	bootUp()
+	-- the question is Stinkie UI's own box, never one of Blizzard's popups
+	local blizzardPopups = 0
+	StaticPopup_Show = function() blizzardPopups = blizzardPopups + 1 end
+	local showDialog = ns.ShowDialog
+	ns.ShowDialog = function(which, a, b, data) shown[#shown + 1] = { which, a, b }; return showDialog(which, a, b, data) end
 	check("the spec's profile loads", ns:CurrentProfileName() == "Destro" and ns.db.scale == 0.8, ns:CurrentProfileName())
 	check("spec list", #ns.SpecList() == 3 and ns.SpecList()[2][2] == "Demonology")
 	MOCK.Advance(2)
@@ -328,7 +332,18 @@ elseif SCENARIO == "spec-profiles" then
 	-- swap to Affliction (no profile of its own): offers the character's profile
 	spec = 1
 	MOCK.Fire("PLAYER_SPECIALIZATION_CHANGED", "player")
-	check("prompt on a spec change", #shown == 1 and shown[1][1] == "STINKIEUI_SPEC_PROFILE" and shown[1][2] == "Affliction" and shown[1][3] == ns.DEFAULT_PROFILE,
+	check("the box is up with the question, and no Blizzard popup was opened", ns.dialog ~= nil and ns.dialog:IsShown() and blizzardPopups == 0
+		and ns.dialog.text._text:find("Affliction", 1, true) ~= nil and ns.dialog.no.text._text == "Not now")
+	ns.dialog.no:GetScript("OnClick")(ns.dialog.no)
+	check("Not now closes it", not ns.dialog:IsShown())
+	local got
+	ns.Dialogs.TEST = { text = "%s?", OnAccept = function(data) got = data end }
+	ns.ShowDialog("TEST", "Sure", nil, 42)
+	ns.dialog.yes:GetScript("OnClick")(ns.dialog.yes)
+	check("yes runs the action with its data and closes", got == 42 and not ns.dialog:IsShown())
+	check("an unknown question shows nothing", ns.ShowDialog("NOPE") == nil and not ns.dialog:IsShown())
+	shown = { shown[1] }
+	check("prompt on a spec change", #shown == 1 and shown[1][1] == "SPEC_PROFILE" and shown[1][2] == "Affliction" and shown[1][3] == ns.DEFAULT_PROFILE,
 		shown[1] and (tostring(shown[1][2]) .. " / " .. tostring(shown[1][3])))
 	MOCK.Fire("PLAYER_SPECIALIZATION_CHANGED", "player")
 	check("asked once", #shown == 1)

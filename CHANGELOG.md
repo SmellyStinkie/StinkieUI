@@ -1,5 +1,12 @@
 # Stinkie UI changelog
 
+## 0.48.0
+- Target and Focus frames: new option to show the unit's buffs in a row of their own, everyone's or only the ones you cast, with size and count sliders. It's off by default and sits on the other side of the frame from the other aura icons.
+- Party and Raid Frames: new "Target outline thickness" slider for the outline on your target.
+- Nameplates: pet, guardian and totem plates could show as a very thin bar with tiny text. The game's own "simplified nameplates" setting was shrinking them. Stinkie UI now switches that off for those plates; a new option under Nameplates brings the shrinking back.
+- Stinkie UI's questions (load a spec's profile, switch, copy, delete or reset a profile, import) now use the addon's own box instead of the game's popup. The game's popup is the likely cause of "tainted by StinkieUI" errors from the chat tabs in matches.
+- Tooltip: fixed an error when changing a setting while the game had a tooltip locked away from addons.
+
 ## 0.47.0
 - Castbars: empowered spells (Evoker) show a line where each rank is reached, with the rank's number on taller bars. It's on by default for every castbar; the option is with the castbar colors. Casts whose details the game hides show without the marks.
 - Party Frames: new option to show buffs. Choose your own buffs or everyone's, on the frame's bottom right corner or in the row under it, with size and count sliders. Big defensives keep their own icon. It's off by default.

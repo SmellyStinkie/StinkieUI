@@ -612,6 +612,11 @@ local function BuildUnitPage(page, unit)
 		page:Choice("CC icon side", { { "LEFT", "Left" }, { "RIGHT", "Right" } }, Getter(acfg, "ccIconSide"), Setter(acfg, "ccIconSide"))
 		page:Slider("CC icon size (0 = frame height)", 0, 80, 1, Getter(acfg, "ccIconSize"), Setter(acfg, "ccIconSize"), true)
 		page:Note("Below sits under the castbar when it's attached, otherwise under the frame.", 36)
+		page:Check("Buffs", Getter(acfg, "buffs"), Setter(acfg, "buffs"))
+		page:Choice("Buffs shown", { { "all", "Everyone's" }, { "mine", "Mine only" } }, Getter(acfg, "buffFilter"), Setter(acfg, "buffFilter"))
+		page:Slider("Buff size", 10, 48, 1, Getter(acfg, "buffSize"), Setter(acfg, "buffSize"), true)
+		page:Slider("Buffs at most", 1, 20, 1, Getter(acfg, "buffMax"), Setter(acfg, "buffMax"))
+		page:Note("The buff row sits on the other side of the frame from the icons above. Mine only: the buffs you cast on this unit.", 36)
 	end
 	if unit == "targettarget" then
 		page:Note("Blizzard blocks addons from target-of-target inside arenas and battlegrounds, so this frame stays blank there.", 48)
@@ -707,6 +712,7 @@ local function BuildPartyPage(page)
 	page:Slider("Buffs at most", 1, 8, 1, Getter(cfg, "buffMax"), Setter(cfg, "buffMax"), true)
 	page:Note("Big defensives keep their own icon and aren't repeated here.", 22)
 	page:Check("Fade when out of range", Getter(cfg, "rangeFade"), Setter(cfg, "rangeFade"))
+	page:Slider("Target outline thickness", 1, 8, 1, Getter(cfg, "targetThickness"), Setter(cfg, "targetThickness"))
 	page:Check("Green cross on healers", Getter(cfg, "healerIcon"), Setter(cfg, "healerIcon"))
 	page:Slider("Healer cross size", 6, 100, 1, Getter(cfg, "healerSize"), Setter(cfg, "healerSize"))
 	page:Check("Target marker", Getter(cfg, "marker"), Setter(cfg, "marker"))
@@ -1025,7 +1031,8 @@ local function BuildPlateAurasPage(page)
 	page:Check("Trivial units", UT("minor"))
 	page:Slider("Pet / totem plate width %", 30, 100, 5, function() return math.floor((cfg().minionScale or 1) * 100 + 0.5) end,
 		function(v) cfg().minionScale = v / 100 end)
-	page:Note("Hiding totems also hides important totems.", 22)
+	page:Check("Let the game shrink pet / totem plates", Getter(cfg, "shrinkMinions"), function(v) cfg().shrinkMinions = v; NPm:ApplyCVars() end)
+	page:Note("Hiding totems also hides important totems. The game's own \"simplified\" setting scales pet, guardian and totem plates down, bar and text together; off here, they use the sizes set on this page.", 48)
 	page:Header("Important units")
 	page:Check("Highlight important units", Getter(imp, "enabled"), Setter(imp, "enabled"))
 	page:Color("Color", Getter(imp, "color"), Setter(imp, "color"))
@@ -1962,6 +1969,7 @@ local function BuildRaidPage(page)
 	page:Check("Summon, resurrection, phased and other-group icons", Getter(cfg, "centerIcons"), Setter(cfg, "centerIcons"))
 	page:Slider("Ready check and status icon size", 8, 60, 1, Getter(cfg, "statusIconSize"), Setter(cfg, "statusIconSize"))
 	page:Check("Outline on your target", Getter(cfg, "targetHighlight"), Setter(cfg, "targetHighlight"))
+	page:Slider("Target outline thickness", 1, 8, 1, Getter(cfg, "targetThickness"), Setter(cfg, "targetThickness"))
 	page:Check("Outline on whoever has aggro", Getter(cfg, "aggro"), Setter(cfg, "aggro"))
 	page:Check("Outline when they have a debuff you can dispel", Getter(cfg, "dispelHighlight"), Setter(cfg, "dispelHighlight"))
 	page:Header("Buffs and debuffs")
@@ -2326,18 +2334,18 @@ local function BuildGeneralPage(page)
 		end
 	end
 	page:Dropdown("Profile on this character", profileItems(false), function() return ns:CurrentProfileName() end, function(v)
-		if v ~= ns:CurrentProfileName() then StaticPopup_Show("STINKIEUI_SWITCH_PROFILE", v, nil, v) end
+		if v ~= ns:CurrentProfileName() then ns.ShowDialog("SWITCH_PROFILE", v, nil, v) end
 	end)
 	page:Button("Give this character its own profile", function()
 		local name = ns.CharKey()
 		if ns:CurrentProfileName() == name then ns:Print("This character already uses its own profile.") return end
-		StaticPopup_Show("STINKIEUI_NEW_PROFILE", name, nil, name)
+		ns.ShowDialog("NEW_PROFILE", name, nil, name)
 	end, 260)
 	page:Dropdown("Copy settings from", profileItems(true), function() return "" end, function(v)
-		if v ~= "" then StaticPopup_Show("STINKIEUI_COPY_PROFILE", v, ns:CurrentProfileName(), v) end
+		if v ~= "" then ns.ShowDialog("COPY_PROFILE", v, ns:CurrentProfileName(), v) end
 	end)
 	page:Dropdown("Delete a profile", profileItems(true), function() return "" end, function(v)
-		if v ~= "" then StaticPopup_Show("STINKIEUI_DELETE_PROFILE", v, nil, v) end
+		if v ~= "" then ns.ShowDialog("DELETE_PROFILE", v, nil, v) end
 	end)
 	page:Note("New characters use Default. Profile changes reload the UI.", 22)
 	page:Header("Profile per spec")
@@ -2372,10 +2380,10 @@ local function BuildGeneralPage(page)
 		ShowTextPopup("Import profile", "", function(text)
 			local t, err = ns:DecodeProfile(text)
 			if not t then ns:Print(err) return end
-			StaticPopup_Show("STINKIEUI_IMPORT", nil, nil, text)
+			ns.ShowDialog("IMPORT", nil, nil, text)
 		end)
 	end)
-	page:Button("Reset this profile", function() StaticPopup_Show("STINKIEUI_RESET") end)
+	page:Button("Reset this profile", function() ns.ShowDialog("RESET") end)
 	page:Note("Settings marked * apply after a reload.", 22)
 	page:Note("Slash commands: /stinkie, /stinkie unlock, /stinkie lock, /mh (match history), /mh stats, /stinkie flags, /stinkie timers, /stinkie fontcheck, /stinkie auras, /stinkie plates, /stinkie modules, /stinkie setup, /stinkie report, /stinkie reset", 50)
 	page:Note("PT Sans Narrow is bundled under the SIL Open Font License (Media folder).", 36)
@@ -2510,58 +2518,48 @@ function ShowTextPopup(title, text, onImport)
 	p.eb:HighlightText()
 end
 
-StaticPopupDialogs["STINKIEUI_IMPORT"] = {
+ns.Dialogs.IMPORT = {
 	text = "Replace this profile's settings with the imported ones and reload?",
 	button1 = YES,
 	button2 = NO,
-	OnAccept = function(_, data)
+	OnAccept = function(data)
 		local ok, err = ns:ImportProfile(data)
 		if ok then ReloadUI() else ns:Print(err) end
 	end,
-	timeout = 0,
-	whileDead = true,
-	hideOnEscape = true,
 }
 
-StaticPopupDialogs["STINKIEUI_SWITCH_PROFILE"] = {
+ns.Dialogs.SWITCH_PROFILE = {
 	text = "Use the profile \"%s\" on this character and reload?",
 	button1 = YES, button2 = NO,
-	OnAccept = function(_, name) ns:SetProfile(name); ReloadUI() end,
-	timeout = 0, whileDead = true, hideOnEscape = true,
+	OnAccept = function(name) ns:SetProfile(name); ReloadUI() end,
 }
 
-StaticPopupDialogs["STINKIEUI_NEW_PROFILE"] = {
+ns.Dialogs.NEW_PROFILE = {
 	text = "Create the profile \"%s\" from your current settings, use it on this character and reload?",
 	button1 = YES, button2 = NO,
-	OnAccept = function(_, name) ns:SetProfile(name, true); ReloadUI() end,
-	timeout = 0, whileDead = true, hideOnEscape = true,
+	OnAccept = function(name) ns:SetProfile(name, true); ReloadUI() end,
 }
 
-StaticPopupDialogs["STINKIEUI_COPY_PROFILE"] = {
+ns.Dialogs.COPY_PROFILE = {
 	text = "Copy every setting from \"%s\" into \"%s\" and reload?",
 	button1 = YES, button2 = NO,
-	OnAccept = function(_, name) if ns:CopyProfile(name) then ReloadUI() end end,
-	timeout = 0, whileDead = true, hideOnEscape = true,
+	OnAccept = function(name) if ns:CopyProfile(name) then ReloadUI() end end,
 }
 
-StaticPopupDialogs["STINKIEUI_DELETE_PROFILE"] = {
+ns.Dialogs.DELETE_PROFILE = {
 	text = "Delete the profile \"%s\"? Characters using it go back to Default.",
 	button1 = YES, button2 = NO,
-	OnAccept = function(_, name)
+	OnAccept = function(name)
 		local ok, err = ns:DeleteProfile(name)
 		ns:Print(ok and ("Deleted profile " .. name .. ".") or err)
 	end,
-	timeout = 0, whileDead = true, hideOnEscape = true,
 }
 
-StaticPopupDialogs["STINKIEUI_RESET"] = {
+ns.Dialogs.RESET = {
 	text = "Reset every setting in this profile and reload?",
 	button1 = YES,
 	button2 = NO,
 	OnAccept = function() ns:ResetProfile(); ReloadUI() end,
-	timeout = 0,
-	whileDead = true,
-	hideOnEscape = true,
 }
 
 ---------------------------------------------------------------------------

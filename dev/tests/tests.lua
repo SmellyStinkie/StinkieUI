@@ -691,6 +691,72 @@ end
 ns.PartyTargets:SetTestMode(true)
 check("party target preview", ns.PartyTargets.frames[2].Name._text == "Pinkie")
 ns.PartyTargets:SetTestMode(false)
+-- pet / totem plates: the game's own shrinking is switched off unless asked for
+do
+	local NP, c = ns.Nameplates, ns.db.nameplates
+	local oldEnum, oldSet, oldGet = Enum.NamePlateSimplifiedType, SetCVarBitfield, C_CVar.GetCVar
+	local wrote
+	SetCVarBitfield = function(name, bit, on) wrote = { name, bit, on } end
+	Enum.NamePlateSimplifiedType = { Minion = 1, MinusMob = 2 }
+	C_CVar.GetCVar = function() return nil end
+	check("a client without that game setting: nothing is written", NP.ApplySimplified(c) == false and wrote == nil)
+	C_CVar.GetCVar = function() return "1" end
+	check("off by default", ns.defaults.nameplates.shrinkMinions == false)
+	NP.ApplySimplified(c)
+	check("the game's shrinking of pet / totem plates is switched off", wrote and wrote[1] == "nameplateSimplifiedTypes" and wrote[2] == 1 and wrote[3] == false)
+	c.shrinkMinions = true
+	NP.ApplySimplified(c)
+	check("asked for: switched on", wrote[3] == true)
+	c.shrinkMinions = false
+	Enum.NamePlateSimplifiedType, SetCVarBitfield, C_CVar.GetCVar = oldEnum, oldSet, oldGet
+end
+-- buffs on the target and focus frames
+do
+	local UF = ns.UF
+	local f, a = UF.frames.target, ns.db.units.target.auras
+	check("target frame has a buff row, off by default", f.Buffs ~= nil and ns.defaults.units.target.auras.buffs == false and not f.Buffs:IsShown())
+	check("focus frame has one too", UF.frames.focus.Buffs ~= nil)
+	check("everyone's buffs, without the defensives the small row shows",
+		UF.BuffFilter({ buffFilter = "all", showSmall = true }) == "HELPFUL|!BIG_DEFENSIVE|!EXTERNAL_DEFENSIVE")
+	check("mine only: the buffs you cast", UF.BuffFilter({ buffFilter = "mine", showSmall = true }) == "HELPFUL|PLAYER|!BIG_DEFENSIVE|!EXTERNAL_DEFENSIVE")
+	check("small row off: defensives show with the buffs", UF.BuffFilter({ buffFilter = "mine", showSmall = false }) == "HELPFUL|PLAYER")
+	local spot
+	f.Buffs.SetPoint = function(_, p, rel, rp) spot = { p, rel, rp } end
+	a.buffs, a.buffFilter = true, "mine"
+	ns:Refresh()
+	check("on: shown, above the frame while the other icons are below", f.Buffs:IsShown() and spot[1] == "BOTTOMLEFT" and spot[3] == "TOPLEFT")
+	check("the choice reaches the row", f.Buffs.SUIFilter and f.Buffs.SUIFilter[1] == "HELPFUL|PLAYER|!BIG_DEFENSIVE|!EXTERNAL_DEFENSIVE")
+	a.position = "ABOVE"
+	ns:Refresh()
+	check("other icons above: buffs go below", spot[1] == "TOPLEFT" and spot[3] == "BOTTOMLEFT")
+	a.enabled = false
+	ns:Refresh()
+	check("the master switch hides them", not f.Buffs:IsShown())
+	a.enabled, a.buffs, a.buffFilter, a.position = true, false, "all", "BELOW"
+	f.Buffs.SetPoint = nil
+	ns:Refresh()
+	check("off again: hidden", not f.Buffs:IsShown())
+end
+-- the outline on your target, party and raid frames: thickness is an option
+do
+	local f, c = ns.Party.frames[1], ns.db.party
+	check("party / raid target outline: 1 pixel by default", ns.defaults.party.targetThickness == 1 and ns.defaults.raid.targetThickness == 1)
+	ns:Refresh()
+	local e = f.Highlight.edges
+	check("party: 1 pixel on every side", e[1]:GetHeight() == 1 and e[2]:GetHeight() == 1 and e[3]:GetWidth() == 1 and e[4]:GetWidth() == 1)
+	c.targetThickness = 4
+	ns:Refresh()
+	check("party: thicker when asked", e[1]:GetHeight() == 4 and e[2]:GetHeight() == 4 and e[3]:GetWidth() == 4 and e[4]:GetWidth() == 4)
+	c.targetThickness = 1
+	ns:Refresh()
+	local r = ns.db.raid
+	check("raid: 1 pixel", ns.Raid.HighlightThickness(0.5) == 0.5)
+	r.targetThickness = 3
+	check("raid: thicker when asked", ns.Raid.HighlightThickness(0.5) == 1.5)
+	r.targetThickness = nil
+	check("raid: a profile without the setting still gets a line", ns.Raid.HighlightThickness(1) == 1)
+	r.targetThickness = 1
+end
 -- buffs on the party frames
 do
 	local P, c = ns.Party, ns.db.party
@@ -3779,6 +3845,18 @@ check("taken team skipped", FL.NearestFaction({ Alliance = { x = 0.5, y = 0.2 },
 
 -- 0.36: tooltip
 local TT = ns.Tooltip
+do -- a tooltip the game has locked away from addons is left alone
+	local tt, scaled = ShoppingTooltip1, 0
+	local oldF, oldS = tt.IsForbidden, tt.SetScale
+	tt.IsForbidden = function() return true end
+	tt.SetScale = function() scaled = scaled + 1 end
+	ns.Tooltip.ApplyScale()
+	check("a forbidden tooltip isn't scaled", scaled == 0)
+	tt.IsForbidden = function() return false end
+	tt.SetScale = function() scaled = scaled + 1; error("forbidden") end
+	check("a tooltip that refuses doesn't raise an error", pcall(ns.Tooltip.ApplyScale) and scaled == 1)
+	tt.IsForbidden, tt.SetScale = oldF, oldS
+end
 check("tooltip defaults", ns.db.tooltip.anchor == "mouse" and ns.db.tooltip.offsetX == 128 and ns.db.tooltip.offsetY == 25)
 ns.db.tooltip.combat = "units"
 check("tooltip shown out of combat", TT.ShouldHide(true) == false)

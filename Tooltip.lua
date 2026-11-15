@@ -70,7 +70,8 @@ function T.ApplyScale()
 	local scale = c.enabled and c.scale or 1
 	for _, name in ipairs({ "GameTooltip", "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "EmbeddedItemTooltip" }) do
 		local tt = _G[name]
-		if tt and tt.SetScale then tt:SetScale(scale) end
+		-- the game can lock a tooltip away from addons ("forbidden"); touching one is an error
+		if tt and tt.SetScale and not (tt.IsForbidden and tt:IsForbidden()) then pcall(tt.SetScale, tt, scale) end
 	end
 end
 
@@ -88,7 +89,7 @@ end
 
 local function OnShow(tooltip)
 	local c = cfg()
-	if not c.enabled then return end
+	if not c.enabled or (tooltip.IsForbidden and tooltip:IsForbidden()) then return end
 	local _, unit = tooltip:GetUnit()
 	if T.ShouldHide(issecret(unit) or unit ~= nil) then
 		tooltip:Hide()

@@ -113,7 +113,8 @@ local function CreateHighlight(f)
 end
 
 local function LayoutHighlight(f)
-	local px = ns.Pixel(f)
+	-- the outline on your target, as many pixels thick as the option says
+	local px = ns.Pixel(f) * math.max(1, ns.db.party.targetThickness or 1)
 	local e = f.Highlight.edges
 	e[1]:ClearAllPoints(); e[1]:SetPoint("TOPLEFT"); e[1]:SetPoint("TOPRIGHT"); e[1]:SetHeight(px)
 	e[2]:ClearAllPoints(); e[2]:SetPoint("BOTTOMLEFT"); e[2]:SetPoint("BOTTOMRIGHT"); e[2]:SetHeight(px)

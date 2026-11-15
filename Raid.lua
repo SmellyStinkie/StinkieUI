@@ -393,6 +393,11 @@ local function LayoutBorder(border, thickness)
 	e[4]:ClearAllPoints(); e[4]:SetPoint("TOPRIGHT"); e[4]:SetPoint("BOTTOMRIGHT"); e[4]:SetWidth(thickness)
 end
 
+-- how thick the outline on your target is, in screen units (px = one pixel)
+function Raid.HighlightThickness(px)
+	return px * math.max(1, cfg().targetThickness or 1)
+end
+
 -- Size and place everything on a button. Out of combat only: it sizes the button itself.
 function Raid.LayoutButton(f)
 	local c = cfg()
@@ -447,7 +452,7 @@ function Raid.LayoutButton(f)
 	f.CenterIcon:SetSize(s, s)
 	f.PrivateHolder:SetSize(math.max(1, c.privateMax * (c.privateSize + 1)), c.privateSize)
 
-	LayoutBorder(f.Highlight, px)
+	LayoutBorder(f.Highlight, Raid.HighlightThickness(px))
 	LayoutBorder(f.Aggro, px * 2)
 	for _, edge in ipairs(f.Highlight.edges) do edge:SetColorTexture(1, 1, 1, 1) end
 

@@ -142,6 +142,7 @@ function UF.UpdateAll(f)
 	if f.PostUpdate then f:PostUpdate() end
 	if f.Auras then ns.SetAuraUnit(f.Auras, f.unit) end
 	if f.CCIcon then ns.SetAuraUnit(f.CCIcon, f.unit) end
+	if f.Buffs then ns.SetAuraUnit(f.Buffs, f.unit) end
 	if f.Castbar and f.Castbar.unit then f.Castbar:ForceUpdate() end
 end
 
@@ -470,6 +471,40 @@ local function BuildAuras(f, acfg, ucfg)
 	f.CCIcon = ns.CreateAuraContainer(f, { { filter = F.cc, max = 1 } }, {
 		size = size, spacing = 0, anchor = "TOPLEFT", growthX = "RIGHT", growthY = "DOWN", maxWidth = size,
 	})
+	-- buffs on the unit (an option), in a row of their own
+	local bs = acfg.buffSize or 20
+	f.Buffs = ns.CreateAuraContainer(f, { { filter = UF.BuffFilter(acfg), max = acfg.buffMax or 8 } }, {
+		size = bs, spacing = 3, anchor = "BOTTOMLEFT", growthX = "RIGHT", growthY = "UP", maxWidth = (bs + 3) * 10,
+	})
+end
+
+-- Which buffs the buff row shows: the ones you cast on the unit, or everyone's. Big defensives
+-- already have an icon in the small aura row, so they're left out while that row is shown.
+function UF.BuffFilter(a)
+	local filter = a.buffFilter == "mine" and "HELPFUL|PLAYER" or "HELPFUL"
+	if a.showSmall ~= false then filter = filter .. "|!BIG_DEFENSIVE|!EXTERNAL_DEFENSIVE" end
+	return filter
+end
+
+-- The buff row goes on the other side of the frame from the small aura row.
+local function LayoutBuffs(f, cfg)
+	local buffs = f.Buffs
+	if not buffs then return end
+	local a = cfg.auras
+	buffs:ClearAllPoints()
+	if a.position == "ABOVE" then
+		local cb = cfg.castbar
+		local under = (cb and cb.enabled and cb.attached and f.Castbar) or f
+		ns.SetAuraGrowth(buffs, "TOPLEFT", "RIGHT", "DOWN")
+		buffs:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -4)
+	else
+		local y = (cfg.showName ~= false and cfg.nameAbove) and (cfg.nameStyle.size + 6) or 4
+		ns.SetAuraGrowth(buffs, "BOTTOMLEFT", "RIGHT", "UP")
+		buffs:SetPoint("BOTTOMLEFT", f, "TOPLEFT", 0, y)
+	end
+	ns.SetAuraGroupFilter(buffs, 1, UF.BuffFilter(a))
+	ns.SetAuraGroupMax(buffs, 1, a.buffMax or 8)
+	buffs:SetShown(a.enabled and a.buffs and true or false)
 end
 
 local function LayoutCCIcon(f, cfg)
@@ -552,6 +587,7 @@ function UF:Refresh()
 				f.Auras:SetShown(a.enabled and a.showSmall ~= false)
 				ns.SetAuraGroupMax(f.Auras, 4, a.max)
 				LayoutCCIcon(f, cfg)
+				LayoutBuffs(f, cfg)
 			end
 			if f.Castbar then
 				UF.LayoutCastbar(f, cfg.castbar, unit .. "Castbar", unitLabels[unit] .. " Castbar")
