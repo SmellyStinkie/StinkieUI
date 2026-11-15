@@ -1,5 +1,12 @@
 # Stinkie UI changelog
 
+## 0.50.0
+- Party Frames: dispellable debuffs can go on the health bar (bottom left corner) as well as below the frame or after the crowd control icons. New sliders set their size and move them left / right and up / down from that spot.
+- Party Frames: new option for a shield icon on tanks, with a size slider.
+- Raid Frames: new sliders to move the row of debuffs, and a separate size for the debuffs you can dispel.
+- The default layout for new profiles is updated to Stinkie's current one (sizes, positions, fonts). Existing profiles keep their settings. Things that act for you or make noise still start off: quest and repair automation, GCD History, Quick Buy's skipped confirmations, the Error Catcher's sound, the custom queue pop sound and the Raid Frames.
+- If you already use Stinkie UI: the tank shield on party frames and the party dispellable debuff size are new settings, so they start at the new default (shield on, 20 pixels). Change them under Unit Frames > Party.
+
 ## 0.49.0
 - New: Error Catcher (Quality of Life), a module that stands in for BugGrabber and BugSack. Lua errors from any addon are kept quietly instead of popping up, and `/st errors` (or `/st e`) opens a window to read and copy them, by session. Options for a chat line, a sound with its own volume, opening the window on an error, and how many errors to keep. It stays off while BugGrabber is loaded.
 - New: Quick Buy (Quality of Life > Automation). Shift + right click a vendor item for a box to buy any number of it: type a number, use the arrows, or press Stack or Max. It shows the total and buys without the "are you sure" popup. Options to skip that popup on ordinary purchases too, and to answer the "can no longer be refunded" question when putting an item in the warband bank.

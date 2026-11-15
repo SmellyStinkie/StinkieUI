@@ -38,6 +38,7 @@ local function PostUpdate(f)
 	else
 		f.RoleIcon:Hide()
 	end
+	f.TankIcon:SetShown(cfg.tankIcon and not issecret(role) and role == "TANK" or false)
 	Party.UpdateTargetHighlight(f)
 	-- the aura containers watch this frame's unit (they show nothing until told which one)
 	local function watch(container, on)
@@ -61,10 +62,40 @@ Party.BUFF_FILTERS = {
 	all = "HELPFUL|!BIG_DEFENSIVE|!EXTERNAL_DEFENSIVE",
 }
 
+-- Where the dispellable debuffs go, as SetPoint arguments without the frame: their usual spot
+-- (under the frame, or beside it after the crowd control icons) moved by the X / Y offsets, so
+-- they can sit on the health bar. sideOffset: how far out the side spot starts; k: the icon's
+-- place in the row (the stand-ins are placed one by one), step: icon size plus spacing.
+function Party.DispelPoint(cfg, other, sideOffset, k, step)
+	local dx, dy = cfg.dispelX or 0, cfg.dispelY or 0
+	local along = ((k or 1) - 1) * (step or 0)
+	if cfg.dispelPosition == "SIDE" then
+		if other == "LEFT" then return "TOPRIGHT", "TOPLEFT", -sideOffset - along + dx, dy end
+		return "TOPLEFT", "TOPRIGHT", sideOffset + along + dx, dy
+	elseif cfg.dispelPosition == "HEALTH" then
+		return "BOTTOMLEFT", "BOTTOMLEFT", along + dx, dy -- in the health bar's bottom left corner
+	end
+	return "TOPLEFT", "BOTTOMLEFT", along + dx, -3 + dy
+end
+
+-- what the dispellable debuffs are placed against: the health bar, the frame, or the castbar
+-- under the frame when they go in the row below
+function Party.DispelRelative(f, cfg)
+	if cfg.dispelPosition == "HEALTH" then return f.Health or f end
+	if cfg.dispelPosition ~= "SIDE" and f.Castbar and cfg.castbar.enabled then return f.Castbar end
+	return f
+end
+
+-- the size of a dispellable debuff icon: your own, or 60% of the frame's height
+function Party.DispelSize(cfg)
+	local s = tonumber(cfg.dispelSize) or 0
+	return s > 0 and s or math.floor(cfg.height * 0.6)
+end
+
 -- the height of the row of icons under a frame (dispellable debuffs and / or buffs), 0 without one
 function Party.RowBelow(cfg)
 	local h = 0
-	if cfg.dispelIcons and cfg.dispelPosition ~= "SIDE" then h = math.floor(cfg.height * 0.6) end
+	if cfg.dispelIcons and (cfg.dispelPosition or "BELOW") == "BELOW" then h = Party.DispelSize(cfg) end
 	if cfg.buffs and cfg.buffPosition == "BELOW" then h = math.max(h, cfg.buffSize) end
 	return h
 end
@@ -152,6 +183,12 @@ local function CreatePartyFrame(unit, index)
 	role:SetVertexColor(ns.HEALER_GREEN[1], ns.HEALER_GREEN[2], ns.HEALER_GREEN[3], 1)
 	role:Hide()
 	f.RoleIcon = role
+	-- the shield for tanks (an option), in the healer cross's corner: nobody is both
+	local tank = f.TextLayer:CreateTexture(nil, "OVERLAY")
+	tank:SetTexture(ns.MEDIA.roleTank)
+	tank:SetVertexColor(ns.TANK_COLOR[1], ns.TANK_COLOR[2], ns.TANK_COLOR[3], 1)
+	tank:Hide()
+	f.TankIcon = tank
 
 	CreateHighlight(f)
 
@@ -186,13 +223,14 @@ local function CreatePartyFrame(unit, index)
 		})
 	end
 	do
-		local s = math.floor(iconSize * 0.6)
-		local below = cfg.dispelPosition ~= "SIDE"
+		local s = Party.DispelSize(cfg)
+		local below, onBar = cfg.dispelPosition ~= "SIDE", cfg.dispelPosition == "HEALTH"
 		f.DispelIcons = ns.CreateAuraContainer(f, { { filter = F.dispellable, max = 3 } }, {
 			size = s, spacing = 2, dispelBorder = true,
-			anchor = below and "TOPLEFT" or anchorFor(other),
-			growthX = below and "RIGHT" or grow(other), growthY = "DOWN",
+			anchor = onBar and "BOTTOMLEFT" or below and "TOPLEFT" or anchorFor(other),
+			growthX = below and "RIGHT" or grow(other), growthY = onBar and "UP" or "DOWN",
 			maxWidth = (s + 2) * 3,
+			disableMouse = onBar, -- on the health bar they'd take the clicks meant for the player
 		})
 	end
 	do
@@ -267,6 +305,10 @@ local function LayoutPartyFrame(f, index)
 	f.RoleIcon:SetSize(rs, rs)
 	f.RoleIcon:ClearAllPoints()
 	f.RoleIcon:SetPoint("BOTTOMRIGHT", f.Health, "BOTTOMRIGHT", -3, 3)
+	local ts = cfg.tankSize or 14
+	f.TankIcon:SetSize(ts, ts)
+	f.TankIcon:ClearAllPoints()
+	f.TankIcon:SetPoint("BOTTOMRIGHT", f.Health, "BOTTOMRIGHT", -3, 3)
 	LayoutHighlight(f)
 
 	local AA = ns.db.arenaAssist
@@ -304,14 +346,17 @@ local function LayoutPartyFrame(f, index)
 		ns.RestyleAuraButtons(f.CCIcons, { glow = AA.ccGlow, glowColor = AA.ccGlowColor, glowThickness = AA.ccGlowThickness }, nil, true)
 	end
 	if f.DispelIcons then
-		if cfg.dispelPosition == "SIDE" then
-			Beside(f.DispelIcons, other, gap + (cfg.ccIcon and (cs + gap) * (cfg.ccMax or 2) or 0))
+		local side = cfg.dispelPosition == "SIDE"
+		-- beside the frame, or a row under it (under the castbar when there is one)
+		local rel = Party.DispelRelative(f, cfg)
+		local p, rp, x, y = Party.DispelPoint(cfg, other, gap + (cfg.ccIcon and (cs + gap) * (cfg.ccMax or 2) or 0))
+		f.DispelIcons:ClearAllPoints()
+		f.DispelIcons:SetPoint(p, rel, rp, x, y)
+		if side then
 			ns.SetAuraGrowth(f.DispelIcons, anchorFor(other), other, "DOWN")
+		elseif cfg.dispelPosition == "HEALTH" then
+			ns.SetAuraGrowth(f.DispelIcons, "BOTTOMLEFT", "RIGHT", "UP")
 		else
-			-- a row under the frame (under the castbar when there is one)
-			f.DispelIcons:ClearAllPoints()
-			local under = f.Castbar and cfg.castbar.enabled and f.Castbar or f
-			f.DispelIcons:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -3)
 			ns.SetAuraGrowth(f.DispelIcons, "TOPLEFT", "RIGHT", "DOWN")
 		end
 	end
@@ -520,7 +565,7 @@ end
 -- party: a tank, a healer and two damage dealers; arena: you plus two teammates, both in CC
 local PREVIEW = {
 	party = {
-		{ name = "Tankie", class = "WARRIOR", hp = 0.91, def = 871, dispel = 0 },
+		{ name = "Tankie", class = "WARRIOR", hp = 0.91, def = 871, dispel = 0, tank = true },
 		{ name = "Pinkie", class = "PRIEST", hp = 0.62, healer = true, cc = 118, dispel = 2 },
 		{ name = "Minkie", class = "MAGE", hp = 0.34, cc = 853, dispel = 0, trinketCD = 74 },
 		{ name = "Winkie", class = "ROGUE", hp = 0.88, def = 31224, dispel = 1 },
@@ -629,18 +674,14 @@ function Party.LayoutPreview(f)
 	def:SetShown(cfg.defensiveIcon and d.def ~= nil)
 	if d.def then def.tex:SetTexture(C_Spell.GetSpellTexture(d.def)); ns.ZoomIcon(def.tex); def.cd:SetCooldown(GetTime() - 1, 8) end
 	-- dispellable debuffs
-	local ds = math.floor(h * 0.6)
+	local ds = Party.DispelSize(cfg)
 	for k = 1, 2 do
 		local p = PreviewIcon(f, "dispel" .. k)
 		p:SetSize(ds, ds)
 		p:ClearAllPoints()
-		if cfg.dispelPosition == "SIDE" then
-			local offset = gap + (cfg.ccIcon and (cs + gap) * (cfg.ccMax or 2) or 0) + (k - 1) * (ds + 2)
-			Beside(p, other, offset, ds)
-		else
-			local under = (f.Castbar and cfg.castbar.enabled) and f.Castbar or f
-			p:SetPoint("TOPLEFT", under, "BOTTOMLEFT", (k - 1) * (ds + 2), -3)
-		end
+		local rel = Party.DispelRelative(f, cfg)
+		local pt, rp, x, y = Party.DispelPoint(cfg, other, gap + (cfg.ccIcon and (cs + gap) * (cfg.ccMax or 2) or 0), k, ds + 2)
+		p:SetPoint(pt, rel, rp, x, y)
 		p:SetShown(cfg.dispelIcons and k <= (d.dispel or 0))
 		p.tex:SetTexture(C_Spell.GetSpellTexture(DISPEL_PREVIEW[k]))
 		ns.ZoomIcon(p.tex)
@@ -701,6 +742,7 @@ function Party.FillPreview(f, i)
 	f.Power:SetValue(0.7)
 	f.Power:SetStatusBarColor(0, 0.44, 0.87)
 	f.RoleIcon:SetShown(cfg.healerIcon ~= false and d.healer and true or false)
+	f.TankIcon:SetShown(cfg.tankIcon and d.tank and true or false)
 	f.Highlight:SetAlpha(i == 2 and 1 or 0)
 	f:SetAlpha(1)
 	Party.LayoutPreview(f)

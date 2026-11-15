@@ -30,7 +30,7 @@ end
 local function PartyStep()
 	local p = ns.db.party
 	local castH = (p.castbar.enabled and (p.castbar.height + 2)) or 0
-	if p.dispelIcons and p.dispelPosition ~= "SIDE" then castH = castH + math.floor(p.height * 0.6) + 3 end
+	if p.dispelIcons and (p.dispelPosition or "BELOW") == "BELOW" then castH = castH + ns.Party.DispelSize(p) + 3 end
 	return p.height + castH + p.spacing, castH
 end
 

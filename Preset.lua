@@ -58,7 +58,7 @@ local PRESET = {
 		nameStyle = {
 			size = 17,
 		},
-		point = { "RIGHT", -560, 105 },
+		point = { "RIGHT", -560, 160 },
 		spacing = 20,
 		trinketSize = 55,
 		width = 200,
@@ -86,7 +86,6 @@ local PRESET = {
 	bgAllies = {
 		buffSide = "LEFT",
 		buffSize = 35,
-		buffs = true,
 		buffsMine = true,
 		carrierSide = "RIGHT",
 		headerStyle = {
@@ -151,14 +150,54 @@ local PRESET = {
 	},
 	blitzMap = {
 		enabled = true,
+		iconSize = 28,
+		nameStyle = {
+			size = 13,
+		},
+		nodeSize = 20,
+		point = { "TOPLEFT", 0, 0 },
+		views = {
+			[1366] = {
+				u = 0.495076,
+				v = 0.481364,
+				zoom = 1.5625,
+			},
+			[206] = {
+				u = 0.570833,
+				v = 0.513636,
+				zoom = 1.25,
+			},
+			[397] = {
+				u = 0.514788,
+				v = 0.508318,
+				zoom = 1.953125,
+			},
+			[417] = {
+				u = 0.480622,
+				v = 0.539715,
+				zoom = 1.5625,
+			},
+			[423] = {
+				u = 0.507955,
+				v = 0.540341,
+				zoom = 1.25,
+			},
+		},
+		width = 440,
+	},
+	bossFrames = {
+		point = { "RIGHT", -490, 100 },
 	},
 	character = {
-		background = "warband:25",
+		background = "warband:146",
+		dim = 0.55,
 		extraHeight = 100,
 		extraWidth = 100,
 		gemSize = 13,
 		nameChars = 20,
-		scale = 1.45,
+		outerDim = 0.55,
+		ownedOnly = true,
+		scale = 1.4,
 	},
 	chat = {
 		bgAlpha = 0.6,
@@ -186,6 +225,7 @@ local PRESET = {
 		width = 280,
 	},
 	colors = {
+		background = { 0, 0, 0, 0.85 },
 		health = { 0.211765, 0.211765, 0.223529 },
 	},
 	combat = {
@@ -198,8 +238,6 @@ local PRESET = {
 		},
 	},
 	combatLog = {
-		mplus = true,
-		raid = true,
 		singleFile = true,
 	},
 	combatTextFont = true,
@@ -240,7 +278,7 @@ local PRESET = {
 	},
 	cursor = {
 		ring = true,
-		ringAlpha = 0.85,
+		ringAlpha = 0.95,
 		ringColor = { 0.858824, 0.690196, 1 },
 		ringCombatOnly = false,
 		ringSize = 69,
@@ -264,6 +302,10 @@ local PRESET = {
 		critSize = 2,
 		height = 9.75,
 		screenY = 0.045,
+	},
+	errors = {
+		fontSize = 14,
+		keep = 60,
 	},
 	flagCap = {
 		eta = false,
@@ -302,11 +344,19 @@ local PRESET = {
 		},
 	},
 	misc = {
+		apm = {
+			count = "keys",
+			point = { "BOTTOM", -650, 0 },
+			textStyle = {
+				size = 20,
+			},
+		},
 		auto = {
 			sellJunk = true,
 		},
 		decor = {
 			enabled = true,
+			maxGold = 10000,
 		},
 		gcd = {
 			direction = "LEFT",
@@ -326,28 +376,41 @@ local PRESET = {
 		auraMode = "important",
 		auraSize = 30,
 		carrierSize = 70,
-		castHeight = 15,
+		castHeight = 20,
+		castStyle = {
+			size = 17,
+		},
 		eliteSize = 16,
 		friendlyHealerSize = 60,
-		friendlyHeight = 6,
+		friendlyHeight = 9,
 		friendlyLower = 20,
-		friendlyNameMaxChars = 20,
+		friendlyMarkerSize = 40,
 		friendlyNameInBar = true,
+		friendlyNameMaxChars = 17,
 		friendlyNameStyle = {
 			classColor = false,
-			size = 17,
+			size = 16,
 		},
 		friendlyWidth = 90,
 		healerSize = 60,
+		healthStyle = {
+			size = 14,
+		},
 		height = 25,
 		highlight = {
 			arrowSize = 50,
 			arrows = true,
-			thickness = 3,
+			outset = 6,
+			thickness = 4,
 		},
 		important = {
-			clickPad = 18,
+			auraSize = 80,
+			clickPad = 40,
+			heightScale = 2.5,
+			widthScale = 2,
 		},
+		markerSize = 40,
+		minionScale = 0.8,
 		nameInBar = true,
 		nameMaxChars = 20,
 		nameStyle = {
@@ -367,33 +430,53 @@ local PRESET = {
 	},
 	objectives = {
 		headerSize = 15,
-		hideDungeon = true,
 		lineSize = 14,
+		questText = {
+			enabled = true,
+			point = { "TOP", 0, -320 },
+		},
+		zoneGroups = true,
 	},
 	party = {
 		castbar = {
 			enabled = true,
+			height = 15,
+			textStyle = {
+				size = 12,
+			},
 		},
-		dispelIcons = false,
+		dispelPosition = "HEALTH",
+		dispelSize = 20,
 		healerSize = 25,
 		height = 55,
+		leaderIcon = true,
 		nameStyle = {
 			size = 17,
 		},
-		point = { "LEFT", 560, 84 },
+		point = { "LEFT", 560, 85 },
 		power = "healer",
+		showPlayer = true,
 		spacing = 20,
+		tankIcon = true,
+		tankSize = 25,
+		targetThickness = 3,
 		trinketSize = 0,
 		width = 200,
 	},
 	partyTargets = {
 		enabled = true,
+		healthText = "none",
 		height = 16,
 		hideInPvP = false,
+		nameStyle = {
+			size = 12,
+		},
 	},
 	queueInfo = {
 		bgAlpha = 0.75,
-		header = false,
+		eyeMove = true,
+		eyePoint = { "BOTTOM", 450, 0 },
+		eyeScale = 1.4,
 		height = 24,
 		labelStyle = {
 			size = 17,
@@ -404,6 +487,35 @@ local PRESET = {
 			size = 17,
 		},
 		width = 523,
+	},
+	raid = {
+		aggro = false,
+		buffSize = 12,
+		buffs = false,
+		debuffSize = 20,
+		debuffs = "dispellable",
+		defensiveSize = 25,
+		dispelHighlight = false,
+		groupSpacing = 7,
+		height = 50,
+		hideInBattlegrounds = true,
+		keepGroups = false,
+		leaderIcon = true,
+		maxColumns = 6,
+		nameStyle = {
+			size = 12,
+		},
+		perColumn = 7,
+		point = { "TOPLEFT", 350, -350 },
+		privateAuras = false,
+		privateSize = 32,
+		rangeAlpha = 0.55,
+		roleIcon = "tankHealer",
+		roleSize = 15,
+		sort = "ROLE",
+		spacing = 1,
+		targetThickness = 4,
+		width = 90,
 	},
 	swingTimers = {
 		hideIdle = true,

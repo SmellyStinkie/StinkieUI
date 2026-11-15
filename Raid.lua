@@ -262,10 +262,10 @@ local function BuildAuras(f)
 	-- bottom left: crowd control, then debuffs you can dispel (colored border), then the rest
 	f.Debuffs = ns.CreateAuraContainer(f, {
 		{ filter = F.cc, max = 1 },
-		{ filter = F.dispellable, max = c.debuffMax, dispelBorder = true },
+		{ filter = F.dispellable, max = c.debuffMax, dispelBorder = true, size = Raid.DispelSize(c) },
 		{ filter = "HARMFUL|!RAID_PLAYER_DISPELLABLE|!CROWD_CONTROL", max = c.debuffMax },
 	}, { size = c.debuffSize, spacing = 1, anchor = "BOTTOMLEFT", growthX = "RIGHT", growthY = "UP",
-		maxWidth = (c.debuffSize + 1) * (c.debuffMax + 1), disableMouse = noMouse })
+		maxWidth = (math.max(c.debuffSize, Raid.DispelSize(c)) + 1) * (c.debuffMax + 1), disableMouse = noMouse })
 	-- bottom right: your own heals over time and the like
 	f.Buffs = ns.CreateAuraContainer(f, { { filter = "HELPFUL|PLAYER|RAID_IN_COMBAT", max = c.buffMax } },
 		{ size = c.buffSize, spacing = 1, anchor = "BOTTOMRIGHT", growthX = "LEFT", growthY = "UP",
@@ -283,10 +283,21 @@ local function BuildAuras(f)
 	Raid.PlaceAuras(f)
 end
 
+-- the size of a debuff you can dispel: your own, or the size of the other debuffs
+function Raid.DispelSize(c)
+	local s = tonumber(c.dispelSize) or 0
+	return s > 0 and s or c.debuffSize
+end
+
+-- where the row of debuffs starts, from the health bar's bottom left corner
+function Raid.DebuffOffset(c)
+	return 2 + (tonumber(c.debuffX) or 0), 2 + (tonumber(c.debuffY) or 0)
+end
+
 function Raid.PlaceAuras(f)
 	if not f.aurasBuilt then return end
 	f.Debuffs:ClearAllPoints()
-	f.Debuffs:SetPoint("BOTTOMLEFT", f.Health, "BOTTOMLEFT", 2, 2)
+	f.Debuffs:SetPoint("BOTTOMLEFT", f.Health, "BOTTOMLEFT", Raid.DebuffOffset(cfg()))
 	f.Buffs:ClearAllPoints()
 	f.Buffs:SetPoint("BOTTOMRIGHT", f.Health, "BOTTOMRIGHT", -2, 2)
 	f.Defensives:ClearAllPoints()
@@ -1000,10 +1011,13 @@ function Raid.LayoutPreview(f, d)
 		def.cd:SetHideCountdownNumbers(true)
 	end
 	if d.def then def.cd:SetCooldown(GetTime() - 2, 8) end
+	local dbx, dby = Raid.DebuffOffset(c)
 	for k = 1, #PREVIEW_SPELLS.debuff do
 		local canDispel = d.dispel and k == 1
 		local on = k <= math.min(d.debuffs, c.debuffMax) and (c.debuffs == "all" or (c.debuffs ~= "none" and canDispel))
-		local p = icon("debuff" .. k, PREVIEW_SPELLS.debuff[k], c.debuffSize, on, "BOTTOMLEFT", 2 + (k - 1) * (c.debuffSize + 1), 2)
+		local size = canDispel and Raid.DispelSize(c) or c.debuffSize
+		local p = icon("debuff" .. k, PREVIEW_SPELLS.debuff[k], size, on, "BOTTOMLEFT", dbx, dby)
+		if on then dbx = dbx + size + 1 end
 		if k == 1 then
 			p.edge = p.edge or NewBorder(p, p:GetFrameLevel() + 1)
 			LayoutBorder(p.edge, px)

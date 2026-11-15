@@ -358,7 +358,9 @@ ns.defaults = {
 		ccIcon = true, defensiveIcon = true, dispelIcons = true,
 		ccSize = 0, -- 0 = frame height
 		ccMax = 2,
-		dispelPosition = "BELOW", -- BELOW (row under the frame) | SIDE (after the CC icons)
+		dispelPosition = "BELOW", -- BELOW (row under the frame) | SIDE (after the CC icons) | HEALTH (the health bar's bottom left corner)
+		dispelSize = 0, -- 0 = 60% of the frame height
+		dispelX = 0, dispelY = 0, -- moved from that spot, e.g. up onto the health bar
 		buffs = false, buffFilter = "mine", -- mine | all
 		buffPosition = "ON", -- ON (the frame's bottom right corner) | BELOW (the row under the frame)
 		buffSize = 16, buffMax = 3,
@@ -368,6 +370,7 @@ ns.defaults = {
 		leaderIcon = false, -- crown on the group leader
 		rangeFade = true,
 		healerIcon = true, healerSize = 12,
+		tankIcon = false, tankSize = 14, -- a shield on tanks
 		nameStyle = text(12),
 		healthStyle = text(12),
 		castbar = { enabled = false, height = 10, textStyle = text(10) },
@@ -786,6 +789,8 @@ ns.defaults = {
 		aggro = true, targetHighlight = true, targetThickness = 1, -- pixels
 		readyCheck = true, centerIcons = true, statusIconSize = 18, -- summon / resurrect / phased / other group
 		debuffs = "all", debuffSize = 16, debuffMax = 3, -- all | dispellable | none
+		dispelSize = 0, -- the ones you can dispel; 0 = the debuff size
+		debuffX = 0, debuffY = 0, -- the row of debuffs, moved from the health bar's bottom left corner
 		buffs = true, buffSize = 14, buffMax = 3,
 		defensiveIcon = true, defensiveSize = 20,
 		dispelHighlight = true,

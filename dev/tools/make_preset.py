@@ -49,7 +49,8 @@ def norm(v):
 prof = norm(prof)
 SKIP = {"version"}
 # remembered window spots are where one person dragged things on one screen, not settings
-DROP = {("windowMover", "frames")}
+# nor are the quest zones one person has folded up
+DROP = {("windowMover", "frames"), ("objectives", "collapsedZones")}
 
 def same(a, b):
     if (a == {} or a == []) and (b == {} or b == []):
@@ -87,12 +88,31 @@ def diff(p, d, path=""):
             out[k] = v
     return out
 
+# Things that act for the player or make noise stay as the built-in defaults have them: a new
+# player gets the look, and switches these on themselves.
+HOLD = [
+    ("misc", "auto", "hideErrors"), ("misc", "auto", "questAccept"), ("misc", "auto", "questTurnIn"),
+    ("misc", "auto", "releasePvP"), ("misc", "auto", "repair"), ("misc", "gcd", "enabled"),
+    ("misc", "quickBuy", "skipConfirm"), ("misc", "quickBuy", "bankRefund"),
+    ("errors", "sound"), ("errors", "chat"), ("errors", "volume"),
+    ("queueInfo", "popSound"), ("queueInfo", "popSoundName"), ("queueInfo", "popVolume"),
+    ("raid", "enabled"),
+]
+
+def remove(d, path):
+    if path[0] not in d:
+        return
+    if len(path) == 1:
+        del d[path[0]]
+        return
+    if isinstance(d[path[0]], dict):
+        remove(d[path[0]], path[1:])
+        if not d[path[0]]:
+            del d[path[0]]
+
 delta = diff(prof, defaults)
-for a, b in DROP:
-    if a in delta and b in delta[a]:
-        del delta[a][b]
-        if not delta[a]:
-            del delta[a]
+for path in list(DROP) + HOLD:
+    remove(delta, path)
 
 def lua_val(v, ind):
     pad = "\t" * ind

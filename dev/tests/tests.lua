@@ -13,6 +13,75 @@ local function flushErrors(label)
 	end
 end
 
+-- The checks below were written against fixed sizes and switches. The default layout (Preset.lua)
+-- is Stinkie's own and changes with it, so the settings those checks lean on are pinned here,
+-- before the addon reads them. A fresh install with the real layout is a scenario in modules.lua.
+do
+	local d = ns.defaults
+	d.blitzMap.views = {}
+	d.blitzMap.iconSize = 22
+	d.blitzMap.nameStyle.size = 10
+	d.blitzMap.nodeSize = 22
+	d.blitzMap.point[1] = "LEFT"
+	d.blitzMap.point[2] = 30
+	d.blitzMap.point[3] = 120
+	d.blitzMap.width = 340
+	d.character.background = "warband:25"
+	d.character.dim = 0.65
+	d.character.outerDim = 0.65
+	d.character.ownedOnly = false
+	d.character.scale = 1.45
+	d.objectives.hideDungeon = true
+	d.objectives.questText.enabled = false
+	d.objectives.questText.point[3] = -170
+	d.objectives.zoneGroups = false
+	d.party.castbar.height = 10
+	d.party.castbar.textStyle.size = 10
+	d.party.dispelIcons = false
+	d.party.dispelPosition = "BELOW"
+	d.party.dispelSize = 0
+	d.party.leaderIcon = false
+	d.party.point[3] = 84
+	d.party.showPlayer = false
+	d.party.tankIcon = false
+	d.party.tankSize = 14
+	d.party.targetThickness = 1
+	d.partyTargets.healthText = "percent"
+	d.partyTargets.nameStyle.size = 10
+	d.queueInfo.eyeMove = false
+	d.queueInfo.eyePoint[1] = "BOTTOMRIGHT"
+	d.queueInfo.eyePoint[2] = -330
+	d.queueInfo.eyePoint[3] = 40
+	d.queueInfo.eyeScale = 1
+	d.queueInfo.header = false
+	d.raid.aggro = true
+	d.raid.buffSize = 14
+	d.raid.buffs = true
+	d.raid.debuffSize = 16
+	d.raid.debuffs = "all"
+	d.raid.defensiveSize = 20
+	d.raid.dispelHighlight = true
+	d.raid.groupSpacing = 6
+	d.raid.height = 44
+	d.raid.hideInBattlegrounds = false
+	d.raid.keepGroups = true
+	d.raid.leaderIcon = false
+	d.raid.maxColumns = 8
+	d.raid.nameStyle.size = 11
+	d.raid.perColumn = 5
+	d.raid.point[2] = 20
+	d.raid.point[3] = -220
+	d.raid.privateAuras = true
+	d.raid.privateSize = 18
+	d.raid.rangeAlpha = 0.45
+	d.raid.roleIcon = "all"
+	d.raid.roleSize = 11
+	d.raid.sort = "GROUP"
+	d.raid.spacing = 2
+	d.raid.targetThickness = 1
+	d.raid.width = 80
+end
+
 -- boot
 MOCK.Fire("ADDON_LOADED", "StinkieUI")
 MOCK.Fire("PLAYER_LOGIN")
@@ -756,6 +825,76 @@ do
 	r.targetThickness = nil
 	check("raid: a profile without the setting still gets a line", ns.Raid.HighlightThickness(1) == 1)
 	r.targetThickness = 1
+end
+-- debuffs on the raid frames: where the row starts, and a size for the ones you can dispel
+do
+	local R, c = ns.Raid, ns.db.raid
+	check("raid: debuffs unmoved, one size by default", c.debuffX == 0 and c.debuffY == 0 and c.dispelSize == 0)
+	local x, y = R.DebuffOffset({})
+	check("raid: the row starts in the health bar's corner", x == 2 and y == 2)
+	x, y = R.DebuffOffset({ debuffX = 30, debuffY = -12 })
+	check("raid: moved by X and Y", x == 32 and y == -10)
+	check("raid: dispellable debuffs are the debuff size unless set", R.DispelSize({ debuffSize = 16 }) == 16
+		and R.DispelSize({ debuffSize = 16, dispelSize = 0 }) == 16 and R.DispelSize({ debuffSize = 16, dispelSize = 30 }) == 30)
+end
+-- dispellable debuffs on the party frames: X / Y offsets
+do
+	local P, f, c = ns.Party, ns.Party.frames[1], ns.db.party
+	check("no offset by default", c.dispelX == 0 and c.dispelY == 0)
+	check("size: 60% of the frame height unless set", c.dispelSize == 0 and P.DispelSize({ height = 50 }) == 30
+		and P.DispelSize({ height = 50, dispelSize = 0 }) == 30 and P.DispelSize({ height = 50, dispelSize = 44 }) == 44)
+	check("the row under the frame is as tall as the icons", P.RowBelow({ height = 50, dispelIcons = true, dispelPosition = "BELOW", dispelSize = 44 }) == 44
+		and P.RowBelow({ height = 50, dispelIcons = true, dispelPosition = "SIDE", dispelSize = 44 }) == 0)
+	local function pt(cfg, other, off, k, step) return table.concat({ P.DispelPoint(cfg, other, off, k, step) }, " ") end
+	check("below: the usual spot under the frame", pt({ dispelPosition = "BELOW" }, "LEFT", 10) == "TOPLEFT BOTTOMLEFT 0 -3")
+	check("below: moved up onto the health bar", pt({ dispelPosition = "BELOW", dispelX = 4, dispelY = 30 }, "LEFT", 10) == "TOPLEFT BOTTOMLEFT 4 27")
+	check("after CC on the left: the usual spot", pt({ dispelPosition = "SIDE" }, "LEFT", 10) == "TOPRIGHT TOPLEFT -10 0")
+	check("after CC on the left: moved", pt({ dispelPosition = "SIDE", dispelX = 40, dispelY = -5 }, "LEFT", 10) == "TOPRIGHT TOPLEFT 30 -5")
+	check("after CC on the right: moved", pt({ dispelPosition = "SIDE", dispelX = -40, dispelY = 5 }, "RIGHT", 10) == "TOPLEFT TOPRIGHT -30 5")
+	check("health bar: its bottom left corner, moved by the offsets", pt({ dispelPosition = "HEALTH" }, "LEFT", 10) == "BOTTOMLEFT BOTTOMLEFT 0 0"
+		and pt({ dispelPosition = "HEALTH", dispelX = 3, dispelY = 2 }, "RIGHT", 10, 2, 14) == "BOTTOMLEFT BOTTOMLEFT 17 2")
+	do
+		local fake = { Health = {}, Castbar = {} }
+		check("health bar: placed against the health bar", P.DispelRelative(fake, { dispelPosition = "HEALTH", castbar = { enabled = true } }) == fake.Health)
+		check("below: against the castbar when there is one", P.DispelRelative(fake, { dispelPosition = "BELOW", castbar = { enabled = true } }) == fake.Castbar
+			and P.DispelRelative(fake, { dispelPosition = "BELOW", castbar = { enabled = false } }) == fake)
+		check("after CC: against the frame", P.DispelRelative(fake, { dispelPosition = "SIDE", castbar = { enabled = true } }) == fake)
+		check("health bar: no row is kept under the frame", P.RowBelow({ height = 50, dispelIcons = true, dispelPosition = "HEALTH" }) == 0)
+	end
+	check("the second stand-in sits one step along", pt({ dispelPosition = "BELOW", dispelX = 4 }, "LEFT", 10, 2, 14) == "TOPLEFT BOTTOMLEFT 18 -3"
+		and pt({ dispelPosition = "SIDE" }, "LEFT", 10, 2, 14) == "TOPRIGHT TOPLEFT -24 0")
+	if f.DispelIcons then
+		local spot
+		f.DispelIcons.SetPoint = function(_, p, rel, rp, x, y) spot = { p, rp, x, y } end
+		c.dispelX, c.dispelY = 6, 20
+		ns:Refresh()
+		check("the offsets reach the icons on the frame", spot ~= nil and spot[3] == (c.dispelPosition == "SIDE" and spot[3] or 6) and (c.dispelPosition == "SIDE" or spot[4] == 17), spot and spot[4])
+		c.dispelX, c.dispelY = 0, 0
+		f.DispelIcons.SetPoint = nil
+		ns:Refresh()
+	end
+end
+-- a shield on tanks, party frames
+do
+	local f, c = ns.Party.frames[1], ns.db.party
+	local oldRole = UnitGroupRolesAssigned
+	local role = "TANK"
+	UnitGroupRolesAssigned = function() return role end
+	check("tank shield: off by default, with Stinkie UI's tank art", c.tankIcon == false and f.TankIcon ~= nil and f.TankIcon._tex == ns.MEDIA.roleTank)
+	ns:Refresh(); f.PostUpdate(f)
+	check("off: no shield on a tank", not f.TankIcon:IsShown())
+	c.tankIcon, c.tankSize = true, 20
+	ns:Refresh(); f.PostUpdate(f)
+	check("on: a tank gets the shield, at the chosen size, and no healer cross", f.TankIcon:IsShown() and f.TankIcon:GetWidth() == 20 and not f.RoleIcon:IsShown())
+	role = "HEALER"
+	ns:Refresh(); f.PostUpdate(f)
+	check("a healer keeps the cross and gets no shield", f.RoleIcon:IsShown() and not f.TankIcon:IsShown())
+	role = "DAMAGER"
+	ns:Refresh(); f.PostUpdate(f)
+	check("a damage dealer gets neither", not f.RoleIcon:IsShown() and not f.TankIcon:IsShown())
+	c.tankIcon, c.tankSize = false, 14
+	UnitGroupRolesAssigned = oldRole
+	ns:Refresh(); f.PostUpdate(f)
 end
 -- buffs on the party frames
 do
