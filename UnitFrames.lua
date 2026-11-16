@@ -486,21 +486,29 @@ function UF.BuffFilter(a)
 	return filter
 end
 
--- The buff row goes on the other side of the frame from the small aura row.
+-- Is the buff row below the frame? Your choice, or (AUTO) the other side of the frame from the
+-- small aura row.
+function UF.BuffsBelow(a)
+	if a.buffPosition == "BELOW" then return true end
+	if a.buffPosition == "ABOVE" then return false end
+	return a.position == "ABOVE"
+end
+
 local function LayoutBuffs(f, cfg)
 	local buffs = f.Buffs
 	if not buffs then return end
 	local a = cfg.auras
+	local dx, dy = tonumber(a.buffX) or 0, tonumber(a.buffY) or 0
 	buffs:ClearAllPoints()
-	if a.position == "ABOVE" then
+	if UF.BuffsBelow(a) then
 		local cb = cfg.castbar
 		local under = (cb and cb.enabled and cb.attached and f.Castbar) or f
 		ns.SetAuraGrowth(buffs, "TOPLEFT", "RIGHT", "DOWN")
-		buffs:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -4)
+		buffs:SetPoint("TOPLEFT", under, "BOTTOMLEFT", dx, -4 + dy)
 	else
 		local y = (cfg.showName ~= false and cfg.nameAbove) and (cfg.nameStyle.size + 6) or 4
 		ns.SetAuraGrowth(buffs, "BOTTOMLEFT", "RIGHT", "UP")
-		buffs:SetPoint("BOTTOMLEFT", f, "TOPLEFT", 0, y)
+		buffs:SetPoint("BOTTOMLEFT", f, "TOPLEFT", dx, y + dy)
 	end
 	ns.SetAuraGroupFilter(buffs, 1, UF.BuffFilter(a))
 	ns.SetAuraGroupMax(buffs, 1, a.buffMax or 8)

@@ -1,5 +1,15 @@
 # Stinkie UI changelog
 
+## 0.51.0
+- New: Boss Warnings (Interface), a module for the game's own boss warnings. Turn them on or off, pick which ones show (all, medium and critical, or critical only), hide the ones that aren't aimed at you, and switch the boss timeline, all from Stinkie UI. The warning text gets your font, an outline and a size for each of critical, medium and minor. Long warnings keep their size and wrap onto more lines instead of being shrunk and cut off. Moving them stays in the game's Edit Mode. This is a new file, so restart the game fully after updating.
+- Nameplates: new quest mark on enemies your quests want (kill or loot), on by default. Options for its size, which side of the health bar it goes on, and X / Y.
+- Chat: Tab in the chat box goes to the next chat type: Say, then party, raid, instance and guild when you're in them, then the last 5 people you whispered with. Shift + Tab goes back. A slash command still completes with Tab. On by default; the option is under Chat > Tabs.
+- Chat: a whisper tab gets its earlier conversation back. The game closes whisper tabs on a reload or logout; when you next whisper that person or they whisper you, their tab comes back with what was said before. On by default, and it follows the "Keep messages" choice.
+- Party Frames: the raid icon (star, skull...) can go on the top, bottom, left or right edge or in the middle, with X / Y sliders, and its size now goes from 6 to 100.
+- Target and Focus frames: the buff row can be set above or below the frame, with X / Y sliders. Auto keeps it where it was.
+- Automation: the "choose your reward" message is said once per quest instead of every time you talk to the quest giver.
+- WoW Forever: when the game refuses the reload after a profile import or a setting that needs one, Stinkie UI now asks with a Reload button instead of failing. Your changes were already saved.
+
 ## 0.50.0
 - Party Frames: dispellable debuffs can go on the health bar (bottom left corner) as well as below the frame or after the crowd control icons. New sliders set their size and move them left / right and up / down from that spot.
 - Party Frames: new option for a shield icon on tanks, with a size slider.

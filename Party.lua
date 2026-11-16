@@ -87,6 +87,13 @@ function Party.DispelRelative(f, cfg)
 end
 
 -- the size of a dispellable debuff icon: your own, or 60% of the frame's height
+-- Where the raid icon's centre sits on the frame: the chosen edge or the middle, moved by X / Y.
+local MARKER_POINTS = { TOP = true, BOTTOM = true, LEFT = true, RIGHT = true, CENTER = true }
+function Party.MarkerPoint(cfg)
+	local where = MARKER_POINTS[cfg.markerAnchor] and cfg.markerAnchor or "TOP"
+	return where, tonumber(cfg.markerX) or 0, tonumber(cfg.markerY) or 0
+end
+
 function Party.DispelSize(cfg)
 	local s = tonumber(cfg.dispelSize) or 0
 	return s > 0 and s or math.floor(cfg.height * 0.6)
@@ -300,7 +307,7 @@ local function LayoutPartyFrame(f, index)
 	f.markerShown = cfg.marker
 	f.Marker:SetSize(cfg.markerSize, cfg.markerSize)
 	f.Marker:ClearAllPoints()
-	f.Marker:SetPoint("CENTER", f, "TOP", 0, 0)
+	f.Marker:SetPoint("CENTER", f, Party.MarkerPoint(cfg))
 	local rs = cfg.healerSize or 12
 	f.RoleIcon:SetSize(rs, rs)
 	f.RoleIcon:ClearAllPoints()

@@ -150,6 +150,40 @@ local function UpdateMarker(f)
 end
 NP.UpdateMarker = UpdateMarker
 
+-- A quest mark beside enemy plates the game says belong to one of your quests (something to
+-- kill, or that drops what you need). The game decides that, and may hide the answer.
+function NP.IsQuestUnit(unit)
+	local fn = C_QuestLog and C_QuestLog.UnitIsRelatedToActiveQuest
+	if not (fn and unit) then return false end
+	local ok, related = pcall(fn, unit)
+	if not ok or ns.issecret(related) then return false end
+	return related and true or false
+end
+
+local function UpdateQuestIcon(f)
+	local icon = f.QuestIcon
+	if not icon then return end
+	icon:SetShown(ns.db.nameplates.questIcon and not f.friendly and f.unit ~= nil and NP.IsQuestUnit(f.unit) or false)
+end
+NP.UpdateQuestIcon = UpdateQuestIcon
+
+-- where the quest mark goes, as SetPoint arguments without the frame: a side of the health
+-- bar, moved by the X / Y offsets
+function NP.QuestIconPoint(cfg)
+	local dx, dy = cfg.questIconX or 0, cfg.questIconY or 0
+	local side = cfg.questIconAnchor
+	if side == "RIGHT" then return "LEFT", "RIGHT", 3 + dx, dy end
+	if side == "TOP" then return "BOTTOM", "TOP", dx, 3 + dy end
+	if side == "BOTTOM" then return "TOP", "BOTTOM", dx, -3 + dy end
+	return "RIGHT", "LEFT", -3 + dx, dy
+end
+
+function NP.UpdateQuestIcons()
+	for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+		if plate.SUIFrame and plate.SUIFrame.unit then UpdateQuestIcon(plate.SUIFrame) end
+	end
+end
+
 local ARENA_ROLE_MAP = { HEALER = ns.MEDIA.cross, TANK = ns.MEDIA.blank, DAMAGER = ns.MEDIA.blank }
 local UNIT_ROLE_OPTIONS = { displayRoleIcon = true, textureMap = { HEALER = ns.MEDIA.cross, TANK = ns.MEDIA.blank, DAMAGER = ns.MEDIA.blank } }
 
@@ -529,6 +563,15 @@ local function CreatePlateFrame(nameplate)
 	f.Marker = textLayer:CreateTexture(nil, "OVERLAY")
 	f.Marker:SetTexture(ns.MARKER_TEXTURE)
 	f.Marker:Hide()
+	-- the game's yellow "!" for a mob one of your quests wants
+	f.QuestIcon = textLayer:CreateTexture(nil, "OVERLAY")
+	local atlas = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo("QuestNormal")
+	if atlas and f.QuestIcon.SetAtlas then
+		f.QuestIcon:SetAtlas("QuestNormal")
+	else
+		f.QuestIcon:SetTexture([[Interface\GossipFrame\AvailableQuestIcon]])
+	end
+	f.QuestIcon:Hide()
 
 	-- healer cross: white plus with a thin black outline, tinted green (friendly) or red (enemy)
 	local healer = CreateFrame("Frame", nil, f)
@@ -817,6 +860,13 @@ local function LayoutPlate(f)
 	f.Marker:ClearAllPoints()
 	f.Marker:SetPoint("BOTTOM", f.TopSlot, "TOP", 0, 2)
 	UpdateMarker(f)
+	-- the quest mark: left of the health bar unless moved
+	local qs = cfg.questIconSize or 20
+	f.QuestIcon:SetSize(qs, qs)
+	f.QuestIcon:ClearAllPoints()
+	local qp, qrp, qx, qy = NP.QuestIconPoint(cfg)
+	f.QuestIcon:SetPoint(qp, f.Health, qrp, qx, qy)
+	UpdateQuestIcon(f)
 	-- Blizzard's helpers fix their icons at 12x12, so the holder is scaled to the chosen size
 	local roles = f.SecretRoles
 	roles:SetScale(hs / 12)
@@ -1279,6 +1329,7 @@ function NP:Init()
 	driver:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
 	driver:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
 	driver:RegisterEvent("RAID_TARGET_UPDATE")
+	driver:RegisterEvent("QUEST_LOG_UPDATE")
 	driver:SetScript("OnEvent", ns.Timed("Nameplates (add / remove / target)", function(_, event, unit)
 		if event == "NAME_PLATE_UNIT_ADDED" then
 			OnPlateAdded(unit)
@@ -1301,6 +1352,8 @@ function NP:Init()
 			for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
 				if plate.SUIFrame and plate.SUIFrame.unit then UpdateMarker(plate.SUIFrame) end
 			end
+		elseif event == "QUEST_LOG_UPDATE" then
+			if ns.db.nameplates.questIcon then NP.UpdateQuestIcons() end
 		else
 			for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
 				if plate.SUIFrame and plate.SUIFrame.unit then UpdateRole(plate.SUIFrame); UpdateSpecIcon(plate.SUIFrame) end

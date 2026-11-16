@@ -616,7 +616,10 @@ local function BuildUnitPage(page, unit)
 		page:Choice("Buffs shown", { { "all", "Everyone's" }, { "mine", "Mine only" } }, Getter(acfg, "buffFilter"), Setter(acfg, "buffFilter"))
 		page:Slider("Buff size", 10, 48, 1, Getter(acfg, "buffSize"), Setter(acfg, "buffSize"), true)
 		page:Slider("Buffs at most", 1, 20, 1, Getter(acfg, "buffMax"), Setter(acfg, "buffMax"))
-		page:Note("The buff row sits on the other side of the frame from the icons above. Mine only: the buffs you cast on this unit.", 36)
+		page:Choice("Buffs go", { { "AUTO", "Auto" }, { "ABOVE", "Above" }, { "BELOW", "Below" } }, Getter(acfg, "buffPosition"), Setter(acfg, "buffPosition"))
+		page:Slider("Buffs X", -1000, 1000, 1, Getter(acfg, "buffX"), Setter(acfg, "buffX"))
+		page:Slider("Buffs Y", -1000, 1000, 1, Getter(acfg, "buffY"), Setter(acfg, "buffY"))
+		page:Note("Auto: the other side of the frame from the icons above. X and Y move the row from its spot. Mine only: the buffs you cast on this unit.", 36)
 	end
 	if unit == "targettarget" then
 		page:Note("Blizzard blocks addons from target-of-target inside arenas and battlegrounds, so this frame stays blank there.", 48)
@@ -721,8 +724,12 @@ local function BuildPartyPage(page)
 	page:Slider("Healer cross size", 6, 100, 1, Getter(cfg, "healerSize"), Setter(cfg, "healerSize"))
 	page:Check("Shield on tanks", Getter(cfg, "tankIcon"), Setter(cfg, "tankIcon"))
 	page:Slider("Tank shield size", 6, 100, 1, Getter(cfg, "tankSize"), Setter(cfg, "tankSize"))
-	page:Check("Target marker", Getter(cfg, "marker"), Setter(cfg, "marker"))
-	page:Slider("Target marker size", 10, 40, 1, Getter(cfg, "markerSize"), Setter(cfg, "markerSize"))
+	page:Check("Raid icon (star, skull...)", Getter(cfg, "marker"), Setter(cfg, "marker"))
+	page:Slider("Raid icon size", 6, 100, 1, Getter(cfg, "markerSize"), Setter(cfg, "markerSize"))
+	page:Dropdown("Raid icon goes", { { "TOP", "Top edge" }, { "BOTTOM", "Bottom edge" }, { "LEFT", "Left edge" }, { "RIGHT", "Right edge" }, { "CENTER", "Middle" } },
+		Getter(cfg, "markerAnchor"), Setter(cfg, "markerAnchor"))
+	page:Slider("Raid icon X", -1000, 1000, 1, Getter(cfg, "markerX"), Setter(cfg, "markerX"))
+	page:Slider("Raid icon Y", -1000, 1000, 1, Getter(cfg, "markerY"), Setter(cfg, "markerY"))
 	page:Check("Group leader icon", Getter(cfg, "leaderIcon"), Setter(cfg, "leaderIcon"))
 	page:Check("Castbars", Getter(ccfg, "enabled"), Setter(ccfg, "enabled"), true)
 	page:Note("Test mode shows looping casts on enabled castbars.", 22)
@@ -975,6 +982,13 @@ local function BuildPlateIconsPage(page)
 	page:Slider("Enemy marker size", 12, 64, 1, Getter(cfg, "markerSize"), Setter(cfg, "markerSize"))
 	page:Check("Above friendly nameplates", Getter(cfg, "friendlyMarker"), Setter(cfg, "friendlyMarker"))
 	page:Slider("Friendly marker size", 12, 64, 1, Getter(cfg, "friendlyMarkerSize"), Setter(cfg, "friendlyMarkerSize"))
+	page:Header("Quest mobs")
+	page:Check("Quest mark on enemies your quests want", Getter(cfg, "questIcon"), Setter(cfg, "questIcon"))
+	page:Slider("Quest mark size", 8, 64, 1, Getter(cfg, "questIconSize"), Setter(cfg, "questIconSize"))
+	page:Choice("Quest mark goes", { { "LEFT", "Left" }, { "RIGHT", "Right" }, { "TOP", "Above" }, { "BOTTOM", "Below" } },
+		Getter(cfg, "questIconAnchor"), Setter(cfg, "questIconAnchor"))
+	page:Slider("Quest mark X", -200, 200, 1, Getter(cfg, "questIconX"), Setter(cfg, "questIconX"))
+	page:Slider("Quest mark Y", -200, 200, 1, Getter(cfg, "questIconY"), Setter(cfg, "questIconY"))
 	page:Header("Healers and elites")
 	page:Check("Red cross over enemy healers", Getter(cfg, "enemyHealerIcon"), Setter(cfg, "enemyHealerIcon"))
 	page:Slider("Enemy cross size", 6, 100, 1, Getter(cfg, "healerSize"), Setter(cfg, "healerSize"))
@@ -1112,6 +1126,8 @@ local function BuildChatPage(page)
 	page:Check("Only flash for messages from players", Getter(cfg, "flashPlayerOnly"), Setter(cfg, "flashPlayerOnly"))
 	page:Choice("Whispers show in", { { "both", "Both" }, { "main", "Main tab" }, { "tab", "Own tab" } }, Getter(cfg, "whisperDisplay"), Setter(cfg, "whisperDisplay"))
 	page:Note("Character and Battle.net whispers. Both: a tab for each person, plus the main tab, so closing a tab loses nothing.", 36)
+	page:Check("Tab in the chat box switches chat type", Getter(cfg, "tabCycle"), Setter(cfg, "tabCycle"))
+	page:Note("Say, then party, raid, instance and guild when you're in them, then the last 5 people you whispered with. Shift + Tab goes back. A slash command still completes with Tab.", 48)
 	page:Header("Copy")
 	page:Check("Copy button (top right, on mouseover)", Getter(cfg, "copyButton"), Setter(cfg, "copyButton"))
 	page:Check("Drag over chat text to copy it", Getter(cfg, "dragCopy"), Setter(cfg, "dragCopy"))
@@ -1120,6 +1136,8 @@ local function BuildChatPage(page)
 	page:Choice("Keep messages", { { "session", "Next login" }, { "reload", "Reloads only" }, { "off", "Off" } },
 		Getter(cfg, "history"), Setter(cfg, "history"))
 	page:Note("Next login: messages come back after a reload and after your next login, then drop off. Lines sent while you're in an arena, battleground, dungeon or raid can't be saved; the game hides their text from addons there.", 76)
+	page:Check("Whisper tabs get their conversation back", Getter(cfg, "restoreWhispers"), Setter(cfg, "restoreWhispers"))
+	page:Note("The game closes whisper tabs on a reload or logout, and only the game can open one. When you next whisper that person, or they whisper you, their tab comes back with what was said before.", 62)
 	page:Slider("Messages kept per window", 50, 1000, 50, Getter(cfg, "historyLines"), Setter(cfg, "historyLines"))
 	page:Check("Line above restored messages", Getter(cfg, "restoreDivider"), Setter(cfg, "restoreDivider"))
 	page:Button("Clear saved messages", function() if CH and CH.ClearHistory then CH.ClearHistory() ns:Print("Saved chat cleared.") end end)
@@ -1837,6 +1855,43 @@ local function BuildDamageTextPage(page)
 	Opt("gravity", "Fall speed (0 = game default)", 0, 5, 0.1)
 	Opt("directional", "Sideways flight (0 = default, low = straight up)", 0, 5, 0.1)
 	page:Note("These use the game's own settings, so they also change what other addons see. Height is measured from the target's nameplate, as a share of your screen's height (0.05 = 5% of the screen). /stinkie dmg shows which settings this game version has and their values.", 62)
+end
+
+local function BuildBossWarningsPage(page)
+	local BW = ns.BossWarnings
+	local fallback = {}
+	local function cfg() return ns.db.bossWarnings or ns.defaults.bossWarnings or fallback end
+	page:Column(1)
+	page:Header("Boss Warnings")
+	if not BW then
+		page:Note("Boss Warnings was added in an update: restart the game fully (a /reload isn't enough) to use it.", 36)
+		return
+	end
+	if not BW.Available() then
+		page:Note("This game version has no boss warnings.", 22)
+		return
+	end
+	page:Note("The game's own warnings for boss abilities in dungeons and raids.", 22)
+	page:Check("Show boss warnings", BW.Enabled, BW.SetEnabled)
+	page:Dropdown("Which ones", { { "minor", "All of them" }, { "medium", "Medium and critical" }, { "critical", "Critical only" } },
+		BW.Level, BW.SetLevel)
+	if BW.Has(BW.MINE) then
+		page:Check("Hide the ones that aren't aimed at me", BW.OnlyMine, BW.SetOnlyMine)
+	end
+	if BW.Has(BW.TIMELINE) then
+		page:Check("Show the boss timeline", BW.Timeline, BW.SetTimeline)
+	end
+	page:Note("These are the game's own settings, so they always match the game's options.", 22)
+	page:Header("Text")
+	page:Check("Stinkie UI font", Getter(cfg, "font"), Setter(cfg, "font"))
+	page:Choice("Outline", { { "NONE", "None" }, { "OUTLINE", "Thin" }, { "THICKOUTLINE", "Thick" } }, Getter(cfg, "outline"), Setter(cfg, "outline"))
+	page:Slider("Critical text size (0 = the game's)", 0, 72, 1, Getter(cfg, "critical"), Setter(cfg, "critical"))
+	page:Slider("Medium text size (0 = the game's)", 0, 72, 1, Getter(cfg, "medium"), Setter(cfg, "medium"))
+	page:Slider("Minor text size (0 = the game's)", 0, 72, 1, Getter(cfg, "minor"), Setter(cfg, "minor"))
+	page:Check("Never cut off or shrink long warnings", Getter(cfg, "noCut"), Setter(cfg, "noCut"))
+	page:Slider("Widest line (0 = always one line)", 0, 2000, 10, Getter(cfg, "wrapWidth"), Setter(cfg, "wrapWidth"))
+	page:Note("The game allows two lines, shrinks long text to fit and cuts off what still doesn't. With this on, a long warning keeps its size and wraps onto as many lines as it needs.", 48)
+	page:Note("To move the warnings, or change their overall size, icons and transparency, open the game's Edit Mode. It shows a sample of each one, in this look.", 48)
 end
 
 local function BuildSkinsPage(page)
@@ -2597,26 +2652,26 @@ ns.Dialogs.IMPORT = {
 	button2 = NO,
 	OnAccept = function(data)
 		local ok, err = ns:ImportProfile(data)
-		if ok then ReloadUI() else ns:Print(err) end
+		if ok then ns.Reload() else ns:Print(err) end
 	end,
 }
 
 ns.Dialogs.SWITCH_PROFILE = {
 	text = "Use the profile \"%s\" on this character and reload?",
 	button1 = YES, button2 = NO,
-	OnAccept = function(name) ns:SetProfile(name); ReloadUI() end,
+	OnAccept = function(name) ns:SetProfile(name); ns.Reload() end,
 }
 
 ns.Dialogs.NEW_PROFILE = {
 	text = "Create the profile \"%s\" from your current settings, use it on this character and reload?",
 	button1 = YES, button2 = NO,
-	OnAccept = function(name) ns:SetProfile(name, true); ReloadUI() end,
+	OnAccept = function(name) ns:SetProfile(name, true); ns.Reload() end,
 }
 
 ns.Dialogs.COPY_PROFILE = {
 	text = "Copy every setting from \"%s\" into \"%s\" and reload?",
 	button1 = YES, button2 = NO,
-	OnAccept = function(name) if ns:CopyProfile(name) then ReloadUI() end end,
+	OnAccept = function(name) if ns:CopyProfile(name) then ns.Reload() end end,
 }
 
 ns.Dialogs.DELETE_PROFILE = {
@@ -2632,7 +2687,7 @@ ns.Dialogs.RESET = {
 	text = "Reset every setting in this profile and reload?",
 	button1 = YES,
 	button2 = NO,
-	OnAccept = function() ns:ResetProfile(); ReloadUI() end,
+	OnAccept = function() ns:ResetProfile(); ns.Reload() end,
 }
 
 ---------------------------------------------------------------------------
@@ -2686,6 +2741,7 @@ local pages = {
 		{ "Character Sheet", BuildCharacterPage },
 		{ "Damage Meter", BuildDamageMeterPage },
 		{ "Damage Numbers", BuildDamageTextPage },
+		{ "Boss Warnings", BuildBossWarningsPage },
 		{ "Window Skins", BuildSkinsPage },
 	} },
 	{ "Quality of Life", children = {
@@ -2748,7 +2804,7 @@ local function CreateWindow()
 	modules:SetScript("OnLeave", function(self) self.bg:SetColorTexture(0, 0, 0, 0) end)
 	O.modulesButton = modules
 
-	local reload = FlatButton(w, "Reload to apply *", 150, function() ReloadUI() end)
+	local reload = FlatButton(w, "Reload to apply *", 150, function() ns.Reload() end)
 	reload:SetPoint("RIGHT", modules, "LEFT", -8, 0)
 	reload.bg:SetColorTexture(BRAND.orange[1] * 0.75, BRAND.orange[2] * 0.75, BRAND.orange[3] * 0.75, 1)
 	reload:SetScript("OnEnter", nil)
@@ -3115,7 +3171,7 @@ local function AddModuleBanner(page, id)
 	local label = Label(band, text, 14, { BRAND.cream[1], BRAND.cream[2], BRAND.cream[3] })
 	label:SetPoint("LEFT", 12, 0)
 	local btn = FlatButton(band, chosen and "Reload" or "Modules", 100, function()
-		if chosen then ReloadUI() else O.OpenModules("list") end
+		if chosen then ns.Reload() else O.OpenModules("list") end
 	end)
 	btn:SetPoint("RIGHT", -10, 0)
 	page.moduleBanner = band
@@ -3195,7 +3251,7 @@ local function BuildModulesPanel()
 	welcome:SetWordWrap(true)
 	local full = FlatButton(intro, "Stinkie's Full UI", 320, function()
 		Mods.Apply(Mods.FullChoices())
-		ReloadUI()
+		ns.Reload()
 	end)
 	full:SetHeight(56)
 	ns.SetFont(full.text, 20)
@@ -3237,7 +3293,7 @@ local function BuildModulesPanel()
 	f.warn:SetWordWrap(true)
 	local apply = FlatButton(list, "Apply & Reload", 160, function()
 		Mods.Apply(f.choices)
-		ReloadUI()
+		ns.Reload()
 	end)
 	apply:SetPoint("BOTTOMRIGHT", -18, 18)
 	AccentFill(apply)

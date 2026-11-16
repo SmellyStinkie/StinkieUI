@@ -305,6 +305,7 @@ Enum = setmetatable({
 	ItemClass = { Weapon = 2, Armor = 4 },
 	PvPUnitClassification = { FlagCarrierHorde = 0, FlagCarrierAlliance = 1, FlagCarrierNeutral = 2 },
 	StatusBarInterpolation = { ExponentialEaseOut = 1, Immediate = 0 },
+	EncounterEventSeverity = { Low = 0, Medium = 1, High = 2 },
 }, { __index = function() return setmetatable({}, { __index = function() return 0 end }) end })
 C_ClassTalents = { GetActiveConfigID = function() return 1 end, GetActiveHeroTalentSpec = function() return 58 end }
 C_Traits = { GenerateImportString = function() return "C0PAAAAAAAAAAAAAAAAAAAAAAAAAAzMjZmZGGzMzMMDzYmZmZmZYGzMzMDAAAAAAgZbmZmZGzwMAAAAA" end, GetSubTreeInfo = function() return { name = "Diabolist" } end }

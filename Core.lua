@@ -325,7 +325,8 @@ ns.defaults = {
 			point = { "BOTTOM", 230, 240 },
 			eliteIcon = true, eliteSize = 16, eliteCorner = "TOPLEFT", -- gold star: elite / boss, silver: rare
 			auras = { enabled = true, size = 24, max = 8, position = "BELOW", showSmall = true, ccIcon = true, ccIconSize = 0, ccIconSide = "RIGHT",
-				buffs = false, buffFilter = "all", buffSize = 20, buffMax = 8 }, -- buffFilter: all | mine (the ones you cast)
+				buffs = false, buffFilter = "all", buffSize = 20, buffMax = 8, -- buffFilter: all | mine (the ones you cast)
+				buffPosition = "AUTO", buffX = 0, buffY = 0 }, -- AUTO (the other side from the icons) | ABOVE | BELOW
 			castbar = castbar(true, 180, 16, { "BOTTOM", 230, 300 }),
 		}),
 		targettarget = unit({
@@ -337,7 +338,8 @@ ns.defaults = {
 			point = { "BOTTOM", 230, 400 },
 			eliteIcon = true, eliteSize = 14, eliteCorner = "TOPLEFT",
 			auras = { enabled = true, size = 20, max = 6, position = "BELOW", showSmall = true, ccIcon = true, ccIconSize = 0, ccIconSide = "RIGHT",
-				buffs = false, buffFilter = "all", buffSize = 18, buffMax = 6 },
+				buffs = false, buffFilter = "all", buffSize = 18, buffMax = 6,
+				buffPosition = "AUTO", buffX = 0, buffY = 0 },
 			castbar = castbar(true, 160, 14, { "BOTTOM", 230, 365 }),
 		}),
 		pet = unit({
@@ -366,7 +368,8 @@ ns.defaults = {
 		buffSize = 16, buffMax = 3,
 		healthText = "percent",
 		nameFormat = "full", showLevel = false,
-		marker = false, markerSize = 16, -- raid target marker on the frame's top edge
+		marker = false, markerSize = 16, -- raid icon (target marker): on the frame's top edge unless moved
+		markerAnchor = "TOP", markerX = 0, markerY = 0, -- TOP | BOTTOM | LEFT | RIGHT | CENTER, then moved by X / Y
 		leaderIcon = false, -- crown on the group leader
 		rangeFade = true,
 		healerIcon = true, healerSize = 12,
@@ -487,6 +490,8 @@ ns.defaults = {
 		nameMaxChars = 0, nameEllipsis = true, -- 0 = full names
 		nameFormat = "full", -- full | first | last
 		marker = true, markerSize = 28, -- raid target marker above the plate
+		questIcon = true, questIconSize = 20, -- a quest mark on enemy plates your quests want
+		questIconAnchor = "LEFT", questIconX = 6, questIconY = 0, -- LEFT | RIGHT | TOP | BOTTOM of the health bar, then moved
 		-- friendly plates have their own of each of these
 		friendlyNameMaxChars = 0, friendlyNameFormat = "full",
 		friendlyMarker = true, friendlyMarkerSize = 28,
@@ -646,12 +651,14 @@ ns.defaults = {
 		-- history
 		history = "session", -- session (this and the previous login) | reload (reloads only) | off
 		historyLines = 300, maxLines = 500, restoreDivider = true,
+		restoreWhispers = true, -- a whisper tab gets its earlier conversation back when it reopens
 		-- formatting
 		classColors = true, showLevel = false, levelHideMax = true,
 		channelStyle = "short", -- full | short | name
 		removeBrackets = false, hideRealms = false, shortWhispers = false,
 		whisperDisplay = "both", -- both (own tab and main tab) | main | tab
 		flashTabs = true, flashPlayerOnly = true,
+		tabCycle = true, -- Tab in the chat box goes to the next chat type
 		colors = {}, -- chat type -> { r, g, b }, only the ones changed here
 	},
 	-- Error Catcher (Report.lua)
@@ -930,6 +937,9 @@ ns.defaults = {
 			bgAnnounce = true, -- battleground announcements come to this box too
 			textStyle = { size = 20, outline = "OUTLINE", color = { 1, 0.82, 0 }, classColor = false } },
 	},
+	-- Boss Warnings: the look of the game's own warning text (sizes: 0 = the game's size)
+	bossWarnings = { font = true, outline = "OUTLINE", critical = 0, medium = 0, minor = 0,
+		noCut = true, wrapWidth = 700 }, -- long warnings: never shrunk or cut; wrapWidth 0 = always one line
 	-- Damage Numbers: floating combat text over targets (0 = the game's default for each)
 	damageText = { scroll = { enabled = true, size = 22, critSize = 32, critPop = false, outline = "OUTLINE", spacing = 10,
 			split = "same" }, -- same | healsUp | healsDown: heals and damage scrolling opposite ways
@@ -1446,7 +1456,7 @@ end
 ns.Dialogs.SPEC_PROFILE = {
 	text = "You're now %s. Load its Stinkie UI profile \"%s\"? This reloads the UI.",
 	button1 = RELOADUI or "Reload", button2 = "Not now",
-	OnAccept = function() ReloadUI() end,
+	OnAccept = function() ns.Reload() end,
 }
 
 local declined = {}
@@ -1601,6 +1611,35 @@ ns:On("ACTIVE_PLAYER_SPECIALIZATION_CHANGED", function() ns.CheckSpecProfile() e
 function ns:Print(msg)
 	print("|cff" .. ns.ACCENT_HEX .. "Stinkie UI|r: " .. tostring(msg))
 end
+
+-- Reloading the interface. The game can refuse an addon's reload: on WoW Forever the reload
+-- after importing a profile is refused, while a button that only reloads works. The settings are
+-- already saved by then, so a refused reload brings up a box whose button does nothing but
+-- reload. If that is refused too, the player is told to type /reload.
+function ns.Reload()
+	ReloadUI()
+end
+
+ns.Dialogs.RELOAD_BLOCKED = {
+	text = "Your changes are saved. Reload now to apply them?",
+	button1 = RELOADUI or "Reload", button2 = "Later",
+	OnAccept = function()
+		ns.reloadRetry = true
+		ReloadUI()
+	end,
+}
+
+function ns.OnReloadBlocked(_, addon, func)
+	if addon ~= "StinkieUI" or type(func) ~= "string" or not func:find("Reload", 1, true) then return end
+	if ns.reloadRetry then
+		ns.reloadRetry = nil
+		ns:Print("The game didn't allow the reload. Your changes are saved: type /reload to apply them.")
+		return
+	end
+	ns.ShowDialog("RELOAD_BLOCKED")
+end
+ns:On("ADDON_ACTION_BLOCKED", ns.OnReloadBlocked)
+ns:On("ADDON_ACTION_FORBIDDEN", ns.OnReloadBlocked)
 
 -- Secret-value helpers (Midnight). Never compare or branch on a secret.
 local issecretvalue = issecretvalue or function() return false end
@@ -2019,7 +2058,7 @@ local function NeedsRestart() ns:Print("Restart the game (not just /reload) to f
 ns.NeedsRestart = NeedsRestart
 
 SLASH_STINKIERELOAD1 = "/rl"
-SlashCmdList.STINKIERELOAD = function() ReloadUI() end
+SlashCmdList.STINKIERELOAD = function() ns.Reload() end
 
 ---------------------------------------------------------------------------
 -- /stinkie taint: which values in Blizzard's own tables Stinkie UI wrote (the game marks each one
@@ -2141,7 +2180,7 @@ SlashCmdList.STINKIEUI = function(msg)
 		if ns.MatchRecorder then ns.MatchRecorder.Open() end
 	elseif msg == "reset" then
 		ns:ResetProfile()
-		ReloadUI()
+		ns.Reload()
 	else
 		ns:ToggleOptions()
 	end

@@ -774,7 +774,13 @@ function MISC.OnQuestComplete()
 	if (GetQuestMoneyToGet() or 0) > 0 then return end
 	local choices = GetNumQuestChoices()
 	if choices > 1 then
-		Say("This quest has a choice of rewards, so that one's yours to pick.")
+		-- the game shows the reward page more than once (and again each time you talk to the
+		-- quest giver): say it once per quest
+		local quest = (GetQuestID and GetQuestID()) or (GetTitleText and GetTitleText()) or true
+		if MISC.choiceSaid ~= quest then
+			MISC.choiceSaid = quest
+			Say("This quest has a choice of rewards, so that one's yours to pick.")
+		end
 		return
 	end
 	GetQuestReward(choices)

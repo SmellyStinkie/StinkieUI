@@ -798,6 +798,22 @@ do
 	a.position = "ABOVE"
 	ns:Refresh()
 	check("other icons above: buffs go below", spot[1] == "TOPLEFT" and spot[3] == "BOTTOMLEFT")
+	-- your own side for the row, and X / Y
+	check("auto side, unmoved, by default", ns.defaults.units.target.auras.buffPosition == "AUTO" and ns.defaults.units.target.auras.buffX == 0
+		and ns.defaults.units.focus.auras.buffPosition == "AUTO" and ns.defaults.units.focus.auras.buffY == 0)
+	check("auto follows the other icons; a choice wins", UF.BuffsBelow({ position = "ABOVE" }) and not UF.BuffsBelow({ position = "BELOW" })
+		and not UF.BuffsBelow({ position = "ABOVE", buffPosition = "ABOVE" }) and UF.BuffsBelow({ position = "BELOW", buffPosition = "BELOW" }))
+	f.Buffs.SetPoint = function(_, p, rel, rp, x, y) spot = { p, rel, rp, x, y } end
+	a.buffPosition, a.buffX, a.buffY = "ABOVE", 12, 7
+	ns:Refresh()
+	local baseY = spot[5] - 7
+	check("above by choice, moved by X and Y", spot[1] == "BOTTOMLEFT" and spot[3] == "TOPLEFT" and spot[4] == 12 and baseY >= 4, spot[5])
+	a.position, a.buffPosition = "BELOW", "BELOW"
+	ns:Refresh()
+	check("below by choice, even with the other icons below", spot[1] == "TOPLEFT" and spot[3] == "BOTTOMLEFT" and spot[4] == 12 and spot[5] == -4 + 7, spot[5])
+	a.position, a.buffPosition, a.buffX, a.buffY = "ABOVE", "AUTO", 0, 0
+	ns:Refresh()
+	check("back to auto: where it was", spot[1] == "TOPLEFT" and spot[4] == 0 and spot[5] == -4)
 	a.enabled = false
 	ns:Refresh()
 	check("the master switch hides them", not f.Buffs:IsShown())
@@ -825,6 +841,29 @@ do
 	r.targetThickness = nil
 	check("raid: a profile without the setting still gets a line", ns.Raid.HighlightThickness(1) == 1)
 	r.targetThickness = 1
+end
+-- a reload the game refuses: say so, the settings are saved
+do
+	local said, reloads = {}, 0
+	local oldPrint, oldReload = ns.Print, ReloadUI
+	ns.Print = function(_, m) said[#said + 1] = m end
+	ReloadUI = function() reloads = reloads + 1 end
+	ns.Reload()
+	check("Stinkie UI's reload asks the game", reloads == 1)
+	if ns.dialog then ns.dialog:Hide() end
+	MOCK.Fire("ADDON_ACTION_BLOCKED", "OtherAddon", "Reload()")
+	MOCK.Fire("ADDON_ACTION_BLOCKED", "StinkieUI", "CastSpellByName()")
+	check("another addon's, or another blocked call: nothing happens", #said == 0 and not (ns.dialog and ns.dialog:IsShown()))
+	MOCK.Fire("ADDON_ACTION_BLOCKED", "StinkieUI", "Reload()")
+	check("refused: a box with a Reload button", ns.dialog:IsShown() and ns.dialog.info == ns.Dialogs.RELOAD_BLOCKED and #said == 0)
+	ns.dialog.yes:GetScript("OnClick")(ns.dialog.yes)
+	check("its button only reloads", reloads == 2 and not ns.dialog:IsShown())
+	MOCK.Fire("ADDON_ACTION_BLOCKED", "StinkieUI", "Reload()")
+	check("refused again: told to type /reload, no second box", #said == 1 and said[1]:find("/reload", 1, true) ~= nil and not ns.dialog:IsShown())
+	MOCK.Fire("ADDON_ACTION_BLOCKED", "StinkieUI", "Reload()")
+	check("a later refusal offers the box again", ns.dialog:IsShown())
+	ns.dialog:Hide()
+	ns.Print, ReloadUI = oldPrint, oldReload
 end
 -- debuffs on the raid frames: where the row starts, and a size for the ones you can dispel
 do
@@ -893,6 +932,27 @@ do
 	ns:Refresh(); f.PostUpdate(f)
 	check("a damage dealer gets neither", not f.RoleIcon:IsShown() and not f.TankIcon:IsShown())
 	c.tankIcon, c.tankSize = false, 14
+	-- the raid icon: where it goes and how big
+	do
+		local P = ns.Party
+		local function pt(t) local a, x, y = P.MarkerPoint(t); return a .. " " .. x .. " " .. y end
+		check("raid icon: top edge, unmoved, by default", c.markerAnchor == "TOP" and c.markerX == 0 and c.markerY == 0 and pt(c) == "TOP 0 0")
+		check("each spot, moved by X and Y", pt({ markerAnchor = "LEFT", markerX = -12, markerY = 4 }) == "LEFT -12 4"
+			and pt({ markerAnchor = "CENTER" }) == "CENTER 0 0" and pt({ markerAnchor = "BOTTOM", markerY = -5 }) == "BOTTOM 0 -5"
+			and pt({ markerAnchor = "RIGHT", markerX = 8 }) == "RIGHT 8 0")
+		check("an unknown spot is the top edge", pt({ markerAnchor = "NOPE", markerX = 3 }) == "TOP 3 0")
+		local was = { c.marker, c.markerSize, c.markerAnchor, c.markerX, c.markerY }
+		c.marker, c.markerSize, c.markerAnchor, c.markerX, c.markerY = true, 30, "RIGHT", 10, -2
+		local p, rel, rp, x, y
+		local oldSet = f.Marker.SetPoint
+		f.Marker.SetPoint = function(_, a1, a2, a3, a4, a5) p, rel, rp, x, y = a1, a2, a3, a4, a5 end
+		ns.modules.Party:Refresh()
+		f.Marker.SetPoint = oldSet
+		check("on the frame: its centre on the chosen edge, moved, at the chosen size", p == "CENTER" and rel == f and rp == "RIGHT" and x == 10 and y == -2
+			and f.Marker:GetWidth() == 30, tostring(rp))
+		c.marker, c.markerSize, c.markerAnchor, c.markerX, c.markerY = was[1], was[2], was[3], was[4], was[5]
+		ns.modules.Party:Refresh()
+	end
 	UnitGroupRolesAssigned = oldRole
 	ns:Refresh(); f.PostUpdate(f)
 end
@@ -3131,6 +3191,59 @@ do
 	CHAT_FRAMES, CHAT_FRAME_TEXTURES = oldFrames, oldTextures
 	_G[name] = nil
 
+	-- a whisper tab's conversation comes back when the game reopens that person's tab
+	do
+		local name2 = "ChatFrame28"
+		local tab = MOCK.NewObj("Frame", name2, UIParent)
+		local back = {}
+		tab.AddMessage = function() end
+		tab.BackFillMessage = function(_, m) back[#back + 1] = m end
+		tab.isTemporary, tab.inUse, tab.chatType, tab.chatTarget = true, true, "WHISPER", "Bob-Realm"
+		_G[name2] = tab
+		local oldF, oldT = CHAT_FRAMES, CHAT_FRAME_TEXTURES
+		CHAT_FRAMES, CHAT_FRAME_TEXTURES = { name2 }, {}
+		local oldStamps, oldDivider = c.timestamps, c.restoreDivider
+		c.timestamps, c.restoreDivider = "none", true
+		CH.OnFirstEnteringWorld(false)
+		local hist = StinkieUIChatHistory
+		local oldWhispers = hist.whispers
+		hist.whispers = {}
+		check("on by default", c.restoreWhispers == true and ns.defaults.chat.restoreWhispers == true)
+		check("a whisper tab is known by who it's with", CH.WhisperKey(tab) == "WHISPER:bob-realm"
+			and CH.WhisperKey(nil, "BN_WHISPER", "Pal") == "BN_WHISPER:pal" and CH.WhisperKey(nil, "GUILD", "x") == nil)
+		CH.OnTemporaryWindow("WHISPER", "Bob-Realm")
+		check("nothing saved for them: nothing put back", #back == 0)
+		tab:AddMessage("hello there", 1, 0.5, 1, nil, nil, nil, "CHAT_MSG_WHISPER")
+		local list = hist.whispers["WHISPER:bob-realm"]
+		check("its lines are kept under that person", list ~= nil and #list == 1 and list[1].m == "hello there" and list[1].e == "WHISPER")
+		CH.OnTemporaryWindow("WHISPER", "Bob-Realm")
+		check("lines from since this load aren't added twice (the game copies those)", #back == 0)
+		-- after a reload: the saved lines are no longer this load's
+		hist.whispers["WHISPER:bob-realm"] = { { t = 100, m = "first", r = 1, g = 1, b = 1, e = "WHISPER", s = hist.session },
+			{ t = 200, m = "second", r = 1, g = 1, b = 1, e = "WHISPER_INFORM", s = hist.session } }
+		CH.OnTemporaryWindow("WHISPER", "Someone-Else")
+		check("another person's tab opening leaves it alone", #back == 0)
+		CH.OnTemporaryWindow("WHISPER", "Bob-Realm")
+		check("their tab reopens with the conversation, newest first under a divider", #back == 3
+			and back[1]:find("earlier messages", 1, true) ~= nil and back[2]:find("second", 1, true) ~= nil and back[3]:find("first", 1, true) ~= nil, #back)
+		back = {}
+		tab.inUse = false
+		CH.OnTemporaryWindow("WHISPER", "Bob-Realm")
+		check("a closed tab isn't filled", #back == 0)
+		tab.inUse = true
+		c.restoreWhispers = false
+		CH.OnTemporaryWindow("WHISPER", "Bob-Realm")
+		tab:AddMessage("not kept", 1, 1, 1, nil, nil, nil, "CHAT_MSG_WHISPER")
+		check("off: nothing put back, nothing kept", #back == 0 and #hist.whispers["WHISPER:bob-realm"] == 2)
+		c.restoreWhispers = true
+		CH.ClearHistory()
+		check("Clear saved messages clears them too", next(hist.whispers) == nil)
+		hist.whispers = oldWhispers
+		c.timestamps, c.restoreDivider = oldStamps, oldDivider
+		CHAT_FRAMES, CHAT_FRAME_TEXTURES = oldF, oldT
+		_G[name2] = nil
+	end
+
 	-- older profiles
 	local kept = { version = 13, units = {}, chat = { whisperTabs = true, whisperDisplay = "both" } }
 	ns.Migrate(kept)
@@ -3140,6 +3253,91 @@ do
 	check("main tab users stay there", off.chat.whisperDisplay == "main" and off.chat.whisperTabs == nil)
 end
 flushErrors("whispers")
+
+-- Tab in the chat box goes to the next chat type
+do
+	local CH, c = ns.Chat, ns.db.chat
+	local oldGroup, oldRaid, oldGuild, oldShift, oldAfter = IsInGroup, IsInRaid, rawget(_G, "IsInGuild"), rawget(_G, "IsShiftKeyDown"), C_Timer.After
+	local wasActive = CH.active
+	CH.active = true
+	local home, inst, raid, guild, shift = false, false, false, false, false
+	IsInGroup = function(cat) if cat == 2 or cat == "LE_PARTY_CATEGORY_INSTANCE" then return inst end return home end
+	IsInRaid = function() return raid end
+	rawset(_G, "IsInGuild", function() return guild end)
+	rawset(_G, "IsShiftKeyDown", function() return shift end)
+	local later = {}
+	C_Timer.After = function(_, fn) later[#later + 1] = fn end
+	local function run() for _, fn in ipairs(later) do fn() end later = {} end
+	local attrs, headers, text, parent = { chatType = "SAY" }, 0, "", {}
+	local eb = {
+		GetAttribute = function(_, k) return attrs[k] end,
+		SetAttribute = function(_, k, v) attrs[k] = v end,
+		GetText = function() return text end,
+		GetParent = function() return parent end,
+		UpdateHeader = function() headers = headers + 1 end,
+	}
+	local function tab() CH.OnTabPressed(eb) run() end
+	CH.ForgetWhispers()
+	check("tab cycling is on by default", c.tabCycle == true and ns.defaults.chat.tabCycle == true)
+	tab()
+	check("alone, with nobody whispered: Tab has nowhere to go", attrs.chatType == "SAY" and headers == 0)
+	home, guild = true, true
+	tab()
+	check("Say to Party, and the box's label is redrawn", attrs.chatType == "PARTY" and headers == 1)
+	tab()
+	check("Party to Guild", attrs.chatType == "GUILD")
+	tab()
+	check("and round to Say", attrs.chatType == "SAY")
+	inst, raid = true, true
+	local order = {}
+	for _, e in ipairs(CH.TabList()) do order[#order + 1] = e[1] end
+	check("the order: say, party, raid, instance, guild", table.concat(order, " ") == "SAY PARTY RAID INSTANCE_CHAT GUILD", table.concat(order, " "))
+	raid = false
+	MOCK.Fire("CHAT_MSG_WHISPER", "hi", "Bob-Realm")
+	MOCK.Fire("CHAT_MSG_BN_WHISPER_INFORM", "yo", "Pal")
+	MOCK.Fire("CHAT_MSG_WHISPER_INFORM", "hi back", "bob-realm")
+	local list = CH.TabList()
+	check("people whispered with come last, newest first, once each", #list == 6 and list[5][1] == "WHISPER" and list[5][2] == "bob-realm"
+		and list[6][1] == "BN_WHISPER" and list[6][2] == "Pal", #list)
+	attrs.chatType = "GUILD"
+	tab()
+	check("Guild to the newest whisper", attrs.chatType == "WHISPER" and attrs.tellTarget == "bob-realm")
+	tab()
+	check("then the Battle.net one", attrs.chatType == "BN_WHISPER" and attrs.tellTarget == "Pal")
+	tab()
+	check("then Say again", attrs.chatType == "SAY")
+	shift = true
+	tab()
+	check("Shift + Tab goes back", attrs.chatType == "BN_WHISPER" and attrs.tellTarget == "Pal")
+	tab()
+	check("and back again", attrs.chatType == "WHISPER" and attrs.tellTarget == "bob-realm")
+	shift = false
+	attrs.chatType, attrs.tellTarget = "WHISPER", "Stranger"
+	tab()
+	check("from somewhere not in the list: the start", attrs.chatType == "SAY")
+	text = "/gui"
+	tab()
+	check("a slash command is left to the game", attrs.chatType == "SAY")
+	text = "hello"
+	tab()
+	check("typed text doesn't stop it", attrs.chatType == "PARTY")
+	parent.isTemporary = true
+	tab()
+	check("a whisper tab stays with its person", attrs.chatType == "PARTY")
+	parent.isTemporary = nil
+	c.tabCycle = false
+	tab()
+	check("off: Tab is the game's", attrs.chatType == "PARTY")
+	c.tabCycle = true
+	for i = 1, 8 do CH.NoteWhisper("WHISPER", "P" .. i) end
+	list = CH.TabList()
+	check("only the last five people", #list == 4 + 5 and list[5][2] == "P8" and list[9][2] == "P4", #list)
+	CH.ForgetWhispers()
+	CH.active = wasActive
+	IsInGroup, IsInRaid, C_Timer.After = oldGroup, oldRaid, oldAfter
+	rawset(_G, "IsInGuild", oldGuild)
+	rawset(_G, "IsShiftKeyDown", oldShift)
+end
 
 -- social button stays beside the chat tabs, whatever Blizzard's alerts do
 do
@@ -3800,6 +3998,23 @@ do
 	GetNumQuestChoices = function() return 3 end
 	M.OnQuestComplete()
 	check("a choice of rewards waits for you", #calls == 0)
+	do
+		local said, oldPrint, oldID = 0, ns.Print, rawget(_G, "GetQuestID")
+		local id = 101
+		rawset(_G, "GetQuestID", function() return id end)
+		ns.Print = function() said = said + 1 end
+		local was = ns.db.misc.auto.announce
+		ns.db.misc.auto.announce = true
+		M.choiceSaid = nil
+		M.OnQuestComplete(); M.OnQuestComplete(); M.OnQuestComplete()
+		check("and says so once for that quest", said == 1 and #calls == 0, said)
+		id = 102
+		M.OnQuestComplete()
+		check("another quest with a choice says it again", said == 2)
+		ns.db.misc.auto.announce = was
+		ns.Print = oldPrint
+		rawset(_G, "GetQuestID", oldID)
+	end
 
 	-- vendors
 	stub("CanMerchantRepair", function() return true end)
@@ -4104,6 +4319,124 @@ do
 	ns.ToggleOptions, ns.Modules.Open = oldToggle, oldOpen
 	rawset(_G, "Settings", oldSettings)
 	rawset(_G, "SettingsPanel", oldPanel)
+end
+
+-- Boss Warnings
+do
+	local BW, c = ns.BossWarnings, ns.db.bossWarnings
+	local oldCV = MOCK.cvars
+	MOCK.cvars = { combatWarningsEnabled = "0", encounterWarningsEnabled = "0", encounterWarningsLevel = "0",
+		encounterWarningsHideIfNotTargetingPlayer = "0", encounterTimelineEnabled = "1" }
+	local cv = MOCK.cvars
+	check("boss warnings: a module with its own page", ns.Modules.byId.bossWarnings ~= nil and ns.Modules.byPage["Boss Warnings"] ~= nil)
+	check("defaults: your font, thin outline, the game's sizes", c.font == true and c.outline == "OUTLINE" and c.critical == 0 and c.medium == 0 and c.minor == 0)
+	check("off while the game's master switch is off", BW.Available() and not BW.Enabled() and not BW.Timeline())
+	BW.SetEnabled(true)
+	check("on: the master switch and the text warnings", cv.combatWarningsEnabled == "1" and cv.encounterWarningsEnabled == "1" and BW.Enabled() and BW.Timeline())
+	BW.SetEnabled(false)
+	check("off: only the text warnings, the timeline keeps the master switch", cv.combatWarningsEnabled == "1" and cv.encounterWarningsEnabled == "0" and not BW.Enabled() and BW.Timeline())
+	BW.SetTimeline(false)
+	check("the timeline has its own switch", cv.encounterTimelineEnabled == "0" and not BW.Timeline())
+	check("all warnings by default", BW.Level() == "minor")
+	BW.SetLevel("critical")
+	check("critical only", cv.encounterWarningsLevel == "2" and BW.Level() == "critical")
+	BW.SetLevel("medium")
+	check("medium and up", cv.encounterWarningsLevel == "1" and BW.Level() == "medium")
+	BW.SetOnlyMine(true)
+	check("only the ones aimed at me", cv.encounterWarningsHideIfNotTargetingPlayer == "1" and BW.OnlyMine())
+
+	-- the look: after the game sets up a warning's text
+	local function fakeText()
+		local fs = { font = { "gameFont", 24, "SLUG" }, sets = 0 }
+		fs.Init = function(self) self.font = { "gameFont", 24, "SLUG" } end -- Blizzard puts its own font back
+		fs.GetFont = function(self) return self.font[1], self.font[2], self.font[3] end
+		fs.SetFont = function(self, p, s, f) self.font = { p, s, f }; self.sets = self.sets + 1 end
+		return fs
+	end
+	local texts, hooks = {}, {}
+	for _, entry in ipairs(BW.FRAMES) do
+		texts[entry[2]] = fakeText()
+		rawset(_G, entry[1], { View = { Text = texts[entry[2]] } })
+	end
+	local oldHook = hooksecurefunc
+	local hookCount = 0
+	hooksecurefunc = function(t, name, fn) if name == "Init" then hooks[t] = fn; hookCount = hookCount + 1 end end
+	BW.Hook()
+	BW.Hook()
+	hooksecurefunc = oldHook
+	local crit, minor = texts.critical, texts.minor
+	check("each of the three texts is watched, once", hookCount == 3 and type(hooks[crit]) == "function" and type(hooks[minor]) == "function", hookCount)
+	crit:Init()
+	hooks[crit](crit)
+	check("your font and outline, at the game's size", crit.font[1] == ns.GetFontPath() and crit.font[2] == 24 and crit.font[3] == ns.OutlineFlags("OUTLINE"))
+	c.critical = 40
+	BW:Refresh()
+	check("a size of your own, straight away", crit.font[2] == 40 and crit.font[1] == ns.GetFontPath())
+	check("only for that kind of warning", minor.font[1] == "gameFont" and minor.sets == 0)
+	minor:Init()
+	hooks[minor](minor)
+	check("minor keeps the game's size", minor.font[2] == 24 and minor.font[1] == ns.GetFontPath())
+	c.font = false
+	BW:Refresh()
+	check("the game's font, your size", crit.font[1] == "gameFont" and crit.font[3] == "SLUG" and crit.font[2] == 40)
+	c.critical = 0
+	BW:Refresh()
+	check("everything back to the game's", crit.font[1] == "gameFont" and crit.font[2] == 24 and crit.font[3] == "SLUG")
+	c.font, c.outline = true, "THICKOUTLINE"
+	crit:Init()
+	hooks[crit](crit)
+	check("the next warning starts from the game's font again", crit.font[2] == 24 and crit.font[3] == ns.OutlineFlags("THICKOUTLINE"))
+	c.outline = "OUTLINE"
+
+	-- long warnings: the game's box is lifted
+	do
+		check("long warnings aren't cut by default", c.noCut == true and c.wrapWidth == 700)
+		local fs = fakeText()
+		local w, h, scale, textWidth = "game", "game", 0.6, 300
+		fs.SetWidth = function(_, v) w = v end
+		fs.SetHeight = function(_, v) h = v end
+		fs.SetTextScale = function(_, v) scale = v end
+		fs.GetUnboundedStringWidth = function() return textWidth end
+		check("a short warning: one line, as wide as its text, at full size", BW.Fit(fs, 700) == true and w == 0 and h == 0 and scale == 1)
+		textWidth = 1500
+		BW.Fit(fs, 700)
+		check("a long one wraps at the widest line, as tall as it needs", w == 700 and h == 0 and scale == 1)
+		BW.Fit(fs, 0)
+		check("no widest line: always one line", w == 0 and h == 0)
+		fs.GetUnboundedStringWidth = function() return nil end
+		w, h = "game", "game"
+		check("a width the game hides: the box is left as the game set it", BW.Fit(fs, 700) == false and w == "game" and h == "game")
+		check("a text without these calls is left alone", BW.Fit(fakeText(), 700) == false)
+		-- through the hook, and off
+		local t2 = fakeText()
+		local w2
+		t2.SetWidth = function(_, v) w2 = v end
+		t2.SetHeight = function() end
+		t2.SetTextScale = function() end
+		t2.GetUnboundedStringWidth = function() return 2000 end
+		rawset(_G, "CriticalEncounterWarnings", { View = { Text = t2 } })
+		local fn
+		local old = hooksecurefunc
+		hooksecurefunc = function(t, name, f) if t == t2 then fn = f end end
+		BW.Hook()
+		hooksecurefunc = old
+		fn(t2)
+		check("a new warning gets the room", w2 == 700)
+		c.noCut = false
+		w2 = nil
+		fn(t2)
+		check("off: the game's box", w2 == nil)
+		c.noCut = true
+	end
+
+	-- a game version without them
+	local oldGet = C_CVar.GetCVar
+	C_CVar.GetCVar = function() return nil end
+	check("no boss warnings in this game version: nothing to switch", not BW.Available() and not BW.Enabled() and pcall(BW.SetEnabled, true))
+	C_CVar.GetCVar = oldGet
+	for _, entry in ipairs(BW.FRAMES) do rawset(_G, entry[1], nil) end
+	check("no frames: nothing breaks", pcall(BW.Hook))
+	MOCK.cvars = oldCV
 end
 
 -- Quick Buy
@@ -4445,6 +4778,45 @@ do
 	ns.Nameplates.UpdateMarker(f)
 	check("plate marker off", not f.Marker:IsShown())
 	ns.db.nameplates.friendlyMarker = true
+	-- a quest mark on enemies your quests want
+	do
+		local NP, c = ns.Nameplates, ns.db.nameplates
+		local oldQ = rawget(_G, "C_QuestLog")
+		local wanted = true
+		rawset(_G, "C_QuestLog", { UnitIsRelatedToActiveQuest = function(u) return wanted and u == "nameplate9" end })
+		local wasFriendly = f.friendly
+		local d = ns.defaults.nameplates
+		check("quest mark: on by default, left of the bar, 6 to the right", d.questIcon == true and d.questIconAnchor == "LEFT"
+			and d.questIconX == 6 and d.questIconY == 0 and f.QuestIcon ~= nil)
+		check("a friendly plate has no mark", not f.QuestIcon:IsShown())
+		f.friendly = false
+		c.questIcon = true
+		NP.UpdateQuestIcon(f)
+		check("on: an enemy your quest wants gets the mark", f.QuestIcon:IsShown())
+		wanted = false
+		NP.driver:GetScript("OnEvent")(NP.driver, "QUEST_LOG_UPDATE")
+		check("quest done: the mark goes when the quest log changes", not f.QuestIcon:IsShown())
+		wanted = true
+		f.friendly = true
+		NP.UpdateQuestIcon(f)
+		check("never on friendly plates", not f.QuestIcon:IsShown())
+		f.friendly = false
+		c.questIcon = false
+		NP.UpdateQuestIcon(f)
+		check("off: no mark", not f.QuestIcon:IsShown())
+		local function pt(t) return table.concat({ NP.QuestIconPoint(t) }, " ") end
+		check("quest mark: left of the health bar", pt({}) == "RIGHT LEFT -3 0" and pt(d) == "RIGHT LEFT 3 0")
+		check("right, above and below", pt({ questIconAnchor = "RIGHT" }) == "LEFT RIGHT 3 0"
+			and pt({ questIconAnchor = "TOP" }) == "BOTTOM TOP 0 3" and pt({ questIconAnchor = "BOTTOM" }) == "TOP BOTTOM 0 -3")
+		check("moved by X and Y", pt({ questIconAnchor = "TOP", questIconX = 10, questIconY = -5 }) == "BOTTOM TOP 10 -2"
+			and pt({ questIconX = -7, questIconY = 4 }) == "RIGHT LEFT -10 4")
+		rawset(_G, "C_QuestLog", { UnitIsRelatedToActiveQuest = function() error("no") end })
+		check("the game refusing the question: no mark, no error", NP.IsQuestUnit("nameplate9") == false)
+		rawset(_G, "C_QuestLog", nil)
+		check("a client without the question: no mark", NP.IsQuestUnit("nameplate9") == false)
+		f.friendly = wasFriendly
+		rawset(_G, "C_QuestLog", oldQ)
+	end
 	f.nameFormat = nil
 	ns.db.nameplates.friendlyNameFormat = "last"
 	local oldUnitName = UnitName

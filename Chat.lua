@@ -128,6 +128,7 @@ local function Store()
 	if type(s) ~= "table" then s = {} end
 	s.session = tonumber(s.session) or 0
 	s.lines = type(s.lines) == "table" and s.lines or {}
+	s.whispers = type(s.whispers) == "table" and s.whispers or {} -- per person: a whisper tab's own lines
 	_G.StinkieUIChatHistory = s
 	store = s
 	return s
@@ -141,23 +142,46 @@ function CH.HistoryID(f)
 	if WHISPER_TYPES[f.chatType] and GetCVar("whisperMode") == CH.WHISPER_MODES.tab then return 1 end
 end
 
+-- A whisper tab's own history, by who it's with. The game closes these tabs on a reload or
+-- logout and an addon can't open one (only the game's own code can, without breaking chat in
+-- matches), so the conversation is kept here and put back when the game next opens that
+-- person's tab: on the next whisper to or from them.
+function CH.WhisperKey(f, chatType, chatTarget)
+	if f then
+		if not IsTemporary(f) or f.inUse == false then return nil end
+		chatType, chatTarget = f.chatType, f.chatTarget
+	end
+	if issecret(chatType) or issecret(chatTarget) then return nil end
+	if not WHISPER_TYPES[chatType] or type(chatTarget) ~= "string" or chatTarget == "" then return nil end
+	return chatType .. ":" .. strlower(chatTarget)
+end
+
+local fresh = setmetatable({}, { __mode = "k" }) -- lines recorded since this load (the game still has those)
+
+-- id: a window's number, or a whisper tab's key
+local function Keep(id, line)
+	local s = Store()
+	line.s = s.session
+	local bucket = type(id) == "string" and s.whispers or s.lines
+	local list = bucket[id]
+	if not list then list = {}; bucket[id] = list end
+	list[#list + 1] = line
+	local max = cfg().historyLines or 300
+	while #list > max do table.remove(list, 1) end
+end
+
 local function Record(f, msg, r, g, b, event)
 	local c = cfg()
 	if c.history == "off" or IsCombatLogFrame(f) then return end
 	local id = CH.HistoryID(f)
-	if type(id) ~= "number" then return end
-	local line = { t = time(), m = msg, r = r, g = g, b = b, e = event }
-	if not sessionReady then
-		pending[#pending + 1] = { id, line }
-		return
+	local key = c.restoreWhispers and CH.WhisperKey(f) or nil
+	for _, where in ipairs({ type(id) == "number" and id or false, key or false }) do
+		if where then
+			local line = { t = time(), m = msg, r = r, g = g, b = b, e = event }
+			fresh[line] = true
+			if sessionReady then Keep(where, line) else pending[#pending + 1] = { where, line } end
+		end
 	end
-	local s = Store()
-	line.s = s.session
-	local list = s.lines[id]
-	if not list then list = {}; s.lines[id] = list end
-	list[#list + 1] = line
-	local max = c.historyLines or 300
-	while #list > max do table.remove(list, 1) end
 end
 
 ---------------------------------------------------------------------------
@@ -425,6 +449,33 @@ local function Restore()
 	end
 end
 
+-- The game has just opened a whisper tab (and emptied it): put back what was said in it before
+-- this reload or login. Lines from since then aren't added; the game copies those itself.
+function CH.FillWhisperTab(chatType, chatTarget)
+	local c = cfg()
+	if c.history == "off" or not c.restoreWhispers or not sessionReady then return false end
+	local key = CH.WhisperKey(nil, chatType, chatTarget)
+	local list = key and Store().whispers[key]
+	if not list or #list == 0 then return false end
+	for _, f in ipairs(ChatFrames()) do
+		if CH.WhisperKey(f) == key then
+			local any = false
+			CH.busy = true
+			for i = #list, 1, -1 do
+				local line = list[i]
+				if type(line.m) == "string" and not fresh[line] then
+					if not any and c.restoreDivider then pcall(f.BackFillMessage, f, DIVIDER, 1, 1, 1) end
+					any = true
+					pcall(f.BackFillMessage, f, Compose(line.m, line.e, line.t), line.r, line.g, line.b)
+				end
+			end
+			CH.busy = false
+			return any
+		end
+	end
+	return false
+end
+
 -- First loading screen of this login or reload: decide the session, prune, restore.
 local function OnFirstEnteringWorld(isInitialLogin)
 	if sessionReady then return end
@@ -433,24 +484,22 @@ local function OnFirstEnteringWorld(isInitialLogin)
 	if isInitialLogin then
 		s.session = s.session + 1
 		local keepFrom = (c.history == "session") and (s.session - 1) or s.session
-		for id, list in pairs(s.lines) do
-			local kept = {}
-			for _, line in ipairs(list) do
-				if (tonumber(line.s) or 0) >= keepFrom then kept[#kept + 1] = line end
+		for _, bucket in ipairs({ s.lines, s.whispers }) do
+			for id, list in pairs(bucket) do
+				local kept = {}
+				for _, line in ipairs(list) do
+					if (tonumber(line.s) or 0) >= keepFrom then kept[#kept + 1] = line end
+				end
+				-- a person with nothing left is dropped; a window keeps its (empty) list
+				bucket[id] = (#kept > 0 or bucket == s.lines) and kept or nil
 			end
-			s.lines[id] = kept
 		end
 	end
 	if c.history == "off" then wipe(s.lines) end
+	if c.history == "off" or not c.restoreWhispers then wipe(s.whispers) end
 	if c.history ~= "off" then Restore() end
 	sessionReady = true
-	for _, p in ipairs(pending) do
-		local id, line = p[1], p[2]
-		line.s = s.session
-		local list = s.lines[id]
-		if not list then list = {}; s.lines[id] = list end
-		list[#list + 1] = line
-	end
+	for _, p in ipairs(pending) do Keep(p[1], p[2]) end
 	wipe(pending)
 end
 CH.OnFirstEnteringWorld = OnFirstEnteringWorld
@@ -458,6 +507,7 @@ CH.OnFirstEnteringWorld = OnFirstEnteringWorld
 function CH.ClearHistory()
 	local s = Store()
 	wipe(s.lines)
+	wipe(s.whispers)
 end
 
 ---------------------------------------------------------------------------
@@ -764,8 +814,10 @@ end
 
 -- Right away: the game delivers the whisper that opened this window as soon as it returns, and
 -- that line needs the hook (tab flash, history). Then once more, when its tab has settled.
-function CH.OnTemporaryWindow()
+function CH.OnTemporaryWindow(chatType, chatTarget)
 	CH.SetupAll()
+	local ok, err = pcall(CH.FillWhisperTab, chatType, chatTarget)
+	if not ok then ns.Error(err) end
 	C_Timer.After(0, CH.SetupAll)
 end
 
@@ -913,6 +965,83 @@ end
 CH.Tick = Tick
 
 ---------------------------------------------------------------------------
+-- Tab in the chat box: the next chat type. Say, then the group chats you're in, guild, then the
+-- people you've whispered with lately; Shift + Tab goes back.
+--
+-- The game calls ChatEdit_CustomTabPressed for addons when Tab is pressed (after its own name
+-- completion), and that is post-hooked. The chat type and whisper target are the edit box's
+-- attributes, which carry no taint, so the game's own code still sends the message. The change is
+-- made a moment later: straight after the hook the game does its own Tab work (the next whisper
+-- target, slash command completion), and this has the last word.
+---------------------------------------------------------------------------
+CH.TAB_WHISPERS = 5
+local recentWhispers = {} -- newest first: { chat type, who }
+
+local function SameTarget(a, b)
+	return type(a) == "string" and type(b) == "string" and strlower(a) == strlower(b)
+end
+
+function CH.NoteWhisper(chatType, target)
+	if issecret(target) or type(target) ~= "string" or target == "" then return end
+	for i = #recentWhispers, 1, -1 do
+		if recentWhispers[i][1] == chatType and SameTarget(recentWhispers[i][2], target) then table.remove(recentWhispers, i) end
+	end
+	table.insert(recentWhispers, 1, { chatType, target })
+	while #recentWhispers > CH.TAB_WHISPERS do table.remove(recentWhispers) end
+end
+
+function CH.ForgetWhispers() wipe(recentWhispers) end
+
+-- what Tab goes through right now, in order
+function CH.TabList()
+	local list = { { "SAY" } }
+	local home, instance = LE_PARTY_CATEGORY_HOME or 1, LE_PARTY_CATEGORY_INSTANCE or 2
+	if Known(IsInGroup(home), false) then list[#list + 1] = { "PARTY" } end
+	if Known(IsInRaid(home), false) then list[#list + 1] = { "RAID" } end
+	if Known(IsInGroup(instance), false) then list[#list + 1] = { "INSTANCE_CHAT" } end
+	if IsInGuild and Known(IsInGuild(), false) then list[#list + 1] = { "GUILD" } end
+	for _, w in ipairs(recentWhispers) do list[#list + 1] = { w[1], w[2] } end
+	return list
+end
+
+-- the entry after (or before) the chat type the box is on; nil when there's nowhere to go
+function CH.TabNext(chatType, target, back)
+	local list = CH.TabList()
+	local at
+	for i, entry in ipairs(list) do
+		if entry[1] == chatType and (not entry[2] or SameTarget(entry[2], target)) then at = i break end
+	end
+	if not at then return list[back and #list or 1] end
+	if #list < 2 then return nil end
+	local n = at + (back and -1 or 1)
+	if n > #list then n = 1 elseif n < 1 then n = #list end
+	return list[n]
+end
+
+function CH.SetChatType(eb, entry)
+	eb:SetAttribute("chatType", entry[1])
+	if entry[2] then eb:SetAttribute("tellTarget", entry[2]) end
+	-- redraws the box's label ("Party:", "To Name:"); it only reads the attributes and sets widgets
+	if type(eb.UpdateHeader) == "function" then pcall(eb.UpdateHeader, eb) end
+end
+
+function CH.OnTabPressed(eb)
+	if not (CH.active and cfg().tabCycle) or issecret(eb) or type(eb) ~= "table" or not eb.GetAttribute then return end
+	local parent = eb.GetParent and eb:GetParent()
+	if type(parent) == "table" and Known(parent.isTemporary, true) then return end -- a whisper tab stays with its person
+	local text = eb:GetText()
+	if issecret(text) or (type(text) == "string" and text:sub(1, 1) == "/") then return end -- slash commands complete
+	local chatType, target = eb:GetAttribute("chatType"), eb:GetAttribute("tellTarget")
+	if issecret(chatType) or issecret(target) then return end
+	local entry = CH.TabNext(chatType, target, IsShiftKeyDown and IsShiftKeyDown() or false)
+	if not entry then return end
+	C_Timer.After(0, function()
+		local ok, err = pcall(CH.SetChatType, eb, entry)
+		if not ok then ns.Error(err) end
+	end)
+end
+
+---------------------------------------------------------------------------
 -- Module
 ---------------------------------------------------------------------------
 local CONFLICTS = { "Chattynator", "Prat-3.0", "ElvUI", "ls_Glass", "Glass" }
@@ -946,6 +1075,16 @@ function CH:Init()
 		hooksecurefunc("FCF_OpenTemporaryWindow", CH.OnTemporaryWindow)
 	end
 	if FCF_StopAlertFlash then hooksecurefunc("FCF_StopAlertFlash", CH.StopFlash) end
+	if ChatEdit_CustomTabPressed then
+		hooksecurefunc("ChatEdit_CustomTabPressed", function(eb)
+			local ok, err = pcall(CH.OnTabPressed, eb)
+			if not ok then ns.Error(err) end
+		end)
+	end
+	for event, chatType in pairs({ CHAT_MSG_WHISPER = "WHISPER", CHAT_MSG_WHISPER_INFORM = "WHISPER",
+		CHAT_MSG_BN_WHISPER = "BN_WHISPER", CHAT_MSG_BN_WHISPER_INFORM = "BN_WHISPER" }) do
+		ns:On(event, function(_, _, who) CH.NoteWhisper(chatType, who) end)
+	end
 	if FCF_SetChatWindowFontSize then
 		hooksecurefunc("FCF_SetChatWindowFontSize", function(_, chatFrame)
 			if cfg().fontSize > 0 and chatFrame then ApplyFont(chatFrame) end
