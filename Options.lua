@@ -724,6 +724,8 @@ local function BuildPartyPage(page)
 	page:Slider("Healer cross size", 6, 100, 1, Getter(cfg, "healerSize"), Setter(cfg, "healerSize"))
 	page:Check("Shield on tanks", Getter(cfg, "tankIcon"), Setter(cfg, "tankIcon"))
 	page:Slider("Tank shield size", 6, 100, 1, Getter(cfg, "tankSize"), Setter(cfg, "tankSize"))
+	page:Check("Summon and resurrection icons", Getter(cfg, "statusIcons"), Setter(cfg, "statusIcons"))
+	page:Slider("Summon and resurrection icon size", 8, 100, 1, Getter(cfg, "statusIconSize"), Setter(cfg, "statusIconSize"))
 	page:Check("Raid icon (star, skull...)", Getter(cfg, "marker"), Setter(cfg, "marker"))
 	page:Slider("Raid icon size", 6, 100, 1, Getter(cfg, "markerSize"), Setter(cfg, "markerSize"))
 	page:Dropdown("Raid icon goes", { { "TOP", "Top edge" }, { "BOTTOM", "Bottom edge" }, { "LEFT", "Left edge" }, { "RIGHT", "Right edge" }, { "CENTER", "Middle" } },

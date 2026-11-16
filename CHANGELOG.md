@@ -1,5 +1,8 @@
 # Stinkie UI changelog
 
+## 0.52.0
+- Party Frames: an icon in the middle of the health bar when a summon is pending, accepted or declined, or a resurrection is on its way. On by default, with a size slider. Raid Frames already had these.
+
 ## 0.51.0
 - New: Boss Warnings (Interface), a module for the game's own boss warnings. Turn them on or off, pick which ones show (all, medium and critical, or critical only), hide the ones that aren't aimed at you, and switch the boss timeline, all from Stinkie UI. The warning text gets your font, an outline and a size for each of critical, medium and minor. Long warnings keep their size and wrap onto more lines instead of being shrunk and cut off. Moving them stays in the game's Edit Mode. This is a new file, so restart the game fully after updating.
 - Nameplates: new quest mark on enemies your quests want (kill or loot), on by default. Options for its size, which side of the health bar it goes on, and X / Y.

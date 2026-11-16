@@ -17,6 +17,50 @@ local function ShouldShowPower(f)
 	return role == "HEALER"
 end
 
+-- A summon or a resurrection on its way to this player: one icon in the middle of the health
+-- bar, the game's own art for each. A summon comes first. An answer the game hides shows nothing.
+local STATUS_ATLAS = {
+	summonPending = "RaidFrame-Icon-SummonPending",
+	summonAccepted = "RaidFrame-Icon-SummonAccepted",
+	summonDeclined = "RaidFrame-Icon-SummonDeclined",
+	resurrect = "RaidFrame-Icon-Rez",
+}
+Party.STATUS_ATLAS = STATUS_ATLAS
+
+function Party.StatusState(unit)
+	local summon = C_IncomingSummon
+	if summon and summon.HasIncomingSummon and summon.IncomingSummonStatus then
+		local has = summon.HasIncomingSummon(unit)
+		if not issecret(has) and has then
+			local status, E = summon.IncomingSummonStatus(unit), Enum.SummonStatus
+			if E and not issecret(status) then
+				if status == E.Pending then return "summonPending" end
+				if status == E.Accepted then return "summonAccepted" end
+				if status == E.Declined then return "summonDeclined" end
+			end
+		end
+	end
+	local res = UnitHasIncomingResurrection(unit)
+	if not issecret(res) and res then return "resurrect" end
+	return nil
+end
+
+function Party.ShowStatus(f, state)
+	local icon = f.StatusIcon
+	if not icon then return end
+	if state and STATUS_ATLAS[state] and ns.db.party.statusIcons then
+		icon:SetAtlas(STATUS_ATLAS[state])
+		icon:Show()
+	else
+		icon:Hide()
+	end
+end
+
+function Party.UpdateStatus(f)
+	if f.previewData then return end -- test mode shows its own sample
+	Party.ShowStatus(f, f.unit and UnitExists(f.unit) and Party.StatusState(f.unit) or nil)
+end
+
 -- Health/power split is done on the non-secure bars, so it can change in combat.
 local function PostUpdate(f)
 	local cfg = ns.db.party
@@ -39,6 +83,7 @@ local function PostUpdate(f)
 		f.RoleIcon:Hide()
 	end
 	f.TankIcon:SetShown(cfg.tankIcon and not issecret(role) and role == "TANK" or false)
+	Party.UpdateStatus(f)
 	Party.UpdateTargetHighlight(f)
 	-- the aura containers watch this frame's unit (they show nothing until told which one)
 	local function watch(container, on)
@@ -132,6 +177,8 @@ end
 local function OnEventExtra(f, event)
 	if event == "PLAYER_TARGET_CHANGED" then
 		Party.UpdateTargetHighlight(f)
+	elseif event == "INCOMING_SUMMON_CHANGED" or event == "INCOMING_RESURRECT_CHANGED" then
+		Party.UpdateStatus(f)
 	end
 end
 
@@ -179,6 +226,11 @@ local function CreatePartyFrame(unit, index)
 	f:RegisterEvent("PLAYER_TARGET_CHANGED")
 	f:RegisterEvent("PLAYER_ROLES_ASSIGNED")
 	f:RegisterEvent("RAID_TARGET_UPDATE")
+	f:RegisterEvent("INCOMING_SUMMON_CHANGED")
+	f:RegisterEvent("INCOMING_RESURRECT_CHANGED")
+
+	f.StatusIcon = f.TextLayer:CreateTexture(nil, "OVERLAY", nil, 5)
+	f.StatusIcon:Hide()
 
 	f.Marker = f.TextLayer:CreateTexture(nil, "OVERLAY")
 	f.Marker:SetTexture(ns.MARKER_TEXTURE)
@@ -316,6 +368,10 @@ local function LayoutPartyFrame(f, index)
 	f.TankIcon:SetSize(ts, ts)
 	f.TankIcon:ClearAllPoints()
 	f.TankIcon:SetPoint("BOTTOMRIGHT", f.Health, "BOTTOMRIGHT", -3, 3)
+	local ss = cfg.statusIconSize or 24
+	f.StatusIcon:SetSize(ss, ss)
+	f.StatusIcon:ClearAllPoints()
+	f.StatusIcon:SetPoint("CENTER", f.Health, "CENTER", 0, 0)
 	LayoutHighlight(f)
 
 	local AA = ns.db.arenaAssist
@@ -750,6 +806,7 @@ function Party.FillPreview(f, i)
 	f.Power:SetStatusBarColor(0, 0.44, 0.87)
 	f.RoleIcon:SetShown(cfg.healerIcon ~= false and d.healer and true or false)
 	f.TankIcon:SetShown(cfg.tankIcon and d.tank and true or false)
+	Party.ShowStatus(f, i == 3 and "summonPending" or nil) -- test mode: one sample, so its size can be seen
 	f.Highlight:SetAlpha(i == 2 and 1 or 0)
 	f:SetAlpha(1)
 	Party.LayoutPreview(f)

@@ -374,6 +374,7 @@ ns.defaults = {
 		rangeFade = true,
 		healerIcon = true, healerSize = 12,
 		tankIcon = false, tankSize = 14, -- a shield on tanks
+		statusIcons = true, statusIconSize = 24, -- a summon or resurrection on its way, in the middle of the health bar
 		nameStyle = text(12),
 		healthStyle = text(12),
 		castbar = { enabled = false, height = 10, textStyle = text(10) },

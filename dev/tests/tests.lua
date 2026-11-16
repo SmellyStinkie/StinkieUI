@@ -932,6 +932,48 @@ do
 	ns:Refresh(); f.PostUpdate(f)
 	check("a damage dealer gets neither", not f.RoleIcon:IsShown() and not f.TankIcon:IsShown())
 	c.tankIcon, c.tankSize = false, 14
+	-- a summon or a resurrection on its way
+	do
+		local P = ns.Party
+		local summon, status, res = false, 1, false
+		local oldSummon, oldEnum, oldRes, oldExists = rawget(_G, "C_IncomingSummon"), Enum.SummonStatus, UnitHasIncomingResurrection, UnitExists
+		rawset(_G, "C_IncomingSummon", { HasIncomingSummon = function() return summon end, IncomingSummonStatus = function() return status end })
+		Enum.SummonStatus = { None = 0, Pending = 1, Accepted = 2, Declined = 3 }
+		UnitHasIncomingResurrection = function() return res end
+		UnitExists = function() return true end
+		local atlas
+		local oldAtlas = f.StatusIcon.SetAtlas
+		f.StatusIcon.SetAtlas = function(_, a) atlas = a end
+		check("summon and resurrection icons: on by default", c.statusIcons == true and c.statusIconSize == 24 and f.StatusIcon ~= nil)
+		check("nothing on its way: no icon", P.StatusState("party1") == nil)
+		f.PostUpdate(f)
+		check("and none on the frame", not f.StatusIcon:IsShown())
+		res = true
+		MOCK.Fire("INCOMING_RESURRECT_CHANGED", "party1")
+		check("a resurrection on its way shows", P.StatusState("party1") == "resurrect" and f.StatusIcon:IsShown() and atlas == "RaidFrame-Icon-Rez", atlas)
+		summon = true
+		MOCK.Fire("INCOMING_SUMMON_CHANGED", "party1")
+		check("a pending summon comes first", P.StatusState("party1") == "summonPending" and atlas == "RaidFrame-Icon-SummonPending")
+		status = 2
+		check("accepted", P.StatusState("party1") == "summonAccepted")
+		status = 3
+		check("declined", P.StatusState("party1") == "summonDeclined")
+		c.statusIcons = false
+		f.PostUpdate(f)
+		check("off: no icon", not f.StatusIcon:IsShown())
+		c.statusIcons, c.statusIconSize = true, 40
+		ns:Refresh(); f.PostUpdate(f)
+		check("on again, at the chosen size", f.StatusIcon:IsShown() and f.StatusIcon:GetWidth() == 40)
+		summon, res = false, false
+		MOCK.Fire("INCOMING_SUMMON_CHANGED", "party1")
+		check("gone when it's over", not f.StatusIcon:IsShown())
+		c.statusIconSize = 24
+		f.StatusIcon.SetAtlas = oldAtlas
+		rawset(_G, "C_IncomingSummon", oldSummon)
+		Enum.SummonStatus = oldEnum
+		UnitHasIncomingResurrection, UnitExists = oldRes, oldExists
+		ns:Refresh()
+	end
 	-- the raid icon: where it goes and how big
 	do
 		local P = ns.Party
